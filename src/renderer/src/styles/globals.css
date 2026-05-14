@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   AssetVault Pro - Global Styles
+   Dark Theme Design System
+   ============================================ */
+
+@layer base {
+  /* Reset & Base */
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #F1F5F9;
+    background-color: #0F1117;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #3D4056;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #4D5068;
+  }
+
+  /* Selection */
+  ::selection {
+    background: rgba(59, 130, 246, 0.3);
+    color: #F1F5F9;
+  }
+}
+
+@layer components {
+  /* Window title bar drag area */
+  .titlebar-drag {
+    -webkit-app-region: drag;
+  }
+
+  .titlebar-no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  /* Custom button styles */
+  .btn-primary {
+    @apply px-3 py-1.5 bg-av-accent-blue text-white rounded-md
+           hover:bg-av-accent-blue-hover active:bg-blue-700
+           transition-colors duration-150 text-sm font-medium
+           flex items-center gap-1.5 cursor-pointer border-none outline-none;
+  }
+
+  .btn-secondary {
+    @apply px-3 py-1.5 bg-av-bg-elevated text-av-text-primary rounded-md
+           hover:bg-av-bg-hover active:bg-av-bg-active
+           transition-colors duration-150 text-sm font-medium
+           flex items-center gap-1.5 cursor-pointer border border-av-border
+           outline-none;
+  }
+
+  .btn-ghost {
+    @apply px-2 py-1.5 bg-transparent text-av-text-secondary rounded-md
+           hover:text-av-text-primary hover:bg-av-bg-hover
+           transition-colors duration-150 text-sm font-medium
+           flex items-center gap-1.5 cursor-pointer border-none outline-none;
+  }
+
+  .btn-icon {
+    @apply p-1.5 bg-transparent text-av-text-secondary rounded
+           hover:text-av-text-primary hover:bg-av-bg-hover
+           transition-colors duration-150 cursor-pointer border-none outline-none;
+  }
+
+  /* Input styles */
+  .input-base {
+    @apply w-full px-3 py-1.5 bg-av-bg-tertiary text-av-text-primary
+           border border-av-border rounded-md
+           placeholder:text-av-text-muted
+           focus:border-av-accent-blue focus:outline-none
+           transition-colors duration-150 text-sm;
+  }
+
+  /* Card styles */
+  .card {
+    @apply bg-av-bg-secondary border border-av-border rounded-lg overflow-hidden;
+  }
+
+  /* Sidebar section */
+  .sidebar-section {
+    @apply px-3 py-2;
+  }
+
+  .sidebar-section-title {
+    @apply text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2 px-1;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Text truncation */
+  .truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+/* ============================================
+   Arco Design Overrides for AssetVault Theme
+   ============================================ */
+
+.arco-theme-dark,
+body {
+  --color-bg-1: #0F1117 !important;
+  --color-bg-2: #161822 !important;
+  --color-bg-3: #1E2030 !important;
+  --color-border: #2D3044 !important;
+  --color-text-1: #F1F5F9 !important;
+  --color-text-2: #94A3B8 !important;
+  --color-text-3: #64748B !important;
+  --color-text-4: #475569 !important;
+  --color-primary-6: #3B82F6 !important;
+}
+
+/* Arco component overrides */
+.arco-btn-primary {
+  background-color: #3B82F6 !important;
+  border-color: #3B82F6 !important;
+}
+.arco-btn-primary:hover {
+  background-color: #2563EB !important;
+  border-color: #2563EB !important;
+}
+
+.arco-input-wrapper,
+.arco-select-view-single {
+  background-color: #1E2030 !important;
+  border-color: #2D3044 !important;
+}
+.arco-input-wrapper:focus-within,
+.arco-select-view-single:focus,
+.arco-select-view-single:hover {
+  border-color: #3B82F6 !important;
+}
+
+.arco-modal-wrapper .arco-modal {
+  background-color: #161822 !important;
+  border: 1px solid #2D3044 !important;
+}
+
+.arco-table {
+  --color-bg-container: #161822 !important;
+}
+
+.arco-menu-dark {
+  background-color: transparent !important;
+}

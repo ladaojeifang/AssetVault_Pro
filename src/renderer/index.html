@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Explicit CSP silences Electron's "Insecure Content-Security-Policy" when no policy is set.
+      Avoid 'unsafe-eval' so devtools warning stays off; Vite 5 + React 18 run as native ESM + HMR (ws).
+      Tighten further for production if you add remote origins.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file: https:; media-src 'self' blob: file:; font-src 'self' data:; connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* wss://127.0.0.1:* wss://localhost:*; worker-src 'self' blob:;"
+    />
+    <title>AssetVault Pro</title>
+  </head>
+  <body class="bg-av-bg-primary text-av-text-primary antialiased">
+    <div id="root"></div>
+    <!-- Diagnostic: sync script to verify HTML loads -->
+    <script>console.log('[HTML] index.html loaded, about to load main.tsx')</script>
+    <script type="module" src="./src/main.tsx"></script>
+    <script>
+      // Detect if module script failed to load (fires after module load attempt)
+      window.addEventListener('error', function(e) {
+        if (e.target && e.target.tagName === 'SCRIPT') {
+          console.error('[HTML] Script failed to load:', e.target.src || '(inline)', e.message);
+        }
+      }, true);
+      // Timeout detection
+      setTimeout(function() {
+        var root = document.getElementById('root');
+        if (!root || root.children.length === 0) {
+          console.warn('[HTML] #root is still empty after 3s — React likely failed to mount');
+          document.body.insertAdjacentHTML('beforeend',
+            '<div style="padding:20px;color:red;background:#111;font-size:14px;position:fixed;top:0;left:0;z-index:99999">' +
+            'React did not mount. Check Console for errors.' +
+            '</div>');
+        }
+      }, 3000);
+    </script>
+  </body>
+</html>

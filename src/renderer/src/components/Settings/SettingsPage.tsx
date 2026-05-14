@@ -1,0 +1,377 @@
+import React, { useState, useEffect } from 'react'
+import { Modal } from '@arco-design/web-react'
+
+/**
+ * Settings / Preferences Page
+ * Storage paths, hotkey customization, appearance preferences
+ */
+interface SettingsProps {
+  visible: boolean
+  onClose: () => void
+}
+
+const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
+  const [activeTab, setActiveTab] = useState('general')
+  const [settings, setSettings] = useState({
+    // General
+    defaultImportPath: '',
+    autoWatchFolders: true,
+    thumbnailQuality: 80,
+    thumbnailSize: 256,
+    maxCacheSizeMB: 2048,
+
+    // Appearance
+    theme: 'dark',
+    gridColumns: 8,
+    gridSize: 'medium' as 'small' | 'medium' | 'large',
+
+    // Shortcuts
+    customHotkeys: {} as Record<string, string>,
+
+    // Advanced
+    enableFileWatcher: true,
+    ftsMinLength: 2,
+    debounceMs: 300
+  })
+
+  const tabs = [
+    { id: 'general', label: 'General', icon: '⚙️' },
+    { id: 'appearance', label: 'Appearance', icon: '🎨' },
+    { id: 'shortcuts', label: 'Shortcuts', icon: '⌨️' },
+    { id: 'advanced', label: 'Advanced', icon: '🔧' }
+  ]
+
+  return (
+    <Modal
+      title={
+        <div className="flex items-center gap-2">
+          <span className="text-lg">Settings</span>
+        </div>
+      }
+      visible={visible}
+      onCancel={onClose}
+      footer={null}
+      unmountOnExit
+      style={{ width: 720, maxWidth: '90vw' }}
+      className="settings-modal"
+    >
+      <div className="flex p-0" style={{ minHeight: 500 }}>
+        {/* Sidebar tabs */}
+        <div className="w-48 border-r border-av-border p-3 space-y-0.5">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-av-accent-blue/15 text-av-text-primary'
+                  : 'text-av-text-secondary hover:bg-av-bg-hover'
+              }`}
+            >
+              <span>{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content area */}
+        <div className="flex-1 p-6 overflow-y-auto">
+          {activeTab === 'general' && <GeneralSettings settings={settings} onUpdate={(k, v) => updateSetting(k as any, v)} />}
+          {activeTab === 'appearance' && <AppearanceSettings settings={settings} onUpdate={(k, v) => updateSetting(k as any, v)} />}
+          {activeTab === 'shortcuts' && <ShortcutSettings />}
+          {activeTab === 'advanced' && <AdvancedSettings settings={settings} onUpdate={(k, v) => updateSetting(k as any, v)} />}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex justify-end gap-3 px-6 py-4 border-t border-av-border">
+        <button onClick={onClose} className="btn-secondary">
+          Cancel
+        </button>
+        <button
+          onClick={() => {
+            saveSettings()
+            onClose()
+          }}
+          className="btn-primary"
+        >
+          Save Changes
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+function GeneralSettings({
+  settings,
+  onUpdate
+}: {
+  settings: Record<string, unknown>
+  onUpdate: (key: string, value: unknown) => void
+}) {
+  return (
+    <div className="space-y-6">
+      <h3 className="text-base font-semibold mb-4">General Settings</h3>
+
+      <SettingField
+        label="Default Import Path"
+        description="Default location when importing files"
+      >
+        <input
+          type="text"
+          value={(settings.defaultImportPath as string) || ''}
+          onChange={(e) => onUpdate('defaultImportPath', e.target.value)}
+          placeholder="Leave empty for system default"
+          className="input-base"
+        />
+      </SettingField>
+
+      <SettingField
+        label="Auto-watch Folders"
+        description="Automatically detect new files in imported folders"
+      >
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.autoWatchFolders as boolean}
+            onChange={(e) => onUpdate('autoWatchFolders', e.target.checked)}
+            className="w-4 h-4 rounded bg-av-bg-elevated border-av-border"
+          />
+          <span className="text-sm text-av-text-secondary">Enable file watching</span>
+        </label>
+      </SettingField>
+
+      <SettingField
+        label="Thumbnail Quality"
+        description={`JPEG/WebP quality (1-100). Current: ${settings.thumbnailQuality}%`}
+      >
+        <input
+          type="range"
+          min={10}
+          max={100}
+          step={5}
+          value={settings.thumbnailQuality as number}
+          onChange={(e) => onUpdate('thumbnailQuality', Number(e.target.value))}
+          className="w-full h-1.5 bg-av-bg-elevated rounded-lg appearance-none cursor-pointer accent-av-accent-blue"
+        />
+      </SettingField>
+
+      <SettingField
+        label="Thumbnail Size"
+        description={`Max dimension in pixels. Current: ${settings.thumbnailSize}px`}
+      >
+        <select
+          value={settings.thumbnailSize as number}
+          onChange={(e) => onUpdate('thumbnailSize', Number(e.target.value))}
+          className="input-base w-auto"
+        >
+          <option value={128}>128px (Small)</option>
+          <option value={256}>256px (Medium)</option>
+          <option value={384}>384px (Large)</option>
+          <option value={512}>512px (HD)</option>
+        </select>
+      </SettingField>
+    </div>
+  )
+}
+
+function AppearanceSettings({
+  settings,
+  onUpdate
+}: {
+  settings: Record<string, unknown>
+  onUpdate: (key: string, value: unknown) => void
+}) {
+  return (
+    <div className="space-y-6">
+      <h3 className="text-base font-semibold mb-4">Appearance</h3>
+
+      <SettingField label="Theme" description="UI color scheme">
+        <select
+          value={settings.theme as string}
+          onChange={(e) => onUpdate('theme', e.target.value)}
+          className="input-base w-auto"
+        >
+          <option value="dark">Dark (Default)</option>
+          <option value="light">Light</option>
+        </select>
+      </SettingField>
+
+      <SettingField label="Grid Columns" description={`Number of columns in grid view. Currently: ${settings.gridColumns}`}>
+        <select
+          value={settings.gridColumns as number}
+          onChange={(e) => onUpdate('gridColumns', Number(e.target.value))}
+          className="input-base w-auto"
+        >
+          {[4, 6, 8, 10, 12].map((n) => (
+            <option key={n} value={n}>{n} columns</option>
+          ))}
+        </select>
+      </SettingField>
+
+      <SettingField label="Grid Item Size" description="Asset card size in grid view">
+        <div className="flex gap-2">
+          {(['small', 'medium', 'large'] as const).map((size) => (
+            <button
+              key={size}
+              onClick={() => onUpdate('gridSize', size)}
+              className={`px-3 py-1.5 rounded-md text-xs capitalize transition-colors ${
+                settings.gridSize === size
+                  ? 'bg-av-accent-blue text-white'
+                  : 'bg-av-bg-elevated text-av-text-secondary hover:text-av-text-primary'
+              }`}
+            >
+              {size}
+            </button>
+          ))}
+        </div>
+      </SettingField>
+    </div>
+  )
+}
+
+function ShortcutSettings() {
+  const [hotkeys, setHotkeys] = useState([
+    { id: 'search', accelerator: 'Ctrl+K', description: 'Focus search bar' },
+    { id: 'import-files', accelerator: 'Ctrl+I', description: 'Import files' },
+    { id: 'import-folder', accelerator: 'Ctrl+Shift+O', description: 'Import folder' },
+    { id: 'toggle-sidebar', accelerator: 'Ctrl+B', description: 'Toggle sidebar' },
+    { id: 'toggle-detail', accelerator: 'Ctrl+D', description: 'Toggle detail panel' },
+    { id: 'delete', accelerator: 'Delete', description: 'Delete selected' },
+    { id: 'refresh', accelerator: 'F5', description: 'Refresh view' }
+  ])
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  function captureHotkey(id: string) {
+    setEditingId(id)
+    // In a real implementation, this would listen for keyboard events
+    // and capture the next key combination pressed
+  }
+
+  return (
+    <div className="space-y-6">
+      <h3 className="text-base font-semibold mb-4">Keyboard Shortcuts</h3>
+
+      <p className="text-sm text-av-text-muted">
+        Click on a shortcut to customize. Press the new key combination to assign.
+      </p>
+
+      <div className="space-y-1">
+        {hotkeys.map((hk) => (
+          <div
+            key={hk.id}
+            className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors ${
+              editingId === hk.id ? 'ring-1 ring-av-accent-blue bg-av-accent-blue/5' : 'hover:bg-av-bg-hover'
+            }`}
+          >
+            <div>
+              <p className="text-sm font-medium">{hk.description}</p>
+              <p className="text-xs text-av-text-muted mt-0.5">{hk.id}</p>
+            </div>
+            <button
+              onClick={() => captureHotkey(hk.id)}
+              className="px-3 py-1.5 rounded bg-av-bg-elevated border border-av-border text-xs font-mono text-av-text-primary hover:border-av-accent-blue transition-colors min-w-[100px] text-center"
+            >
+              {hk.accelerator}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function AdvancedSettings({
+  settings,
+  onUpdate
+}: {
+  settings: Record<string, unknown>
+  onUpdate: (key: string, value: unknown) => void
+}) {
+  return (
+    <div className="space-y-6">
+      <h3 className="text-base font-semibold mb-4">Advanced Settings</h3>
+
+      <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+        <p className="text-sm text-yellow-400/80">
+          ⚠️ These settings may affect performance or stability.
+        </p>
+      </div>
+
+      <SettingField
+        label="Enable File Watcher"
+        description="Auto-sync file changes from watched folders"
+      >
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.enableFileWatcher as boolean}
+            onChange={(e) => onUpdate('enableFileWatcher', e.target.checked)}
+            className="w-4 h-4 rounded bg-av-bg-elevated border-av-border"
+          />
+          <span className="text-sm text-av-text-secondary">Enable</span>
+        </label>
+      </SettingField>
+
+      <SettingField
+        label="Search Debounce"
+        description={`Delay before search executes (ms). Current: ${settings.debounceMs}ms`}
+      >
+        <input
+          type="range"
+          min={100}
+          max={800}
+          step={50}
+          value={settings.debounceMs as number}
+          onChange={(e) => onUpdate('debounceMs', Number(e.target.value))}
+          className="w-full h-1.5 bg-av-bg-elevated rounded-lg appearance-none cursor-pointer accent-av-accent-blue"
+        />
+      </SettingField>
+
+      <SettingField
+        label="Max Cache Size"
+        description={`Maximum disk cache for thumbnails (MB). Current: ${settings.maxCacheSizeMB}MB`}
+      >
+        <input
+          type="number"
+          min={256}
+          max={10240}
+          step={256}
+          value={settings.maxCacheSizeMB as number}
+          onChange={(e) => onUpdate('maxCacheSizeMB', Number(e.target.value))}
+          className="input-base w-32"
+        />
+      </SettingField>
+    </div>
+  )
+}
+
+// Reusable form field component
+function SettingField({
+  label,
+  description,
+  children
+}: {
+  label: string
+  description?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-av-text-primary">{label}</label>
+      {description && <p className="text-xs text-av-text-muted">{description}</p>}
+      {children}
+    </div>
+  )
+}
+
+async function updateSetting(_key: string, _value: unknown): Promise<void> {
+  // Settings would be persisted via IPC or local storage
+}
+
+function saveSettings(): void {
+  // Persist all settings
+  console.log('[Settings] Saving preferences...')
+}
+
+export default SettingsPage
