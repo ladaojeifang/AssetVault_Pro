@@ -1,13 +1,16 @@
 import initSqlJs from 'sql.js'
 import { drizzle } from 'drizzle-orm/sql-js'
-import { join } from 'path'
-import { readFile, writeFile, rename } from 'fs/promises'
+import { join, dirname, normalize } from 'path'
+import { readFile, writeFile, rename, mkdir, unlink } from 'fs/promises'
+import { randomBytes } from 'node:crypto'
 import { app } from 'electron'
 import * as schema from './schema'
+import { createInitialSchemaOnSqlite } from './sqliteSchema'
 
 let db: ReturnType<typeof drizzle> | null = null
 let SQLjsDb: initSqlJs.Database | null = null
-const DB_FILENAME = 'assetvault.db'
+/** Absolute path to the active library.sqlite (set in initDatabase). */
+let activeDbFilePath: string | null = null
 
 /** True after mutations until a successful saveDatabase(). */
 let dbDirty = false
@@ -22,19 +25,37 @@ export function getDatabase() {
   return db
 }
 
+/** Serialize disk writes — overlapping saves used the same *.tmp path and broke rename on Windows (ENOENT). */
+let saveTail: Promise<void> = Promise.resolve()
+
+async function writeDbAtomic(dbPath: string, buffer: Buffer): Promise<void> {
+  await mkdir(dirname(dbPath), { recursive: true })
+  const tmp = `${dbPath}.${process.pid}.${randomBytes(8).toString('hex')}.tmp`
+  try {
+    await writeFile(tmp, buffer)
+    await rename(tmp, dbPath)
+  } catch (e) {
+    await unlink(tmp).catch(() => {})
+    throw e
+  }
+}
+
 /**
  * Persist the in-memory SQLite database to disk.
  * Call this after important write operations or on app close.
  */
 export async function saveDatabase(): Promise<void> {
-  if (!SQLjsDb) return
+  if (!SQLjsDb || !activeDbFilePath) return
 
-  const userDataPath = app.getPath('userData')
-  const dbPath = join(userDataPath, DB_FILENAME)
-  const data = SQLjsDb.export()
-  const buffer = Buffer.from(data)
-  await writeFile(dbPath, buffer)
-  dbDirty = false
+  const p = saveTail.then(async () => {
+    if (!SQLjsDb || !activeDbFilePath) return
+    const dbPath = activeDbFilePath
+    const buffer = Buffer.from(SQLjsDb.export())
+    await writeDbAtomic(dbPath, buffer)
+    dbDirty = false
+  })
+  saveTail = p.catch(() => {})
+  return p
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null
@@ -74,16 +95,58 @@ export function stopDevAutosave(): void {
 }
 
 /**
+ * Close the in-memory DB and release sql.js (e.g. before switching library root).
+ */
+export async function closeDatabase(): Promise<void> {
+  stopDevAutosave()
+  if (persistTimer) {
+    clearTimeout(persistTimer)
+    persistTimer = null
+  }
+  await saveTail.catch(() => {})
+  if (SQLjsDb && activeDbFilePath) {
+    try {
+      const p = activeDbFilePath
+      const buffer = Buffer.from(SQLjsDb.export())
+      await writeDbAtomic(p, buffer)
+    } catch (e) {
+      console.error('[DB] closeDatabase flush failed:', e)
+    }
+  }
+  dbDirty = false
+  db = null
+  if (SQLjsDb) {
+    try {
+      SQLjsDb.close()
+    } catch {
+      /* ignore */
+    }
+    SQLjsDb = null
+  }
+  activeDbFilePath = null
+  saveTail = Promise.resolve()
+}
+
+/**
  * Initialize database with sql.js (pure WASM SQLite).
  * Loads existing DB from disk or creates a new one with full schema.
+ * @param dbPath Absolute path to library.sqlite inside the library root.
  */
-export async function initDatabase(): Promise<void> {
-  if (db) return
+export async function initDatabase(dbPath: string): Promise<void> {
+  const normalized = normalize(dbPath)
+  if (db && activeDbFilePath && normalize(activeDbFilePath) === normalized) {
+    return
+  }
+  if (db) {
+    console.warn('[DB] Replacing open database with:', normalized)
+    await closeDatabase()
+  }
 
-  const userDataPath = app.getPath('userData')
-  const dbPath = join(userDataPath, DB_FILENAME)
+  activeDbFilePath = normalized
 
-  console.log(`[DB] Initializing sql.js database at: ${dbPath}`)
+  await mkdir(dirname(normalized), { recursive: true })
+
+  console.log(`[DB] Initializing sql.js database at: ${normalized}`)
 
   // Initialize sql.js WASM engine
   const SQL = await initSqlJs()
@@ -91,7 +154,7 @@ export async function initDatabase(): Promise<void> {
   let isFreshDb = false
   let fileBuffer: Buffer | undefined
   try {
-    fileBuffer = await readFile(dbPath)
+    fileBuffer = await readFile(normalized)
   } catch (err: unknown) {
     const code = err && typeof err === 'object' && 'code' in err ? (err as NodeJS.ErrnoException).code : undefined
     if (code !== 'ENOENT') {
@@ -106,9 +169,9 @@ export async function initDatabase(): Promise<void> {
       console.log('[DB] Loaded existing database from disk')
     } catch (openErr) {
       console.error('[DB] File exists but is not a valid SQLite DB; keeping a backup copy:', openErr)
-      const corruptPath = `${dbPath}.corrupt-${Date.now()}`
+      const corruptPath = `${normalized}.corrupt-${Date.now()}`
       try {
-        await rename(dbPath, corruptPath)
+        await rename(normalized, corruptPath)
         console.error(`[DB] Renamed unreadable DB to: ${corruptPath}`)
       } catch (renameErr) {
         console.error('[DB] Could not rename corrupt DB file:', renameErr)
@@ -134,7 +197,7 @@ export async function initDatabase(): Promise<void> {
   db = drizzle(SQLjsDb, { schema })
 
   // Run schema creation (idempotent — all CREATE IF NOT EXISTS)
-  createInitialSchema(SQLjsDb)
+  createInitialSchemaOnSqlite(SQLjsDb)
 
   // Save initial state to disk if this is a fresh DB
   if (isFreshDb) {
@@ -153,149 +216,6 @@ export async function initDatabase(): Promise<void> {
   }
 
   console.log('[DB] Database initialized successfully')
-}
-
-function createInitialSchema(sqlite: initSqlJs.Database): void {
-  // Folders table
-  sqlite.run(`
-    CREATE TABLE IF NOT EXISTS folders (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      parent_id TEXT REFERENCES folders(id) ON DELETE CASCADE,
-      path TEXT NOT NULL UNIQUE,
-      level INTEGER NOT NULL DEFAULT 0,
-      asset_count INTEGER NOT NULL DEFAULT 0,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-    )
-  `)
-
-  // Assets table
-  sqlite.run(`
-    CREATE TABLE IF NOT EXISTS assets (
-      id TEXT PRIMARY KEY,
-      filename TEXT NOT NULL,
-      original_name TEXT NOT NULL,
-      extension TEXT NOT NULL,
-      mime_type TEXT NOT NULL,
-      file_type TEXT NOT NULL,
-      folder_id TEXT REFERENCES folders(id) ON DELETE CASCADE,
-      file_path TEXT NOT NULL UNIQUE,
-      file_size INTEGER NOT NULL,
-      width INTEGER,
-      height INTEGER,
-      dominant_color TEXT,
-      colors TEXT,
-      duration REAL,
-      thumbnail_path TEXT,
-      has_thumbnail INTEGER NOT NULL DEFAULT 0 CHECK(has_thumbnail IN (0, 1)),
-      metadata TEXT,
-      notes TEXT,
-      view_count INTEGER NOT NULL DEFAULT 0,
-      access_count INTEGER NOT NULL DEFAULT 0,
-      file_created_at INTEGER,
-      file_modified_at INTEGER,
-      imported_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-    )
-  `)
-
-  try {
-    sqlite.run('ALTER TABLE assets ADD COLUMN notes TEXT')
-  } catch {
-    /* column already exists */
-  }
-
-  // Tags table
-  sqlite.run(`
-    CREATE TABLE IF NOT EXISTS tags (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
-      color TEXT NOT NULL DEFAULT '#3B82F6',
-      description TEXT,
-      usage_count INTEGER NOT NULL DEFAULT 0,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    )
-  `)
-
-  // Asset-Tags junction
-  sqlite.run(`
-    CREATE TABLE IF NOT EXISTS asset_tags (
-      asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
-      tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-      assigned_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      PRIMARY KEY(asset_id, tag_id)
-    )
-  `)
-
-  /*
-   * FTS5 替代方案：使用普通表存储搜索索引 + LIKE 查询
-   * 原因：标准 sql.js (WASM) 不包含 FTS5 模块
-   * 对于本地桌面应用的数据规模，LIKE + 索引性能足够
-   */
-  sqlite.run(`
-    CREATE TABLE IF NOT EXISTS assets_search (
-      asset_id TEXT PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
-      search_text TEXT NOT NULL,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    )
-  `)
-
-  // Indexes for performance
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_assets_folder_id ON assets(folder_id);`)
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_assets_file_type ON assets(file_type);`)
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_assets_imported_at ON assets(imported_at DESC);`)
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_assets_dominant_color ON assets(dominant_color);`)
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_folders_parent_id ON folders(parent_id);`)
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_asset_tags_tag_id ON asset_tags(tag_id);`)
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_asset_tags_asset_id ON asset_tags(asset_id);`)
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_assets_search_text ON assets_search(search_text);`)
-
-  // Triggers: keep assets_search table in sync with assets
-  sqlite.run(`
-    CREATE TRIGGER IF NOT EXISTS tr_assets_search_insert AFTER INSERT ON assets BEGIN
-      INSERT INTO assets_search(asset_id, search_text)
-      VALUES (new.id, new.filename || ' ' || new.original_name);
-    END;
-
-    CREATE TRIGGER IF NOT EXISTS tr_assets_search_delete AFTER DELETE ON assets BEGIN
-      DELETE FROM assets_search WHERE asset_id = old.id;
-    END;
-
-    CREATE TRIGGER IF NOT EXISTS tr_assets_search_update AFTER UPDATE ON assets BEGIN
-      DELETE FROM assets_search WHERE asset_id = old.id;
-      INSERT INTO assets_search(asset_id, search_text)
-      VALUES (new.id, new.filename || ' ' || new.original_name ||
-        COALESCE((SELECT ' ' || GROUP_CONCAT(t.name) FROM tags t JOIN asset_tags at ON t.id = at.tag_id WHERE at.asset_id = new.id), '')
-      );
-    END;
-  `)
-
-  // Trigger to update tag usage count
-  sqlite.run(`
-    CREATE TRIGGER IF NOT EXISTS tr_tag_usage_insert AFTER INSERT ON asset_tags BEGIN
-      UPDATE tags SET usage_count = usage_count + 1 WHERE id = new.tag_id;
-    END;
-
-    CREATE TRIGGER IF NOT EXISTS tr_tag_usage_delete AFTER DELETE ON asset_tags BEGIN
-      UPDATE tags SET usage_count = MAX(0, usage_count - 1) WHERE id = old.tag_id;
-    END;
-  `)
-
-  // Trigger to update folder asset count
-  sqlite.run(`
-    CREATE TRIGGER IF NOT EXISTS tr_folder_asset_insert AFTER INSERT ON assets WHEN new.folder_id IS NOT NULL BEGIN
-      UPDATE folders SET asset_count = asset_count + 1, updated_at = unixepoch()
-      WHERE id = new.folder_id;
-    END;
-
-    CREATE TRIGGER IF NOT EXISTS tr_folder_asset_delete AFTER DELETE ON assets WHEN old.folder_id IS NOT NULL BEGIN
-      UPDATE folders SET asset_count = MAX(0, asset_count - 1), updated_at = unixepoch()
-      WHERE id = old.folder_id;
-    END;
-  `)
-
-  console.log('[DB] Schema created/verified successfully')
 }
 
 export { db }

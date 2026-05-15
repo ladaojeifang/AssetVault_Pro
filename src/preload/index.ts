@@ -33,13 +33,26 @@ const api = {
   folders: {
     list: () => ipcRenderer.invoke('folders:list'),
     getTree: () => ipcRenderer.invoke('folders:get-tree'),
-    create: (data: { name: string; parentId?: string }) =>
+    create: (data: { name: string; parentId?: string; color?: string; icon?: string | null }) =>
       ipcRenderer.invoke('folders:create', data),
-    update: (id: string, data: { name?: string; parentId?: string }) =>
+    update: (id: string, data: { name?: string; parentId?: string; color?: string; icon?: string | null }) =>
       ipcRenderer.invoke('folders:update', id, data),
     delete: (id: string) => ipcRenderer.invoke('folders:delete', id),
     move: (id: string, newParentId: string) =>
-      ipcRenderer.invoke('folders:move', id, newParentId)
+      ipcRenderer.invoke('folders:move', id, newParentId),
+    getCoverAssetIds: (folderIds: string[]) =>
+      ipcRenderer.invoke('folders:get-cover-asset-ids', folderIds) as Promise<Record<string, string>>,
+    importIconFromFile: (sourcePath: string) =>
+      ipcRenderer.invoke('folders:import-icon-from-file', sourcePath) as Promise<{
+        relativePath: string
+        previewDataUrl: string
+      }>,
+    getIconDataUrl: (relativePath: string) =>
+      ipcRenderer.invoke('folders:get-icon-data-url', relativePath) as Promise<string | null>,
+    deleteStoredIcon: (relativePath: string) =>
+      ipcRenderer.invoke('folders:delete-stored-icon', relativePath) as Promise<boolean>,
+    setCover: (folderId: string, assetId: string) =>
+      ipcRenderer.invoke('folders:set-cover', folderId, assetId) as Promise<boolean>
   },
 
   // Asset operations
@@ -62,10 +75,56 @@ const api = {
     delete: (ids: string[]) => ipcRenderer.invoke('assets:delete', ids),
     move: (ids: string[], targetFolderId: string) =>
       ipcRenderer.invoke('assets:move', ids, targetFolderId),
+    addToFolders: (assetIds: string[], folderIds: string[]) =>
+      ipcRenderer.invoke('assets:add-to-folders', assetIds, folderIds),
+    removeFromFolders: (assetIds: string[], folderIds: string[]) =>
+      ipcRenderer.invoke('assets:remove-from-folders', assetIds, folderIds),
     updateMetadata: (id: string, metadata: Record<string, unknown>) =>
       ipcRenderer.invoke('assets:update-metadata', id, metadata),
     updateNotes: (id: string, notes: string) => ipcRenderer.invoke('assets:update-notes', id, notes),
-    getThumbnail: (id: string) => ipcRenderer.invoke('assets:get-thumbnail', id)
+    getThumbnail: (id: string) => ipcRenderer.invoke('assets:get-thumbnail', id),
+    analyzeColors: (id: string) => ipcRenderer.invoke('assets:analyze-colors', id),
+    rename: (id: string, newName: string) =>
+      ipcRenderer.invoke('assets:rename', id, newName) as Promise<{ filename: string }>,
+    analyzeColorsBatch: (ids: string[]) =>
+      ipcRenderer.invoke('assets:analyze-colors-batch', ids) as Promise<{ updated: number }>,
+    copyToLibrary: (assetIds: string[], targetLibraryRoot: string) =>
+      ipcRenderer.invoke('assets:copy-to-library', assetIds, targetLibraryRoot) as Promise<{
+        copied: number
+        skipped: number
+      }>
+  },
+
+  library: {
+    getInfo: () =>
+      ipcRenderer.invoke('library:get-info') as Promise<{
+        libraryRoot: string
+        manifestPath: string
+        dbPath: string
+      }>,
+    getState: () =>
+      ipcRenderer.invoke('library:get-state') as Promise<{
+        activeLibraryRoot: string
+        recentLibraries: string[]
+        libraryDisplayName: string
+        manifestPath: string
+        dbPath: string
+      }>,
+    switchRoot: (targetRoot: string) => ipcRenderer.invoke('library:switch', targetRoot),
+    pickAndSwitch: () => ipcRenderer.invoke('library:pick-and-switch'),
+    createAndSwitch: () => ipcRenderer.invoke('library:create-and-switch'),
+    removeFromRecent: (path: string) => ipcRenderer.invoke('library:remove-from-recent', path),
+    getStorageStats: () =>
+      ipcRenderer.invoke('library:get-storage-stats') as Promise<{
+        assetRowCount: number
+        itemPackCount: number
+        itemsDir: string
+      }>,
+    onLibrarySwitched: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('library:switched', handler)
+      return () => ipcRenderer.removeListener('library:switched', handler)
+    }
   },
 
   // Tag operations
@@ -90,10 +149,20 @@ const api = {
     }) => ipcRenderer.invoke('fs:select-dialog', options),
     selectFolderDialog: () => ipcRenderer.invoke('fs:select-folder-dialog'),
     openInExplorer: (filePath: string) => ipcRenderer.invoke('fs:open-in-explorer', filePath),
+    pathToFileUrl: (filePath: string) =>
+      ipcRenderer.invoke('fs:path-to-file-url', filePath) as Promise<string | null>,
+    readFileBytes: (filePath: string) =>
+      ipcRenderer.invoke('fs:read-file-bytes', filePath) as Promise<Uint8Array>,
     /** Required in sandboxed renderer when File.path is unavailable (drag/drop, file input). */
     getPathForFile: (file: File) => webUtils.getPathForFile(file),
     pathKind: (filePath: string) =>
-      ipcRenderer.invoke('fs:path-kind', filePath) as Promise<'file' | 'directory' | 'missing'>
+      ipcRenderer.invoke('fs:path-kind', filePath) as Promise<'file' | 'directory' | 'missing'>,
+    openAssetItemDirectory: (assetId: string) =>
+      ipcRenderer.invoke('fs:open-asset-item-directory', assetId) as Promise<boolean>,
+    copyFilesToClipboard: (assetIds: string[]) =>
+      ipcRenderer.invoke('fs:copy-files-to-clipboard', assetIds) as Promise<boolean>,
+    copyPathsToClipboard: (assetIds: string[]) =>
+      ipcRenderer.invoke('fs:copy-paths-to-clipboard', assetIds) as Promise<number>
   },
 
   // Import progress events

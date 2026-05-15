@@ -115,6 +115,14 @@
   .sidebar-section-title {
     @apply text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2 px-1;
   }
+
+  /**
+   * Left rail (Sidebar + LibrarySwitcher): +25% visual size for text & icons.
+   * Uses CSS zoom (Chromium/Electron); layout width grows proportionally.
+   */
+  .av-sidebar-zoom {
+    zoom: 1.25;
+  }
 }
 
 @layer utilities {
@@ -185,4 +193,15 @@ body {
 
 .arco-menu-dark {
   background-color: transparent !important;
+}
+
+/* Fallback if Arco Message is used elsewhere */
+.arco-message-wrapper .arco-message {
+  background: #1a1d2e !important;
+  border: 1px solid #2d3044 !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45) !important;
+  color: #f1f5f9 !important;
+}
+.arco-message-wrapper .arco-message-content {
+  color: #f1f5f9 !important;
 }

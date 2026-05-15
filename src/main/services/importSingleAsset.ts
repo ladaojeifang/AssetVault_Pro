@@ -1,19 +1,65 @@
-import { statSync, readFileSync } from 'fs'
-import { basename, extname } from 'path'
-import { toCanonicalFilePath, isSqliteUniqueFilePathError } from '../utils/pathUtils'
+import { statSync, readFileSync, mkdirSync, copyFileSync, rmSync, existsSync, readdirSync } from 'fs'
+import { basename, dirname, extname, join, sep } from 'path'
+import { toCanonicalFilePath, isSqliteUniqueConstraintError } from '../utils/pathUtils'
 import { v4 as uuidv4 } from 'uuid'
 import mime from 'mime-types'
 import { Transformer, ResizeFit } from '@napi-rs/image'
 import ExifReader from 'exifreader'
 import { db, persistDatabase } from '../db'
-import { assets, assetsSearch } from '../db/schema'
-import { eq } from 'drizzle-orm'
+import { assets, assetFolders } from '../db/schema'
+import { eq, and } from 'drizzle-orm'
 import { getFileType } from '../utils/fileUtils'
 import { getThumbnailService } from './ThumbnailService'
+import { shouldUseOriginalImageDimensions } from '../utils/thumbnailSizing'
+import { extractPaletteFromImageBuffer, serializePaletteColors } from '../utils/colorPalette'
+import { extractVideoFramePngBestEffort } from '../utils/videoFrame'
+import {
+  getLibraryRoot,
+  itemPackFileRelative,
+  itemThumbRelative,
+  sanitizeStorageFileName
+} from './libraryBundle'
+import { syncAssetSidecarFromDb, writeAssetSidecarMeta } from './assetSidecar'
+import { isModelThumbnailSkipped, markModelThumbnailSkipped } from './modelThumbnailSkip'
+
+function posixRelToFsAbs(libraryRoot: string, rel: string): string {
+  return join(libraryRoot, rel.split('/').join(sep))
+}
+
+/** Same basename as OBJ in the source folder, e.g. `chair.obj` → `chair.mtl`. */
+function findCompanionMtlBesideObj(objPath: string): string | null {
+  const dir = dirname(objPath)
+  const base = basename(objPath, extname(objPath))
+  const exact = join(dir, `${base}.mtl`)
+  if (existsSync(exact)) return exact
+
+  try {
+    const want = `${base}.mtl`.toLowerCase()
+    for (const name of readdirSync(dir)) {
+      if (name.toLowerCase() === want) return join(dir, name)
+    }
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+function copyObjCompanionMtl(sourceObjPath: string, itemDirAbs: string): void {
+  const mtlSource = findCompanionMtlBesideObj(sourceObjPath)
+  if (!mtlSource) return
+
+  const mtlName = sanitizeStorageFileName(basename(mtlSource))
+  const mtlDest = join(itemDirAbs, mtlName)
+  try {
+    copyFileSync(mtlSource, mtlDest)
+    console.log(`[Import] Copied companion MTL: ${mtlName}`)
+  } catch (e) {
+    console.warn(`[Import] Failed to copy companion MTL ${basename(mtlSource)}:`, e)
+  }
+}
 
 /**
- * Import one file into the library (DB + thumbnail + search index).
- * Used by IPC batch import and by the file watcher.
+ * Import one file into the portable library: copy into items/{id}/{original filename}, write meta.json, index in SQLite.
  */
 export async function importSingleAsset(
   filePath: string,
@@ -23,23 +69,48 @@ export async function importSingleAsset(
 
   const filePathCanonical = toCanonicalFilePath(filePath)
 
-  const existing = await database
+  const dupSource = await database
     .select({ id: assets.id })
     .from(assets)
-    .where(eq(assets.filePath, filePathCanonical))
+    .where(eq(assets.importSource, filePathCanonical))
     .get()
 
-  if (existing) {
-    console.log(`[Import] File already exists, skipping: ${basename(filePathCanonical)}`)
-    return existing.id
+  if (dupSource) {
+    console.log(`[Import] Same source path already imported, skipping: ${basename(filePathCanonical)}`)
+    if (targetFolderId) {
+      const existing = await database
+        .select()
+        .from(assetFolders)
+        .where(and(eq(assetFolders.assetId, dupSource.id), eq(assetFolders.folderId, targetFolderId)))
+        .get()
+      if (!existing) {
+        await database.insert(assetFolders).values({ assetId: dupSource.id, folderId: targetFolderId })
+        persistDatabase()
+        await syncAssetSidecarFromDb(database, dupSource.id)
+      }
+    }
+    return dupSource.id
   }
 
   const stat = statSync(filePathCanonical)
-  const ext = extname(filePathCanonical).toLowerCase()
+  const extWithDot = extname(filePathCanonical).toLowerCase()
+  const extNoDot = extWithDot.replace(/^\./, '')
   const mimeType = mime.lookup(filePathCanonical) || 'application/octet-stream'
-  const fileType = getFileType(mimeType, ext)
-  const filename = basename(filePathCanonical, ext)
+  const fileType = getFileType(mimeType, extWithDot)
+  const filename = basename(filePathCanonical, extWithDot)
+  const originalName = basename(filePathCanonical)
+  const storageFileName = sanitizeStorageFileName(originalName)
   const id = uuidv4()
+
+  const libraryRoot = getLibraryRoot()
+  const relOriginal = itemPackFileRelative(id, storageFileName)
+  const destAbs = posixRelToFsAbs(libraryRoot, relOriginal)
+  const itemDirAbs = join(libraryRoot, 'items', id)
+  mkdirSync(itemDirAbs, { recursive: true })
+  copyFileSync(filePathCanonical, destAbs)
+  if (extNoDot === 'obj') {
+    copyObjCompanionMtl(filePathCanonical, itemDirAbs)
+  }
 
   let width: number | undefined
   let height: number | undefined
@@ -52,33 +123,30 @@ export async function importSingleAsset(
 
   if (fileType === 'image') {
     try {
-      const fileBuffer = readFileSync(filePathCanonical)
+      const fileBuffer = readFileSync(destAbs)
       const transformer = new Transformer(fileBuffer)
       const imgInfo = await transformer.metadata()
       width = imgInfo.width
       height = imgInfo.height
 
-      const thumb = await getThumbnailService().generate(filePathCanonical, id, {
-        width: 256,
-        height: 256,
-        quality: 80
-      })
-      if (thumb) {
-        thumbnailPath = thumb.path
-        hasThumbnail = true
+      if (!shouldUseOriginalImageDimensions(width, height)) {
+        const thumb = await getThumbnailService().generate(destAbs, id, {
+          width: 256,
+          height: 256,
+          quality: 80
+        })
+        if (thumb && !thumb.usedOriginal) {
+          thumbnailPath = itemThumbRelative(id)
+          hasThumbnail = true
+        }
       }
 
-      const colorTransformer = new Transformer(fileBuffer)
-      const colorBuffer = await colorTransformer.resize(1, 1, undefined, ResizeFit.Inside).rawPixels()
-      dominantColor =
-        '#' +
-        [colorBuffer[0], colorBuffer[1], colorBuffer[2]]
-          .map((v: number) => Math.round(v).toString(16).padStart(2, '0'))
-          .join('')
-          .toUpperCase()
+      const palette = await extractPaletteFromImageBuffer(fileBuffer)
+      dominantColor = palette.dominantColor
+      colors = serializePaletteColors(palette.colors)
 
       try {
-        const exifTags = ExifReader.load(filePathCanonical, { expanded: true })
+        const exifTags = ExifReader.load(destAbs, { expanded: true })
         if (exifTags && typeof exifTags === 'object' && !Array.isArray(exifTags)) {
           metadataObj.exif = {}
           const tagMap = exifTags as unknown as Record<string, { value: unknown; description?: string }>
@@ -98,7 +166,7 @@ export async function importSingleAsset(
   } else if (fileType === 'video') {
     try {
       const { parseFile } = await import('music-metadata')
-      const mm = await parseFile(filePathCanonical, { skipCovers: true, duration: true })
+      const mm = await parseFile(destAbs, { skipCovers: true, duration: true })
       if (typeof mm.format.duration === 'number') duration = mm.format.duration
       for (const ti of mm.format.trackInfo) {
         if (ti.video) {
@@ -115,14 +183,25 @@ export async function importSingleAsset(
     }
     metadataObj.duration = duration ?? null
     try {
-      const thumb = await getThumbnailService().generateVideo(filePathCanonical, id, {
+      // Always extract a poster frame; generateVideo skips resize when frame long edge < 256
+      const thumb = await getThumbnailService().generateVideo(destAbs, id, {
         width: 256,
         height: 256,
         quality: 80
       })
       if (thumb) {
-        thumbnailPath = thumb.path
+        thumbnailPath = itemThumbRelative(id)
         hasThumbnail = true
+      }
+      try {
+        const frame = await extractVideoFramePngBestEffort(destAbs)
+        if (frame) {
+          const palette = await extractPaletteFromImageBuffer(frame)
+          dominantColor = palette.dominantColor
+          colors = serializePaletteColors(palette.colors)
+        }
+      } catch (colorErr) {
+        console.error('[Import] Video color analysis error:', colorErr)
       }
     } catch (error) {
       console.error('[Import] Video thumbnail error:', error)
@@ -130,23 +209,26 @@ export async function importSingleAsset(
   } else if (fileType === 'audio') {
     try {
       const { parseFile } = await import('music-metadata')
-      const mm = await parseFile(filePathCanonical, { skipCovers: true, duration: true })
+      const mm = await parseFile(destAbs, { skipCovers: true, duration: true })
       if (typeof mm.format.duration === 'number') duration = mm.format.duration
     } catch {
       // optional metadata
     }
     metadataObj.duration = duration ?? null
   }
+  // 3D thumbnails run after DB + meta.json (see schedule3dThumbnailAfterImport) — rendering can take minutes
+  // and must not block import; killing the app mid-render used to leave only items/{id}/original.* on disk.
 
   const insertValues = {
     id,
-    filename: `${filename}${ext}`,
-    originalName: basename(filePathCanonical),
-    extension: ext.replace('.', ''),
+    filename: `${filename}${extWithDot}`,
+    originalName,
+    extension: extNoDot,
     mimeType,
     fileType,
-    folderId: targetFolderId || null,
-    filePath: filePathCanonical,
+    folderId: null,
+    filePath: relOriginal,
+    importSource: filePathCanonical,
     fileSize: stat.size,
     width,
     height,
@@ -163,33 +245,145 @@ export async function importSingleAsset(
   try {
     await database.insert(assets).values(insertValues)
   } catch (e) {
-    if (isSqliteUniqueFilePathError(e)) {
+    const rowAfterError = await database.select().from(assets).where(eq(assets.id, id)).get()
+    if (rowAfterError) {
+      console.warn(`[Import] assets row exists after insert error, finishing sidecar: ${basename(filePathCanonical)}`, e)
+      return await finalizeImportedAsset(database, {
+        id,
+        targetFolderId,
+        fileType,
+        destAbs,
+        extNoDot
+      })
+    }
+
+    if (isSqliteUniqueConstraintError(e)) {
       const row = await database
         .select({ id: assets.id })
         .from(assets)
-        .where(eq(assets.filePath, filePathCanonical))
+        .where(eq(assets.importSource, filePathCanonical))
         .get()
       if (row) {
-        console.log(`[Import] Already in library (race or duplicate path): ${basename(filePathCanonical)}`)
+        console.log(`[Import] Already in library (race): ${basename(filePathCanonical)}`)
+        try {
+          removeOrphanItemDir(libraryRoot, id)
+        } catch {
+          /* ignore */
+        }
+        if (targetFolderId) {
+          const existingAf = await database
+            .select()
+            .from(assetFolders)
+            .where(and(eq(assetFolders.assetId, row.id), eq(assetFolders.folderId, targetFolderId)))
+            .get()
+          if (!existingAf) {
+            await database.insert(assetFolders).values({ assetId: row.id, folderId: targetFolderId })
+            persistDatabase()
+            await syncAssetSidecarFromDb(database, row.id)
+          }
+        }
         return row.id
       }
+    }
+    try {
+      removeOrphanItemDir(libraryRoot, id)
+    } catch {
+      /* ignore */
     }
     throw e
   }
 
-  const existingSearch = await database
-    .select({ assetId: assetsSearch.assetId })
-    .from(assetsSearch)
-    .where(eq(assetsSearch.assetId, id))
-    .get()
+  return await finalizeImportedAsset(database, {
+    id,
+    targetFolderId,
+    fileType,
+    destAbs,
+    extNoDot
+  })
+}
 
-  if (!existingSearch) {
-    await database.insert(assetsSearch).values({
-      assetId: id,
-      searchText: `${filename} ${basename(filePathCanonical)}`
-    })
+async function finalizeImportedAsset(
+  database: NonNullable<typeof db>,
+  opts: {
+    id: string
+    targetFolderId?: string
+    fileType: string
+    destAbs: string
+    extNoDot: string
+  }
+): Promise<string> {
+  const { id, targetFolderId, fileType, destAbs, extNoDot } = opts
+
+  const row = await database.select().from(assets).where(eq(assets.id, id)).get()
+  if (!row) {
+    throw new Error(`[Import] Asset row missing after insert: ${id}`)
+  }
+
+  writeAssetSidecarMeta(row, [], [])
+
+  if (targetFolderId) {
+    try {
+      const existingAf = await database
+        .select()
+        .from(assetFolders)
+        .where(and(eq(assetFolders.assetId, id), eq(assetFolders.folderId, targetFolderId)))
+        .get()
+      if (!existingAf) {
+        await database.insert(assetFolders).values({ assetId: id, folderId: targetFolderId })
+      }
+    } catch (folderErr) {
+      console.error('[Import] folder assignment failed:', folderErr)
+    }
+  }
+
+  await syncAssetSidecarFromDb(database, id)
+
+  if (fileType === '3d') {
+    void schedule3dThumbnailAfterImport(database, id, destAbs, extNoDot)
   }
 
   persistDatabase()
   return id
+}
+
+/** Generate 3D thumb after import; updates DB + meta.json when done. */
+export async function schedule3dThumbnailAfterImport(
+  database: NonNullable<typeof db>,
+  assetId: string,
+  destAbs: string,
+  extNoDot: string
+): Promise<void> {
+  if (isModelThumbnailSkipped(assetId)) return
+
+  try {
+    const thumb = await getThumbnailService().generateModel(destAbs, assetId, extNoDot, {
+      width: 256,
+      height: 256,
+      quality: 80
+    })
+    if (!thumb) {
+      markModelThumbnailSkipped(assetId)
+      return
+    }
+
+    await database
+      .update(assets)
+      .set({
+        thumbnailPath: itemThumbRelative(assetId),
+        hasThumbnail: true,
+        updatedAt: new Date()
+      })
+      .where(eq(assets.id, assetId))
+
+    await syncAssetSidecarFromDb(database, assetId)
+    persistDatabase()
+  } catch (error) {
+    markModelThumbnailSkipped(assetId)
+    console.warn('[Import] 3D thumbnail skipped:', error)
+  }
+}
+
+function removeOrphanItemDir(libraryRoot: string, id: string): void {
+  const dir = join(libraryRoot, 'items', id)
+  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
 }

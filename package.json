@@ -1,1 +1,134 @@
-{"name":"assetvault-pro","version":"0.5.0-alpha","description":"AssetVault Pro - Professional Digital Asset Management System","main":"./out/main/index.js","author":"AssetVault Team","license":"MIT","scripts":{"dev":"electron-vite dev","build":"electron-vite build","preview":"electron-vite preview","postinstall":"electron-builder install-app-deps","package":"electron-vite build && electron-builder --win","package:mac":"electron-vite build && electron-builder --mac","package:linux":"electron-vite build && electron-builder --linux","lint":"eslint . --ext .ts,.tsx,.js,.jsx","lint:fix":"eslint . --ext .ts,.tsx,.js,.jsx --fix","typecheck":"tsc --noEmit","db:generate":"drizzle-kit generate","db:migrate":"drizzle-kit migrate","db:studio":"drizzle-kit studio"},"dependencies":{"@arco-design/web-react":"^2.63.0","@napi-rs/image":"^1.6.4","@tanstack/react-virtual":"^3.5.6","chokidar":"^3.6.0","dayjs":"^1.11.13","drizzle-orm":"^0.33.0","exifreader":"^4.24.0","ffmpeg-static":"^5.2.0","file-type":"^19.4.0","framer-motion":"^11.9.0","lru-cache":"^10.4.3","mime-types":"^2.1.35","music-metadata":"^7.14.0","react":"^18.3.1","react-dom":"^18.3.1","react-router-dom":"^6.26.0","sql.js":"^1.10.3","uuid":"^10.0.0","zustand":"^4.5.5"},"devDependencies":{"@types/mime-types":"^2.1.4","@types/react":"^18.3.11","@types/react-dom":"^18.3.1","@types/uuid":"^10.0.0","@typescript-eslint/eslint-plugin":"^8.8.0","@typescript-eslint/parser":"^8.8.0","@vitejs/plugin-react":"^4.3.1","autoprefixer":"^10.4.20","drizzle-kit":"^0.24.0","electron":"^28.3.3","electron-builder":"^25.1.8","electron-vite":"^2.3.0","eslint":"^8.57.0","eslint-config-prettier":"^9.1.0","eslint-plugin-react-hooks":"^4.6.2","eslint-plugin-react-refresh":"^0.4.12","postcss":"^8.4.47","prettier":"^3.3.2","tailwindcss":"^3.4.13","typescript":"^5.6.3"},"build":{"appId":"com.assetvault.app","productName":"AssetVault Pro","directories":{"output":"release"},"asarUnpack":["node_modules/ffmpeg-static/**"],"files":["out/**/*","resources/**/*","node_modules/ffmpeg-static/**/*"],"win":{"target":[{"target":"nsis","arch":["x64"]}],"icon":"resources/icon.ico"},"mac":{"target":[{"target":"dmg","arch":["universal"]}]}},"packageManager":"pnpm@9.12.3"}
+{
+  "name": "assetvault-pro",
+  "version": "0.5.0-alpha",
+  "description": "AssetVault Pro - Professional Digital Asset Management System",
+  "main": "./out/main/index.js",
+  "author": "AssetVault Team",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "postinstall": "electron-builder install-app-deps",
+    "prepackage": "node scripts/prepackage-clean.mjs",
+    "package": "electron-vite build && electron-builder --win",
+    "package:mac": "electron-vite build && electron-builder --mac",
+    "package:linux": "electron-vite build && electron-builder --linux",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+    "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "clean:install": "powershell -ExecutionPolicy Bypass -File scripts/clean-install.ps1",
+    "preinstall": "node scripts/guard-package-manager.mjs"
+  },
+  "dependencies": {
+    "@arco-design/web-react": "^2.63.0",
+    "@babylonjs/core": "^9.7.0",
+    "@babylonjs/loaders": "^9.7.0",
+    "@napi-rs/image": "^1.6.4",
+    "@tanstack/react-virtual": "^3.5.6",
+    "babylonjs-fbx-loader": "^1.1.0",
+    "chokidar": "^3.6.0",
+    "dayjs": "^1.11.13",
+    "drizzle-orm": "^0.33.0",
+    "exifreader": "^4.24.0",
+    "ffmpeg-static": "^5.2.0",
+    "file-type": "^19.4.0",
+    "framer-motion": "^11.9.0",
+    "lru-cache": "^10.4.3",
+    "mime-types": "^2.1.35",
+    "music-metadata": "^7.14.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.0",
+    "sql.js": "^1.10.3",
+    "uuid": "^10.0.0",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@types/mime-types": "^2.1.4",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.8.0",
+    "@typescript-eslint/parser": "^8.8.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "drizzle-kit": "^0.24.0",
+    "electron": "^28.3.3",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "eslint-plugin-react-refresh": "^0.4.12",
+    "postcss": "^8.4.47",
+    "prettier": "^3.3.2",
+    "tailwindcss": "^3.4.13",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.assetvault.app",
+    "productName": "AssetVault Pro",
+    "directories": {
+      "output": "release"
+    },
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ],
+    "files": [
+      "out/**/*",
+      "resources/**/*",
+      "node_modules/ffmpeg-static/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icon.ico",
+      "sign": false,
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ]
+    }
+  },
+  "packageManager": "pnpm@9.12.3",
+  "overrides": {
+    "babylonjs-fbx-loader": {
+      "@babylonjs/core": "^9.7.0",
+      "@babylonjs/loaders": "^9.7.0"
+    }
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "@babylonjs/core": "9",
+        "@babylonjs/loaders": "9",
+        "@babylonjs/materials": "9"
+      }
+    }
+  }
+}

@@ -82,6 +82,10 @@ const HOTKEY_MAP: Record<string, (ctx: ReturnType<typeof useApp>) => void> = {
 
   'open-settings': () => {
     window.dispatchEvent(new CustomEvent('assetvault:open-settings'))
+  },
+
+  'focus-library-switcher': () => {
+    window.dispatchEvent(new CustomEvent('assetvault:focus-library-switcher'))
   }
 }
 
@@ -154,6 +158,7 @@ function resolveHotkeyId(e: KeyboardEvent): string | null {
   if (key === 'f5' || (key === 'r' && ctrl)) return 'refresh'
   if (key === ' ') return 'preview'
   if (ctrl && !shift && key === ',') return 'open-settings'
+  if (ctrl && !shift && key === 'l') return 'focus-library-switcher'
 
   return null
 }

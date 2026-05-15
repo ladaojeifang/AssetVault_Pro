@@ -35,6 +35,10 @@ const TitleBar: React.FC = () => {
     await window.assetVaultAPI.window.close()
   }
 
+  function openSettings() {
+    window.dispatchEvent(new CustomEvent('assetvault:open-settings'))
+  }
+
   return (
     <div className="titlebar-drag flex items-center justify-between h-9 px-3 bg-av-bg-secondary border-b border-av-border select-none shrink-0">
       {/* Left section */}
@@ -61,8 +65,20 @@ const TitleBar: React.FC = () => {
       {/* Center - spacer for drag area */}
       <div className="flex-1" />
 
-      {/* Right - Window controls */}
+      {/* Right - Settings + Window controls */}
       <div className="flex items-center titlebar-no-drag -mr-2">
+        <button
+          type="button"
+          onClick={openSettings}
+          className="w-[40px] h-[32px] flex items-center justify-center rounded hover:bg-av-bg-hover transition-colors text-av-text-secondary hover:text-av-text-primary"
+          title={`设置（${typeof navigator !== 'undefined' && navigator.platform?.toLowerCase().includes('mac') ? '⌘' : 'Ctrl'}+,）`}
+          aria-label="打开设置"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" strokeLinecap="round" />
+          </svg>
+        </button>
         <button
           onClick={handleMinimize}
           className="w-[46px] h-[32px] flex items-center justify-center hover:bg-av-bg-hover transition-colors"

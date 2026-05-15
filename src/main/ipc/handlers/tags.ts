@@ -2,7 +2,8 @@ import { ipcMain } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import { db, persistDatabase, getDatabase } from '../../db'
 import { tags, assetTags, assetsSearch, assets } from '../../db/schema'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, count, asc } from 'drizzle-orm'
+import { syncAssetSidecarFromDb } from '../../services/assetSidecar'
 
 async function rebuildAssetSearchText(database: ReturnType<typeof getDatabase>, assetId: string): Promise<void> {
   const asset = await database
@@ -28,7 +29,17 @@ async function rebuildAssetSearchText(database: ReturnType<typeof getDatabase>, 
 export function handleTagOperations(ipc: typeof ipcMain): void {
   ipc.handle('tags:list', async () => {
     const database = db!
-    return database.select().from(tags).all()
+    const rows = await database.select().from(tags).orderBy(asc(tags.name)).all()
+    const usageRows = await database
+      .select({ tagId: assetTags.tagId, c: count() })
+      .from(assetTags)
+      .groupBy(assetTags.tagId)
+      .all()
+    const usageMap = new Map(usageRows.map((r) => [r.tagId, Number(r.c ?? 0)]))
+    return rows.map((t) => ({
+      ...t,
+      usageCount: usageMap.get(t.id) ?? 0
+    }))
   })
 
   ipc.handle(
@@ -80,6 +91,7 @@ export function handleTagOperations(ipc: typeof ipcMain): void {
       }
 
       await rebuildAssetSearchText(database, assetId)
+      await syncAssetSidecarFromDb(database, assetId)
     }
 
     persistDatabase()
@@ -97,6 +109,7 @@ export function handleTagOperations(ipc: typeof ipcMain): void {
       }
 
       await rebuildAssetSearchText(database, assetId)
+      await syncAssetSidecarFromDb(database, assetId)
     }
 
     persistDatabase()

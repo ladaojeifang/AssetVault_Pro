@@ -27,7 +27,8 @@ export default defineConfig({
       outDir: 'out/preload',
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'src/preload/index.ts')
+          index: resolve(__dirname, 'src/preload/index.ts'),
+          modelThumbnail: resolve(__dirname, 'src/preload/modelThumbnail.ts')
         }
       }
     }
@@ -38,7 +39,8 @@ export default defineConfig({
       outDir: resolve(__dirname, 'out/renderer'),
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'src/renderer/index.html')
+          index: resolve(__dirname, 'src/renderer/index.html'),
+          modelThumbnail: resolve(__dirname, 'src/renderer/model-thumbnail/index.html')
         }
       }
     },
@@ -49,6 +51,9 @@ export default defineConfig({
       }
     },
     plugins: [react()],
+    optimizeDeps: {
+      include: ['@babylonjs/core', '@babylonjs/loaders', 'babylonjs-fbx-loader']
+    },
     css: {
       postcss: {
         plugins: [

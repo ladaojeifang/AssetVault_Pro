@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Modal } from '@arco-design/web-react'
+import { LibrarySettingsPanel } from './LibrarySettingsPanel'
 
 /**
  * Settings / Preferences Page
@@ -36,6 +37,7 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
 
   const tabs = [
     { id: 'general', label: 'General', icon: '⚙️' },
+    { id: 'library', label: 'Library', icon: '📁' },
     { id: 'appearance', label: 'Appearance', icon: '🎨' },
     { id: 'shortcuts', label: 'Shortcuts', icon: '⌨️' },
     { id: 'advanced', label: 'Advanced', icon: '🔧' }
@@ -77,6 +79,7 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
         {/* Content area */}
         <div className="flex-1 p-6 overflow-y-auto">
           {activeTab === 'general' && <GeneralSettings settings={settings} onUpdate={(k, v) => updateSetting(k as any, v)} />}
+          {activeTab === 'library' && <LibrarySettingsPanel />}
           {activeTab === 'appearance' && <AppearanceSettings settings={settings} onUpdate={(k, v) => updateSetting(k as any, v)} />}
           {activeTab === 'shortcuts' && <ShortcutSettings />}
           {activeTab === 'advanced' && <AdvancedSettings settings={settings} onUpdate={(k, v) => updateSetting(k as any, v)} />}
@@ -237,6 +240,7 @@ function ShortcutSettings() {
     { id: 'import-folder', accelerator: 'Ctrl+Shift+O', description: 'Import folder' },
     { id: 'toggle-sidebar', accelerator: 'Ctrl+B', description: 'Toggle sidebar' },
     { id: 'toggle-detail', accelerator: 'Ctrl+D', description: 'Toggle detail panel' },
+    { id: 'library-switcher', accelerator: 'Ctrl+L', description: 'Open library switcher (sidebar)' },
     { id: 'delete', accelerator: 'Delete', description: 'Delete selected' },
     { id: 'refresh', accelerator: 'F5', description: 'Refresh view' }
   ])
@@ -281,6 +285,83 @@ function ShortcutSettings() {
   )
 }
 
+function LibraryStorageStatsCard(): React.ReactElement {
+  const [stats, setStats] = useState<{ assetRowCount: number; itemPackCount: number; itemsDir: string } | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setErr(null)
+    try {
+      const s = await window.assetVaultAPI.library.getStorageStats()
+      setStats(s)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+      setStats(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  useEffect(() => {
+    const unsub = window.assetVaultAPI.library.onLibrarySwitched(() => void load())
+    return unsub
+  }, [load])
+
+  const diff =
+    stats != null ? stats.itemPackCount - stats.assetRowCount : null
+
+  return (
+    <div className="p-4 rounded-lg bg-av-bg-elevated border border-av-border space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-sm font-semibold text-av-text-primary">资料库自检</h4>
+        <button type="button" onClick={() => void load()} disabled={loading} className="btn-secondary text-xs px-2 py-1">
+          {loading ? '刷新中…' : '刷新'}
+        </button>
+      </div>
+      <p className="text-xs text-av-text-muted leading-relaxed">
+        主界面列表来自 <code className="text-[11px] px-1 rounded bg-av-bg-secondary">library.sqlite</code> 的{' '}
+        <code className="text-[11px] px-1 rounded bg-av-bg-secondary">assets</code> 表；此处对比磁盘上{' '}
+        <code className="text-[11px] px-1 rounded bg-av-bg-secondary">items/</code> 子目录数量。
+      </p>
+      {err != null && <p className="text-xs text-red-400">{err}</p>}
+      {stats != null && (
+        <dl className="grid grid-cols-2 gap-2 text-sm">
+          <div className="rounded-md bg-av-bg-secondary/80 px-3 py-2 border border-av-border/60">
+            <dt className="text-xs text-av-text-muted">assets 行数</dt>
+            <dd className="font-mono text-av-text-primary tabular-nums mt-0.5">{stats.assetRowCount}</dd>
+          </div>
+          <div className="rounded-md bg-av-bg-secondary/80 px-3 py-2 border border-av-border/60">
+            <dt className="text-xs text-av-text-muted">items 子目录数</dt>
+            <dd className="font-mono text-av-text-primary tabular-nums mt-0.5">{stats.itemPackCount}</dd>
+          </div>
+        </dl>
+      )}
+      {stats != null && diff != null && diff !== 0 && (
+        <p className="text-xs text-amber-400/90">
+          {diff > 0
+            ? `磁盘上多 ${diff} 个目录：多为历史残留（库内已无对应记录），界面不会显示这些文件夹。`
+            : `数据库记录比 items 子目录多 ${-diff} 条：可能部分包目录缺失或已被手动删除。`}
+        </p>
+      )}
+      {stats != null && diff === 0 && stats.assetRowCount > 0 && (
+        <p className="text-xs text-emerald-400/80">数量一致；若主界面仍为空，请检查侧栏文件夹筛选与类型筛选。</p>
+      )}
+      {stats != null && stats.assetRowCount === 0 && stats.itemPackCount === 0 && (
+        <p className="text-xs text-av-text-muted">当前库为空，请通过导入或拖拽添加资源。</p>
+      )}
+      {stats != null && (
+        <p className="text-[11px] text-av-text-muted font-mono break-all">items: {stats.itemsDir}</p>
+      )}
+    </div>
+  )
+}
+
 function AdvancedSettings({
   settings,
   onUpdate
@@ -291,6 +372,8 @@ function AdvancedSettings({
   return (
     <div className="space-y-6">
       <h3 className="text-base font-semibold mb-4">Advanced Settings</h3>
+
+      <LibraryStorageStatsCard />
 
       <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
         <p className="text-sm text-yellow-400/80">

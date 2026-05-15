@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react'
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
 import type { AssetItem, FolderItem, TagItem, ViewMode, SortField, QueryParams, QueryResult } from '@/shared/types'
 
 const ASSET_CHUNK_SIZE = 80
@@ -104,6 +104,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const listGenerationRef = useRef(0)
 
+  const loadTagList = useCallback(async () => {
+    try {
+      const tagList = await window.assetVaultAPI.tags.list()
+      setState((prev) => ({ ...prev, tags: tagList as TagItem[] }))
+    } catch (error) {
+      console.error('Failed to fetch tags:', error)
+    }
+  }, [])
+
   const fetchAssets = useCallback(async (params?: Partial<QueryParams> & { append?: boolean }) => {
     const append = params?.append === true
     const { append: _appendIgnored, ...queryOverrides } = params || {}
@@ -142,13 +151,86 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isLoading: false,
         isLoadingMore: false
       }))
+
+      if (!append) {
+        await loadTagList()
+      }
     } catch (error) {
       console.error('Failed to fetch assets:', error)
       if (listGenerationRef.current === requestGen) {
         setState((prev) => ({ ...prev, isLoading: false, isLoadingMore: false }))
       }
     }
+  }, [loadTagList])
+
+  const reloadAfterLibrarySwitch = useCallback(async () => {
+    listGenerationRef.current += 1
+    const gen = listGenerationRef.current
+    const sortField = stateRef.current.sortField
+    const sortOrder = stateRef.current.sortOrder
+
+    setState((prev) => ({
+      ...prev,
+      selectedAssetIds: new Set(),
+      detailPanelOpen: false,
+      currentFolderId: null,
+      searchQuery: '',
+      fileTypeFilter: null,
+      tagFilters: [],
+      assets: [],
+      totalAssets: 0,
+      hasMoreAssets: false,
+      isLoading: true,
+      isLoadingMore: false
+    }))
+
+    let tree: FolderItem[] = []
+    let tagList: TagItem[] = []
+    try {
+      tree = (await window.assetVaultAPI.folders.getTree()) as FolderItem[]
+      tagList = (await window.assetVaultAPI.tags.list()) as TagItem[]
+    } catch (error) {
+      console.error('[App] reload folders/tags after library switch:', error)
+    }
+
+    if (listGenerationRef.current !== gen) return
+
+    setState((prev) => ({ ...prev, folderTree: tree, tags: tagList }))
+
+    try {
+      const result = (await window.assetVaultAPI.assets.query({
+        offset: 0,
+        pageSize: ASSET_CHUNK_SIZE,
+        sortBy: sortField,
+        sortOrder
+      })) as QueryResult<AssetItem>
+
+      if (listGenerationRef.current !== gen) return
+
+      const items = result.items as AssetItem[]
+      const newLen = items.length
+      setState((prev) => ({
+        ...prev,
+        assets: items,
+        totalAssets: result.total,
+        hasMoreAssets: newLen < result.total,
+        isLoading: false,
+        isLoadingMore: false
+      }))
+    } catch (error) {
+      console.error('[App] reload assets after library switch:', error)
+      if (listGenerationRef.current === gen) {
+        setState((prev) => ({ ...prev, isLoading: false, isLoadingMore: false }))
+      }
+    }
   }, [])
+
+  useEffect(() => {
+    const unsub = window.assetVaultAPI.library.onLibrarySwitched(() => {
+      void reloadAfterLibrarySwitch()
+    })
+    return unsub
+  }, [reloadAfterLibrarySwitch])
 
   const actions: AppActions = {
     setViewMode: (mode) => setState((prev) => ({ ...prev, viewMode: mode })),
@@ -200,14 +282,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         console.error('Failed to fetch folders:', error)
       }
     },
-    refreshTags: async () => {
-      try {
-        const tagList = await window.assetVaultAPI.tags.list()
-        setState((prev) => ({ ...prev, tags: tagList as TagItem[] }))
-      } catch (error) {
-        console.error('Failed to fetch tags:', error)
-      }
-    },
+    refreshTags: loadTagList,
     startImport: () => setState((prev) => ({ ...prev, isImporting: true })),
     stopImport: () => setState((prev) => ({ ...prev, isImporting: false })),
     setDetailPanelOpen: (open) => setState((prev) => ({ ...prev, detailPanelOpen: open })),

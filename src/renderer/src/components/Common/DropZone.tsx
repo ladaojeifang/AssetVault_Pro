@@ -1,10 +1,18 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { useApp } from '../../stores/AppContext'
-import { resolveDroppedFilePaths } from '../../utils/resolveDroppedFilePaths'
+import {
+  dataTransferMightContainOsFiles,
+  isInternalAssetVaultDrag,
+  resolveDropPaths
+} from '../../utils/resolveDroppedFilePaths'
+import { notify } from './notify'
 
-function dataTransferHasFiles(dt: DataTransfer | null): boolean {
-  if (!dt?.types) return false
-  return Array.from(dt.types).some((t) => t === 'Files' || t === 'application/x-moz-file')
+/** OS 文件拖移在 dragover 阶段常常尚未填入 `files`，不能仅凭此时数据判断 —— 必须持续 preventDefault 才会在 drop 时拿到路径。 */
+function shouldHintFileImportOverlay(dt: DataTransfer | null): boolean {
+  if (!dt?.types?.length) return false
+  const types = Array.from(dt.types)
+  if (types.some((t) => t === 'Files' || t.toLowerCase() === 'files')) return true
+  return dataTransferMightContainOsFiles(dt)
 }
 
 /**
@@ -18,12 +26,12 @@ const DropZone: React.FC = () => {
 
   const runImportFromDataTransfer = useCallback(
     async (dt: DataTransfer) => {
-      const files = Array.from(dt.files)
-      if (files.length === 0) return
-
-      const paths = resolveDroppedFilePaths(files)
+      const paths = resolveDropPaths(dt)
       if (paths.length === 0) {
-        console.warn('[DropZone] No file paths resolved from drop (sandbox needs getPathForFile)')
+        console.warn('[DropZone] No file paths resolved from drop')
+        notify.warning(
+          '无法取得拖入文件的路径。请尝试从资源管理器拖到窗口中央，或使用工具栏「导入」。'
+        )
         return
       }
 
@@ -61,24 +69,32 @@ const DropZone: React.FC = () => {
     }
 
     const onDragEnter = (e: DragEvent) => {
-      if (!dataTransferHasFiles(e.dataTransfer)) return
+      const dt = e.dataTransfer
+      if (!dt) return
+      if (isInternalAssetVaultDrag(dt)) return
       e.preventDefault()
-      setIsDragging(true)
-      const n = e.dataTransfer?.items?.length ?? e.dataTransfer?.files?.length ?? 0
-      if (n > 0) setDragFileCount(n)
+      if (shouldHintFileImportOverlay(dt)) {
+        setIsDragging(true)
+        const n = dt.items?.length ?? dt.files?.length ?? 0
+        if (n > 0) setDragFileCount(n)
+      }
     }
 
     const onDragOver = (e: DragEvent) => {
-      if (!dataTransferHasFiles(e.dataTransfer)) return
+      const dt = e.dataTransfer
+      if (!dt) return
+      if (isInternalAssetVaultDrag(dt)) return
       e.preventDefault()
-      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+      dt.dropEffect = 'copy'
     }
 
     const onDrop = (e: DragEvent) => {
-      if (!dataTransferHasFiles(e.dataTransfer)) return
+      const dt = e.dataTransfer
+      if (!dt) return
+      if (isInternalAssetVaultDrag(dt)) return
       e.preventDefault()
       clearOverlay()
-      if (e.dataTransfer) void runImportFromDataTransfer(e.dataTransfer)
+      void runImportFromDataTransfer(dt)
     }
 
     const onDragEnd = () => {

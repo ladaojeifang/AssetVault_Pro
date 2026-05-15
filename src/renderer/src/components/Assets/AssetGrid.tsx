@@ -1,9 +1,16 @@
-import React, { useRef, useCallback, useEffect, useState } from 'react'
+import React, { useRef, useCallback, useEffect, useState, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Virtualizer } from '@tanstack/virtual-core'
 import { useApp } from '../../stores/AppContext'
-import { resolveDroppedFilePaths } from '../../utils/resolveDroppedFilePaths'
-import { formatFileSize } from '@/shared/types' // We'll add this utility
+import { resolveDropPaths } from '../../utils/resolveDroppedFilePaths'
+import { formatFileSize, type AssetItem, type FolderItem } from '@/shared/types'
+import { Modal, Input } from '@arco-design/web-react'
+import { AssetContextMenu, type AssetContextMenuState } from './AssetContextMenu'
+import { getChildFolders, findFolderInTree } from '../../utils/folderTreeNav'
+import { FolderIconDisplay } from '../Common/FolderIconDisplay'
+import { isAssetDragEvent } from '../../utils/assetDragDrop'
+import { addDraggedAssetsToFolder } from '../../utils/addAssetsToFolder'
+import { notify } from '../Common/notify'
 
 const AssetGrid: React.FC = () => {
   const {
@@ -16,13 +23,94 @@ const AssetGrid: React.FC = () => {
     selectedAssetIds,
     selectAsset,
     selectMultiple,
+    clearSelection,
     setDetailPanelOpen,
-    loadMoreAssets
+    loadMoreAssets,
+    tagFilters,
+    fileTypeFilter,
+    searchQuery,
+    currentFolderId,
+    refreshAssets,
+    refreshFolders,
+    folderTree,
+    setCurrentFolder
   } = useApp()
 
   const containerRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const dragStartRef = useRef<string | null>(null)
+  /** Index in current `assets` for Shift+click range selection */
+  const anchorIndexRef = useRef<number | null>(null)
+
+  const selectionFilterKey = `${tagFilters.join(',')}|${currentFolderId ?? ''}|${searchQuery}|${fileTypeFilter ?? ''}`
+  useEffect(() => {
+    anchorIndexRef.current = null
+  }, [selectionFilterKey])
+
+  const childFolders = useMemo(
+    () => getChildFolders(folderTree, currentFolderId),
+    [folderTree, currentFolderId]
+  )
+
+  const showFolderHierarchy =
+    !String(searchQuery || '').trim() && tagFilters.length === 0 && !fileTypeFilter
+  const showSubfolderStrip = showFolderHierarchy && childFolders.length > 0
+
+  const currentFolderNode = useMemo(
+    () => (currentFolderId ? findFolderInTree(folderTree, currentFolderId) : null),
+    [folderTree, currentFolderId]
+  )
+
+  const [coverAssetIds, setCoverAssetIds] = useState<Record<string, string>>({})
+  const [subfoldersOpen, setSubfoldersOpen] = useState(true)
+  const [contentOpen, setContentOpen] = useState(true)
+  const [dropTargetFolderId, setDropTargetFolderId] = useState<string | null>(null)
+  const [contextMenu, setContextMenu] = useState<AssetContextMenuState>(null)
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renameAssetId, setRenameAssetId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [renameBusy, setRenameBusy] = useState(false)
+  const [libraryRoots, setLibraryRoots] = useState<{ active: string; recent: string[] }>({
+    active: '',
+    recent: []
+  })
+
+  useEffect(() => {
+    void window.assetVaultAPI.library.getState().then((s) => {
+      setLibraryRoots({ active: s.activeLibraryRoot, recent: s.recentLibraries })
+    })
+    const unsub = window.assetVaultAPI.library.onLibrarySwitched(() => {
+      void window.assetVaultAPI.library.getState().then((s) => {
+        setLibraryRoots({ active: s.activeLibraryRoot, recent: s.recentLibraries })
+      })
+    })
+    return unsub
+  }, [])
+
+  useEffect(() => {
+    const ids = childFolders.map((c) => c.id)
+    if (ids.length === 0) {
+      setCoverAssetIds({})
+      return
+    }
+    let cancelled = false
+    void window.assetVaultAPI.folders
+      .getCoverAssetIds(ids)
+      .then((m) => {
+        if (!cancelled) setCoverAssetIds(m)
+      })
+      .catch(() => {
+        if (!cancelled) setCoverAssetIds({})
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [childFolders])
+
+  useEffect(() => {
+    setSubfoldersOpen(true)
+    setContentOpen(true)
+  }, [currentFolderId])
 
   const COLS = 8
 
@@ -30,7 +118,7 @@ const AssetGrid: React.FC = () => {
   const rowVirtualizer = useVirtualizer<Element, Element>({
     count: Math.max(1, Math.ceil(assets.length / COLS)),
     getScrollElement: () => containerRef.current,
-    estimateSize: () => (viewMode === 'grid' ? 220 : 56),
+    estimateSize: () => (viewMode === 'grid' ? 252 : 56),
     overscan: 4
   })
 
@@ -59,37 +147,88 @@ const AssetGrid: React.FC = () => {
 
   const handleAssetClick = useCallback(
     (id: string, event: React.MouseEvent) => {
-      if (event.ctrlKey || event.metaKey) {
-        selectAsset(id) // Toggle selection
-      } else {
-        selectMultiple([id]) // Single select
-        setDetailPanelOpen(true)
+      const idx = assets.findIndex((a) => a.id === id)
+      if (idx < 0) return
+
+      if (event.shiftKey && anchorIndexRef.current !== null) {
+        const from = Math.min(anchorIndexRef.current, idx)
+        const to = Math.max(anchorIndexRef.current, idx)
+        const ids = assets.slice(from, to + 1).map((a) => a.id)
+        selectMultiple(ids)
+        return
       }
+
+      if (event.ctrlKey || event.metaKey) {
+        selectAsset(id)
+        anchorIndexRef.current = idx
+        return
+      }
+
+      // Plain click on the only selected item → deselect (toggle off)
+      if (selectedAssetIds.size === 1 && selectedAssetIds.has(id)) {
+        clearSelection()
+        anchorIndexRef.current = null
+        return
+      }
+
+      anchorIndexRef.current = idx
+      selectMultiple([id])
+      setDetailPanelOpen(true)
     },
-    [selectAsset, selectMultiple, setDetailPanelOpen]
+    [assets, selectedAssetIds, selectAsset, selectMultiple, clearSelection, setDetailPanelOpen]
   )
 
   const handleAssetDoubleClick = useCallback(
     async (id: string) => {
-      // Open the asset in the system's default application
       const asset = assets.find((a) => a.id === id)
-      if (asset?.filePath) {
-        await window.assetVaultAPI.fs.openInExplorer(asset.filePath)
+      const p = asset?.resolvedFilePath ?? asset?.filePath
+      if (p) {
+        await window.assetVaultAPI.fs.openInExplorer(p)
       }
     },
     [assets]
   )
 
-  const handleDragStart = (e: React.DragEvent, asset: { id: string; filename: string; filePath: string }) => {
-    dragStartRef.current = asset.id
-    e.dataTransfer.effectAllowed = 'copyMove'
-    try {
-      e.dataTransfer.setData('text/plain', asset.filename || 'asset')
-      e.dataTransfer.setData('application/x-assetvault-asset-id', asset.id)
-    } catch {
-      // Some platforms restrict custom MIME types during drag
-    }
-  }
+  const handleDragStart = useCallback(
+    (
+      e: React.DragEvent,
+      asset: { id: string; filename: string; filePath: string; resolvedFilePath?: string }
+    ) => {
+      dragStartRef.current = asset.id
+      e.dataTransfer.effectAllowed = 'copyMove'
+      const inSelection = selectedAssetIds.size > 0 && selectedAssetIds.has(asset.id)
+      const assetIds = inSelection ? Array.from(selectedAssetIds) : [asset.id]
+      const addToFolderOnly = e.altKey
+      try {
+        e.dataTransfer.setData('text/plain', asset.filename || 'asset')
+        e.dataTransfer.setData('application/x-assetvault-asset-id', asset.id)
+        e.dataTransfer.setData(
+          'application/x-assetvault-drag',
+          JSON.stringify({ assetIds, addToFolderOnly })
+        )
+      } catch {
+        // Some platforms restrict custom MIME types during drag
+      }
+    },
+    [selectedAssetIds]
+  )
+
+  const handleDropOnSubfolder = useCallback(
+    async (e: React.DragEvent, folderId: string) => {
+      setDropTargetFolderId(null)
+      try {
+        const result = await addDraggedAssetsToFolder(e, folderId)
+        if (!result.ok) return
+        notify.success(`已将 ${result.count} 项加入「${findFolderInTree(folderTree, folderId)?.name ?? '文件夹'}」`)
+        await refreshAssets()
+        await refreshFolders()
+      } catch (err) {
+        console.error('[AssetGrid] drop on folder:', err)
+        notify.error('加入文件夹失败')
+      }
+    },
+    [folderTree, refreshAssets, refreshFolders]
+  )
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -109,14 +248,129 @@ const AssetGrid: React.FC = () => {
     [assets, selectedAssetIds, selectMultiple]
   )
 
-  async function handleDelete() {
-    if (selectedAssetIds.size === 0) return
-    if (!confirm(`Delete ${selectedAssetIds.size} item(s)?`)) return
+  async function handleDelete(ids?: string[]) {
+    const toDelete = ids ?? Array.from(selectedAssetIds)
+    if (toDelete.length === 0) return
+    if (!confirm(`确定删除 ${toDelete.length} 项？`)) return
 
-    await window.assetVaultAPI.assets.delete(Array.from(selectedAssetIds))
+    await window.assetVaultAPI.assets.delete(toDelete)
     selectMultiple([])
-    // Refresh will be handled by parent
+    await refreshAssets()
+    await refreshFolders()
   }
+
+  const handleAssetContextMenu = useCallback(
+    (e: React.MouseEvent, asset: AssetItem) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const ids =
+        selectedAssetIds.has(asset.id) && selectedAssetIds.size > 0
+          ? Array.from(selectedAssetIds)
+          : [asset.id]
+      const primary = assets.find((a) => a.id === asset.id) ?? asset
+      setContextMenu({ assetIds: ids, primaryAsset: primary, x: e.clientX, y: e.clientY })
+    },
+    [assets, selectedAssetIds]
+  )
+
+  const handleAssetMenuAction = useCallback(
+    async (key: string, assetIds: string[], extra?: string) => {
+      try {
+        switch (key) {
+          case 'explorer':
+            await window.assetVaultAPI.fs.openAssetItemDirectory(assetIds[0]!)
+            break
+          case 'add-folder':
+            if (extra) {
+              await window.assetVaultAPI.assets.addToFolders(assetIds, [extra])
+              const name = findFolderInTree(folderTree, extra)?.name ?? '文件夹'
+              notify.success(`已将 ${assetIds.length} 项加入「${name}」`)
+              await refreshAssets()
+              await refreshFolders()
+            }
+            break
+          case 'add-library':
+            if (extra) {
+              const r = await window.assetVaultAPI.assets.copyToLibrary(assetIds, extra)
+              notify.success(`已复制 ${r.copied} 项到其它资料库${r.skipped ? `（跳过 ${r.skipped}）` : ''}`)
+            }
+            break
+          case 'set-cover':
+            if (currentFolderId && assetIds[0]) {
+              await window.assetVaultAPI.folders.setCover(currentFolderId, assetIds[0])
+              notify.success('已设为文件夹封面')
+              const ids = childFolders.map((c) => c.id)
+              if (ids.length) {
+                const m = await window.assetVaultAPI.folders.getCoverAssetIds(ids)
+                setCoverAssetIds(m)
+              }
+            }
+            break
+          case 'rename': {
+            const asset = assets.find((a) => a.id === assetIds[0])
+            if (!asset) break
+            setRenameAssetId(asset.id)
+            const base = asset.filename.replace(/\.[^.]+$/, '')
+            setRenameValue(base)
+            setRenameOpen(true)
+            break
+          }
+          case 'copy-files': {
+            const ok = await window.assetVaultAPI.fs.copyFilesToClipboard(assetIds)
+            if (ok) notify.success('已复制文件到剪贴板')
+            else notify.error('复制文件失败')
+            break
+          }
+          case 'copy-paths': {
+            const n = await window.assetVaultAPI.fs.copyPathsToClipboard(assetIds)
+            notify.success(`已复制 ${n} 条路径`)
+            break
+          }
+          case 'analyze-colors': {
+            const { updated } = await window.assetVaultAPI.assets.analyzeColorsBatch(assetIds)
+            notify.success(`已更新 ${updated} 项颜色`)
+            await refreshAssets()
+            break
+          }
+          case 'delete':
+            await handleDelete(assetIds)
+            break
+        }
+      } catch (err) {
+        console.error('[AssetGrid] menu action:', err)
+        notify.error(err instanceof Error ? err.message : '操作失败')
+      }
+    },
+    [
+      assets,
+      childFolders,
+      currentFolderId,
+      folderTree,
+      refreshAssets,
+      refreshFolders,
+      selectedAssetIds
+    ]
+  )
+
+  const submitRename = useCallback(async () => {
+    if (!renameAssetId) return
+    const name = renameValue.trim()
+    if (!name) {
+      notify.warning('请输入名称')
+      return
+    }
+    setRenameBusy(true)
+    try {
+      await window.assetVaultAPI.assets.rename(renameAssetId, name)
+      setRenameOpen(false)
+      notify.success('已重命名')
+      await refreshAssets()
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : '重命名失败')
+    } finally {
+      setRenameBusy(false)
+    }
+  }, [renameAssetId, renameValue, refreshAssets])
 
   // Keyboard navigation
   useEffect(() => {
@@ -126,7 +380,7 @@ const AssetGrid: React.FC = () => {
     return () => el.removeEventListener('keydown', handleKeyDown as any)
   }, [handleKeyDown])
 
-  if (isLoading && assets.length === 0) {
+  if (isLoading && assets.length === 0 && !showSubfolderStrip) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-av-text-muted">
@@ -142,11 +396,19 @@ const AssetGrid: React.FC = () => {
     )
   }
 
-  if (!isLoading && assets.length === 0) {
+  const listAreaEmpty = !isLoading && assets.length === 0
+
+  if (listAreaEmpty && !showSubfolderStrip) {
     return (
       <EmptyState />
     )
   }
+
+  const parentNavLabel = !currentFolderNode
+    ? '全部资产'
+    : currentFolderNode.parentId == null || currentFolderNode.parentId === undefined
+      ? '全部资产'
+      : findFolderInTree(folderTree, currentFolderNode.parentId)?.name ?? '上级'
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -158,43 +420,159 @@ const AssetGrid: React.FC = () => {
             <span className="text-av-text-secondary"> · {assets.length.toLocaleString()} in view</span>
           )}
           {selectedAssetIds.size > 0 && ` · ${selectedAssetIds.size} selected`}
+          {assets.length > 1 && (
+            <span className="text-av-text-muted/80 hidden sm:inline">
+              {' '}
+              · Ctrl/⌘+单击多选 · Shift+单击范围 · 拖到上方子文件夹加入目录
+            </span>
+          )}
         </span>
         {isLoadingMore && <span className="text-xs text-av-accent-blue">Loading more…</span>}
+        {isLoading && assets.length > 0 && (
+          <span className="text-xs text-av-text-muted">Updating…</span>
+        )}
       </div>
 
-      {/* Grid/List content with virtual scroll */}
+      {currentFolderId && showFolderHierarchy && (
+        <div className="px-4 py-2 border-b border-av-border/40 shrink-0">
+          <button
+            type="button"
+            onClick={() => void setCurrentFolder(currentFolderNode?.parentId ?? null)}
+            className="text-xs text-av-accent-blue hover:underline"
+          >
+            ← 返回「{parentNavLabel}」
+          </button>
+        </div>
+      )}
+
+      {/* Grid/List + folder hierarchy */}
       <div
         ref={containerRef}
         tabIndex={0}
-        className={`flex-1 overflow-auto outline-none ${
-          viewMode === 'grid' ? 'p-4' : ''
+        className={`flex-1 overflow-auto outline-none flex flex-col ${
+          viewMode === 'grid' ? 'p-4 gap-3' : 'px-4 py-2'
         }`}
         style={{
           contain: 'strict'
         }}
       >
-        {viewMode === 'grid' ? (
-          <GridContent
-            assets={assets}
-            columns={COLS}
-            virtualizer={rowVirtualizer}
-            selectedIds={selectedAssetIds}
-            onAssetClick={handleAssetClick}
-            onAssetDoubleClick={handleAssetDoubleClick}
-            onDragStart={handleDragStart}
-          />
-        ) : (
-          <ListContent
-            assets={assets}
-            virtualizer={listVirtualizer}
-            selectedIds={selectedAssetIds}
-            onAssetClick={handleAssetClick}
-            onAssetDoubleClick={handleAssetDoubleClick}
-            onDragStart={handleDragStart}
-          />
+        {showFolderHierarchy && showSubfolderStrip && (
+          <div className="shrink-0 border-b border-av-border/40 pb-3">
+            <button
+              type="button"
+              className="flex items-center gap-2 w-full text-left text-sm font-medium text-av-text-secondary hover:text-av-text-primary mb-2"
+              onClick={() => setSubfoldersOpen((o) => !o)}
+            >
+              <span
+                className={`inline-block w-4 text-[10px] text-av-text-muted transition-transform ${
+                  subfoldersOpen ? '' : '-rotate-90'
+                }`}
+              >
+                ▼
+              </span>
+              子文件夹 ({childFolders.length})
+            </button>
+            {subfoldersOpen && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {childFolders.map((f) => (
+                  <FolderBrowseCard
+                    key={f.id}
+                    folder={f}
+                    coverAssetId={coverAssetIds[f.id]}
+                    isDropTarget={dropTargetFolderId === f.id}
+                    onOpen={() => void setCurrentFolder(f.id)}
+                    onAssetDragOver={(e) => {
+                      if (!isAssetDragEvent(e)) return
+                      e.preventDefault()
+                      e.stopPropagation()
+                      e.dataTransfer.dropEffect = 'copy'
+                      setDropTargetFolderId(f.id)
+                    }}
+                    onAssetDragLeave={() => {
+                      setDropTargetFolderId((prev) => (prev === f.id ? null : prev))
+                    }}
+                    onAssetDrop={(e) => void handleDropOnSubfolder(e, f.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         )}
+
+        {showFolderHierarchy && (
+          <div className="shrink-0 border-b border-av-border/30 pb-2">
+            <button
+              type="button"
+              className="flex items-center gap-2 w-full text-left text-sm font-medium text-av-text-secondary hover:text-av-text-primary"
+              onClick={() => setContentOpen((o) => !o)}
+            >
+              <span
+                className={`inline-block w-4 text-[10px] text-av-text-muted transition-transform ${
+                  contentOpen ? '' : '-rotate-90'
+                }`}
+              >
+                ▼
+              </span>
+              内容 ({totalAssets})
+            </button>
+          </div>
+        )}
+
+        {(!showFolderHierarchy || contentOpen) && (
+          <>
+            {assets.length > 0 ? (
+              viewMode === 'grid' ? (
+                <GridContent
+                  assets={assets}
+                  columns={COLS}
+                  virtualizer={rowVirtualizer}
+                  selectedIds={selectedAssetIds}
+                  onAssetClick={handleAssetClick}
+                  onAssetDoubleClick={handleAssetDoubleClick}
+                  onDragStart={handleDragStart}
+                  onAssetContextMenu={handleAssetContextMenu}
+                  showCaptions={showFolderHierarchy}
+                />
+              ) : (
+                <ListContent
+                  assets={assets}
+                  virtualizer={listVirtualizer}
+                  selectedIds={selectedAssetIds}
+                  onAssetClick={handleAssetClick}
+                  onAssetDoubleClick={handleAssetDoubleClick}
+                  onDragStart={handleDragStart}
+                  onAssetContextMenu={handleAssetContextMenu}
+                />
+              )
+            ) : showFolderHierarchy ? (
+              <div className="py-10 text-center text-sm text-av-text-muted">此位置暂无素材文件</div>
+            ) : null}
+          </>
+        )}
+
         {hasMoreAssets && <div ref={sentinelRef} className="h-8 w-full shrink-0" aria-hidden />}
       </div>
+
+      <AssetContextMenu
+        state={contextMenu}
+        folderTree={folderTree}
+        currentFolderId={currentFolderId}
+        recentLibraries={libraryRoots.recent}
+        activeLibraryRoot={libraryRoots.active}
+        onClose={() => setContextMenu(null)}
+        onAction={handleAssetMenuAction}
+      />
+
+      <Modal
+        title="重命名"
+        visible={renameOpen}
+        onOk={() => void submitRename()}
+        onCancel={() => setRenameOpen(false)}
+        confirmLoading={renameBusy}
+        autoFocus={false}
+      >
+        <Input value={renameValue} onChange={setRenameValue} placeholder="文件名（不含扩展名）" />
+      </Modal>
     </div>
   )
 }
@@ -207,7 +585,9 @@ function GridContent({
   selectedIds,
   onAssetClick,
   onAssetDoubleClick,
-  onDragStart
+  onDragStart,
+  onAssetContextMenu,
+  showCaptions = false
 }: {
   assets: typeof useApp extends () => infer T ? T extends { assets?: infer A } ? A : never : never
   columns: number
@@ -215,7 +595,12 @@ function GridContent({
   selectedIds: Set<string>
   onAssetClick: (id: string, e: React.MouseEvent) => void
   onAssetDoubleClick: (id: string) => void
-  onDragStart: (e: React.DragEvent, asset: { id: string; filename: string; filePath: string }) => void
+  onDragStart: (
+    e: React.DragEvent,
+    asset: { id: string; filename: string; filePath: string; resolvedFilePath?: string }
+  ) => void
+  onAssetContextMenu: (e: React.MouseEvent, asset: AssetItem) => void
+  showCaptions?: boolean
 }) {
   return (
     <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative', width: '100%' }}>
@@ -242,14 +627,26 @@ function GridContent({
           >
             {rowItems.map((asset: any, colIdx: number) =>
               asset ? (
-                <AssetCard
-                  key={asset.id}
-                  asset={asset}
-                  selected={selectedIds.has(asset.id)}
-                  onClick={(e) => onAssetClick(asset.id, e)}
-                  onDoubleClick={() => onAssetDoubleClick(asset.id)}
-                  onDragStart={(e) => onDragStart(e, asset)}
-                />
+                <div key={asset.id} className="flex flex-col min-w-0">
+                  <AssetCard
+                    asset={asset}
+                    selected={selectedIds.has(asset.id)}
+                    onClick={(e) => onAssetClick(asset.id, e)}
+                    onDoubleClick={() => onAssetDoubleClick(asset.id)}
+                    onDragStart={(e) => onDragStart(e, asset)}
+                    onContextMenu={(e) => onAssetContextMenu(e, asset)}
+                  />
+                  {showCaptions && (
+                    <div className="mt-1.5 px-0.5 space-y-0.5 shrink-0">
+                      <p className="text-xs truncate text-av-text-primary leading-tight">{asset.filename}</p>
+                      {asset.width && asset.height ? (
+                        <p className="text-[10px] text-av-text-muted tabular-nums">
+                          {asset.width} × {asset.height}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div key={`empty-${colIdx}`} />
               )
@@ -268,14 +665,19 @@ function ListContent({
   selectedIds,
   onAssetClick,
   onAssetDoubleClick,
-  onDragStart
+  onDragStart,
+  onAssetContextMenu
 }: {
   assets: any[]
   virtualizer: Virtualizer<Element, Element>
   selectedIds: Set<string>
   onAssetClick: (id: string, e: React.MouseEvent) => void
   onAssetDoubleClick: (id: string) => void
-  onDragStart: (e: React.DragEvent, asset: { id: string; filename: string; filePath: string }) => void
+  onDragStart: (
+    e: React.DragEvent,
+    asset: { id: string; filename: string; filePath: string; resolvedFilePath?: string }
+  ) => void
+  onAssetContextMenu: (e: React.MouseEvent, asset: AssetItem) => void
 }) {
   return (
     <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
@@ -302,6 +704,7 @@ function ListContent({
               onClick={(e) => onAssetClick(asset.id, e)}
               onDoubleClick={() => onAssetDoubleClick(asset.id)}
               onDragStart={(e) => onDragStart(e, asset)}
+              onContextMenu={(e) => onAssetContextMenu(e, asset)}
             />
           </div>
         )
@@ -316,13 +719,15 @@ function AssetCard({
   selected,
   onClick,
   onDoubleClick,
-  onDragStart
+  onDragStart,
+  onContextMenu
 }: {
   asset: any
   selected: boolean
   onClick: (e: React.MouseEvent) => void
   onDoubleClick: () => void
   onDragStart: (e: React.DragEvent) => void
+  onContextMenu: (e: React.MouseEvent) => void
 }) {
   const [imgError, setImgError] = React.useState(false)
 
@@ -332,6 +737,7 @@ function AssetCard({
       onDragStart={onDragStart}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      onContextMenu={onContextMenu}
       className={`group relative aspect-square rounded-lg overflow-hidden cursor-pointer transition-all duration-150 ${
         selected
           ? 'ring-2 ring-av-accent-blue shadow-lg shadow-av-accent-blue/20'
@@ -340,7 +746,8 @@ function AssetCard({
     >
       {/* Thumbnail or placeholder */}
       <div className="absolute inset-0 bg-av-bg-tertiary">
-        {!imgError && (asset.fileType === 'image' || asset.fileType === 'video' || asset.hasThumbnail) ? (
+        {!imgError &&
+        (asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === '3d' || asset.hasThumbnail) ? (
           <ThumbnailImage assetId={asset.id} onError={() => setImgError(true)} />
         ) : (
           <FilePlaceholder fileType={asset.fileType} color={asset.dominantColor} />
@@ -401,6 +808,75 @@ function ThumbnailSkeleton() {
         <circle cx="9" cy="9" r="2" />
         <path d="M21 15l-3.086-3.086a2 2 0 00-2.828 0L6 21" />
       </svg>
+    </div>
+  )
+}
+
+function FolderBrowseCard({
+  folder,
+  coverAssetId,
+  isDropTarget,
+  onOpen,
+  onAssetDragOver,
+  onAssetDragLeave,
+  onAssetDrop
+}: {
+  folder: FolderItem
+  coverAssetId?: string
+  isDropTarget?: boolean
+  onOpen: () => void
+  onAssetDragOver?: (e: React.DragEvent) => void
+  onAssetDragLeave?: () => void
+  onAssetDrop?: (e: React.DragEvent) => void
+}) {
+  const accent = folder.color ?? '#64748b'
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
+      onDragOver={onAssetDragOver}
+      onDragLeave={onAssetDragLeave}
+      onDrop={onAssetDrop}
+      className={`text-left group w-full cursor-pointer rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-av-accent-blue/60 transition-all ${
+        isDropTarget ? 'ring-2 ring-av-accent-blue shadow-lg shadow-av-accent-blue/25 scale-[1.02]' : ''
+      }`}
+    >
+      <div
+        className="relative rounded-xl overflow-hidden bg-av-bg-tertiary border shadow-md transition-transform group-hover:scale-[1.01] active:scale-[0.99]"
+        style={{ borderColor: isDropTarget ? accent : `${accent}66` }}
+      >
+        {isDropTarget && (
+          <div className="absolute inset-0 z-[2] bg-av-accent-blue/15 flex items-center justify-center pointer-events-none">
+            <span className="text-xs font-medium text-av-accent-blue px-2 py-1 rounded-md bg-av-bg-primary/80">
+              松开加入
+            </span>
+          </div>
+        )}
+        <div className="absolute top-2 left-3 right-3 space-y-1 z-[1] pointer-events-none">
+          <div className="h-0.5 rounded-full bg-av-border" />
+          <div className="h-0.5 rounded-full bg-av-border/70 w-[92%]" />
+        </div>
+        <div className="aspect-[3/4] max-h-52 mx-auto flex items-center justify-center pt-7 px-2 pb-2">
+          {coverAssetId ? (
+            <div className="w-full h-full rounded-lg overflow-hidden [&_img]:w-full [&_img]:h-full [&_img]:object-cover">
+              <ThumbnailImage assetId={coverAssetId} onError={() => {}} />
+            </div>
+          ) : (
+            <div className="opacity-80 flex items-center justify-center" aria-hidden>
+              <FolderIconDisplay icon={folder.icon} fallbackEmoji="📁" size={44} />
+            </div>
+          )}
+        </div>
+      </div>
+      <p className="mt-2 text-sm font-medium text-av-text-primary truncate">{folder.name}</p>
+      <p className="text-xs text-av-text-muted tabular-nums">{folder.assetCount} 个文件</p>
     </div>
   )
 }
@@ -491,13 +967,15 @@ function AssetListItem({
   selected,
   onClick,
   onDoubleClick,
-  onDragStart
+  onDragStart,
+  onContextMenu
 }: {
   asset: any
   selected: boolean
   onClick: (e: React.MouseEvent) => void
   onDoubleClick: () => void
   onDragStart: (e: React.DragEvent) => void
+  onContextMenu: (e: React.MouseEvent) => void
 }) {
   return (
     <div
@@ -505,13 +983,14 @@ function AssetListItem({
       onDragStart={onDragStart}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
+      onContextMenu={onContextMenu}
       className={`flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors ${
         selected ? 'bg-av-accent-blue/10' : 'hover:bg-av-bg-hover'
       }`}
     >
       {/* Mini thumbnail */}
       <div className="w-10 h-10 rounded bg-av-bg-tertiary shrink-0 flex items-center justify-center overflow-hidden">
-        {asset.fileType === 'image' || asset.fileType === 'video' || asset.hasThumbnail ? (
+        {asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === '3d' || asset.hasThumbnail ? (
           <div className="w-full h-full [&_img]:w-full [&_img]:h-full [&_img]:object-cover">
             <ThumbnailImage assetId={asset.id} onError={() => {}} />
           </div>
@@ -549,8 +1028,7 @@ function EmptyState() {
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault()
-    const files = Array.from(e.dataTransfer.files)
-    const paths = resolveDroppedFilePaths(files)
+    const paths = resolveDropPaths(e.dataTransfer)
     if (paths.length === 0) return
 
     const filePaths: string[] = []

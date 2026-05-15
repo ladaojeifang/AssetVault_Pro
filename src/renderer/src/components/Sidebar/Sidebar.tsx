@@ -1,6 +1,27 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
+import { Modal, Input } from '@arco-design/web-react'
+import { notify } from '../Common/notify'
 import { useApp } from '../../stores/AppContext'
 import type { FolderItem, TagItem } from '@/shared/types'
+import { LibrarySwitcherBar } from './LibrarySwitcher'
+import { FolderIconDisplay } from '../Common/FolderIconDisplay'
+import { findFolderInTree } from '../../utils/folderTreeNav'
+import {
+  FolderContextMenu,
+  type FolderContextMenuState
+} from './FolderContextMenu'
+import { addDraggedAssetsToFolder } from '../../utils/addAssetsToFolder'
+
+/** Parent folder at this level cannot have children (must match `MAX_FOLDER_LEVEL` in main `folders.ts`). */
+const FOLDER_MAX_PARENT_LEVEL_FOR_CHILD = 4
+
+function collectSubtreeFolderIds(folder: FolderItem): string[] {
+  const ids = [folder.id]
+  for (const c of folder.children ?? []) {
+    ids.push(...collectSubtreeFolderIds(c))
+  }
+  return ids
+}
 
 const Sidebar: React.FC = () => {
   const {
@@ -9,10 +30,40 @@ const Sidebar: React.FC = () => {
     currentFolderId,
     tagFilters,
     setCurrentFolder,
-    setTagFilters
+    setTagFilters,
+    refreshFolders,
+    refreshAssets
   } = useApp()
 
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
+  const [createFolderOpen, setCreateFolderOpen] = useState(false)
+  const [newFolderParentId, setNewFolderParentId] = useState<string | null>(null)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [createBusy, setCreateBusy] = useState(false)
+  const [newFolderColor, setNewFolderColor] = useState('#64748b')
+  const [newFolderIconEmoji, setNewFolderIconEmoji] = useState('')
+  const [newFolderIconRel, setNewFolderIconRel] = useState('')
+  const [newFolderIconPreview, setNewFolderIconPreview] = useState<string | null>(null)
+
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renameFolderId, setRenameFolderId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [renameBusy, setRenameBusy] = useState(false)
+
+  const [colorEditOpen, setColorEditOpen] = useState(false)
+  const [colorEditFolderId, setColorEditFolderId] = useState<string | null>(null)
+  const [colorEditValue, setColorEditValue] = useState('#64748b')
+  const [colorEditBusy, setColorEditBusy] = useState(false)
+
+  const [iconEditOpen, setIconEditOpen] = useState(false)
+  const [iconEditFolderId, setIconEditFolderId] = useState<string | null>(null)
+  const [iconEditEmoji, setIconEditEmoji] = useState('')
+  const [iconEditRel, setIconEditRel] = useState('')
+  const [iconEditPreview, setIconEditPreview] = useState<string | null>(null)
+  const [iconEditBaselineRel, setIconEditBaselineRel] = useState<string | null>(null)
+  const [iconEditBusy, setIconEditBusy] = useState(false)
+
+  const [folderContextMenu, setFolderContextMenu] = useState<FolderContextMenuState>(null)
 
   const toggleFolder = (id: string) => {
     setExpandedFolders((prev) => {
@@ -23,18 +74,409 @@ const Sidebar: React.FC = () => {
     })
   }
 
+  const processFolderDrop = useCallback(
+    async (e: React.DragEvent, folderId: string) => {
+      try {
+        const result = await addDraggedAssetsToFolder(e, folderId, { requireAlt: true })
+        if (result.skippedAltHint) {
+          notify.info('侧栏：按住 Alt 拖到文件夹可加入分类；主区域子文件夹卡片可直接拖入')
+          return
+        }
+        if (!result.ok) return
+        notify.success(`已将 ${result.count} 项加入文件夹`)
+        await refreshFolders()
+        await refreshAssets()
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        notify.error(msg || '加入文件夹失败')
+      }
+    },
+    [refreshFolders, refreshAssets]
+  )
+
+  const openCreateFolderModal = useCallback(() => {
+    setNewFolderName('New Folder')
+    setNewFolderColor('#64748b')
+    setNewFolderIconEmoji('')
+    setNewFolderIconRel('')
+    setNewFolderIconPreview(null)
+    setNewFolderParentId(currentFolderId)
+    setCreateFolderOpen(true)
+  }, [currentFolderId])
+
+  const openCreateSubfolderModal = useCallback((parent: FolderItem) => {
+    if (parent.level >= FOLDER_MAX_PARENT_LEVEL_FOR_CHILD) {
+      notify.warning('文件夹层级已达上限，无法继续添加子文件夹')
+      return
+    }
+    setNewFolderName('New Folder')
+    setNewFolderColor(parent.color?.trim() || '#64748b')
+    setNewFolderIconEmoji('')
+    setNewFolderIconRel('')
+    setNewFolderIconPreview(null)
+    setNewFolderParentId(parent.id)
+    setExpandedFolders((prev) => new Set(prev).add(parent.id))
+    setCreateFolderOpen(true)
+  }, [])
+
+  const clearLocalFolderIcon = useCallback(async () => {
+    if (newFolderIconRel) {
+      try {
+        await window.assetVaultAPI.folders.deleteStoredIcon(newFolderIconRel)
+      } catch {
+        /* ignore */
+      }
+    }
+    setNewFolderIconRel('')
+    setNewFolderIconPreview(null)
+  }, [newFolderIconRel])
+
+  const pickFolderIconFromDisk = useCallback(async () => {
+    const paths = (await window.assetVaultAPI.fs.selectDialog({
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'svg'] }]
+    })) as string[]
+    const first = paths?.[0]
+    if (!first) return
+    const prev = newFolderIconRel
+    try {
+      const { relativePath, previewDataUrl } = await window.assetVaultAPI.folders.importIconFromFile(first)
+      if (prev && prev !== relativePath) {
+        try {
+          await window.assetVaultAPI.folders.deleteStoredIcon(prev)
+        } catch {
+          /* ignore */
+        }
+      }
+      setNewFolderIconRel(relativePath)
+      setNewFolderIconPreview(previewDataUrl)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      notify.error(msg || '导入图标失败')
+    }
+  }, [newFolderIconRel])
+
+  const closeCreateFolderModal = useCallback(() => {
+    void (async () => {
+      if (newFolderIconRel) {
+        try {
+          await window.assetVaultAPI.folders.deleteStoredIcon(newFolderIconRel)
+        } catch {
+          /* ignore */
+        }
+      }
+      setNewFolderIconRel('')
+      setNewFolderIconEmoji('')
+      setNewFolderIconPreview(null)
+      setNewFolderParentId(null)
+      setCreateFolderOpen(false)
+    })()
+  }, [newFolderIconRel])
+
+  const submitCreateFolder = useCallback(async () => {
+    const name = newFolderName.trim()
+    if (!name) {
+      notify.warning('请输入文件夹名称')
+      return
+    }
+    if (/[/\\]/.test(name)) {
+      notify.warning('名称不能包含 / 或 \\')
+      return
+    }
+    const iconForCreate = newFolderIconRel || (newFolderIconEmoji.trim() || null)
+    setCreateBusy(true)
+    try {
+      const created = (await window.assetVaultAPI.folders.create({
+        name,
+        parentId: newFolderParentId || undefined,
+        color: newFolderColor,
+        icon: iconForCreate
+      })) as { id: string }
+      await refreshFolders()
+      if (newFolderParentId) {
+        setExpandedFolders((prev) => new Set(prev).add(newFolderParentId))
+      }
+      setNewFolderIconRel('')
+      setNewFolderIconEmoji('')
+      setNewFolderIconPreview(null)
+      setNewFolderParentId(null)
+      setCreateFolderOpen(false)
+      notify.success('已创建文件夹')
+      await setCurrentFolder(created.id)
+    } catch (e) {
+      if (iconForCreate && iconForCreate.startsWith('folder-icons/')) {
+        try {
+          await window.assetVaultAPI.folders.deleteStoredIcon(iconForCreate)
+        } catch {
+          /* ignore */
+        }
+      }
+      const msg = e instanceof Error ? e.message : String(e)
+      notify.error(msg || '创建失败')
+    } finally {
+      setCreateBusy(false)
+    }
+  }, [
+    newFolderName,
+    newFolderColor,
+    newFolderIconEmoji,
+    newFolderIconRel,
+    newFolderParentId,
+    refreshFolders,
+    setCurrentFolder
+  ])
+
+  const clearIconEditLocal = useCallback(async () => {
+    if (
+      iconEditRel &&
+      iconEditRel.startsWith('folder-icons/') &&
+      iconEditRel !== iconEditBaselineRel
+    ) {
+      try {
+        await window.assetVaultAPI.folders.deleteStoredIcon(iconEditRel)
+      } catch {
+        /* ignore */
+      }
+    }
+    setIconEditRel('')
+    setIconEditPreview(null)
+  }, [iconEditRel, iconEditBaselineRel])
+
+  const pickIconEditFromDisk = useCallback(async () => {
+    const paths = (await window.assetVaultAPI.fs.selectDialog({
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'svg'] }]
+    })) as string[]
+    const first = paths?.[0]
+    if (!first) return
+    const prev = iconEditRel
+    try {
+      const { relativePath, previewDataUrl } = await window.assetVaultAPI.folders.importIconFromFile(first)
+      if (
+        prev &&
+        prev !== relativePath &&
+        prev.startsWith('folder-icons/') &&
+        prev !== iconEditBaselineRel
+      ) {
+        try {
+          await window.assetVaultAPI.folders.deleteStoredIcon(prev)
+        } catch {
+          /* ignore */
+        }
+      }
+      setIconEditRel(relativePath)
+      setIconEditPreview(previewDataUrl)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      notify.error(msg || '导入图标失败')
+    }
+  }, [iconEditRel, iconEditBaselineRel])
+
+  const openIconEditModal = useCallback(async (folder: FolderItem) => {
+    const icon = folder.icon ?? null
+    const baseline = icon && icon.startsWith('folder-icons/') ? icon : null
+    setIconEditFolderId(folder.id)
+    setIconEditBaselineRel(baseline)
+    if (baseline) {
+      setIconEditRel(baseline)
+      setIconEditEmoji('')
+      try {
+        const u = await window.assetVaultAPI.folders.getIconDataUrl(baseline)
+        setIconEditPreview(u)
+      } catch {
+        setIconEditPreview(null)
+      }
+    } else {
+      setIconEditRel('')
+      setIconEditEmoji(icon?.trim() || '')
+      setIconEditPreview(null)
+    }
+    setIconEditOpen(true)
+  }, [])
+
+  const closeIconEditModal = useCallback(() => {
+    void (async () => {
+      if (
+        iconEditRel &&
+        iconEditRel.startsWith('folder-icons/') &&
+        iconEditRel !== iconEditBaselineRel
+      ) {
+        try {
+          await window.assetVaultAPI.folders.deleteStoredIcon(iconEditRel)
+        } catch {
+          /* ignore */
+        }
+      }
+      setIconEditOpen(false)
+      setIconEditFolderId(null)
+      setIconEditEmoji('')
+      setIconEditRel('')
+      setIconEditPreview(null)
+      setIconEditBaselineRel(null)
+    })()
+  }, [iconEditRel, iconEditBaselineRel])
+
+  const submitIconEdit = useCallback(async () => {
+    if (!iconEditFolderId) return
+    const newIcon = iconEditRel || (iconEditEmoji.trim() || null)
+    const baseline = iconEditBaselineRel
+    setIconEditBusy(true)
+    try {
+      await window.assetVaultAPI.folders.update(iconEditFolderId, { icon: newIcon })
+      await refreshFolders()
+      setIconEditOpen(false)
+      setIconEditFolderId(null)
+      setIconEditEmoji('')
+      setIconEditRel('')
+      setIconEditPreview(null)
+      setIconEditBaselineRel(null)
+      notify.success('图标已更新')
+    } catch (e) {
+      if (newIcon && newIcon.startsWith('folder-icons/') && newIcon !== baseline) {
+        try {
+          await window.assetVaultAPI.folders.deleteStoredIcon(newIcon)
+        } catch {
+          /* ignore */
+        }
+      }
+      const msg = e instanceof Error ? e.message : String(e)
+      notify.error(msg || '更新失败')
+    } finally {
+      setIconEditBusy(false)
+    }
+  }, [iconEditFolderId, iconEditRel, iconEditEmoji, iconEditBaselineRel, refreshFolders])
+
+  const submitRenameFolder = useCallback(async () => {
+    if (!renameFolderId) return
+    const name = renameValue.trim()
+    if (!name) {
+      notify.warning('请输入文件夹名称')
+      return
+    }
+    if (/[/\\]/.test(name)) {
+      notify.warning('名称不能包含 / 或 \\')
+      return
+    }
+    const existing = findFolderInTree(folderTree, renameFolderId)
+    if (existing && existing.name === name) {
+      setRenameOpen(false)
+      setRenameFolderId(null)
+      return
+    }
+    setRenameBusy(true)
+    try {
+      await window.assetVaultAPI.folders.update(renameFolderId, { name })
+      await refreshFolders()
+      await refreshAssets()
+      setRenameOpen(false)
+      setRenameFolderId(null)
+      notify.success('已重命名')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      notify.error(msg || '重命名失败')
+    } finally {
+      setRenameBusy(false)
+    }
+  }, [renameFolderId, renameValue, folderTree, refreshFolders, refreshAssets])
+
+  const submitColorEdit = useCallback(async () => {
+    if (!colorEditFolderId) return
+    setColorEditBusy(true)
+    try {
+      await window.assetVaultAPI.folders.update(colorEditFolderId, { color: colorEditValue })
+      await refreshFolders()
+      setColorEditOpen(false)
+      setColorEditFolderId(null)
+      notify.success('颜色已更新')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      notify.error(msg || '更新失败')
+    } finally {
+      setColorEditBusy(false)
+    }
+  }, [colorEditFolderId, colorEditValue, refreshFolders])
+
+  const confirmDeleteFolder = useCallback(
+    (folder: FolderItem) => {
+      const subtree = new Set(collectSubtreeFolderIds(folder))
+      Modal.confirm({
+        title: '删除文件夹',
+        content: `确定删除「${folder.name}」？子文件夹会被一并删除，素材与该文件夹的关联也会被移除。`,
+        okText: '删除',
+        cancelText: '取消',
+        okButtonProps: { status: 'danger' as const },
+        async onOk() {
+          try {
+            await window.assetVaultAPI.folders.delete(folder.id)
+            await refreshFolders()
+            await refreshAssets()
+            if (currentFolderId && subtree.has(currentFolderId)) {
+              await setCurrentFolder(folder.parentId)
+            }
+            notify.success('已删除文件夹')
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            notify.error(msg || '删除失败')
+            throw e
+          }
+        }
+      })
+    },
+    [currentFolderId, refreshFolders, refreshAssets, setCurrentFolder]
+  )
+
+  const handleFolderContextAction = useCallback(
+    (key: string, folder: FolderItem) => {
+      switch (key) {
+        case 'subfolder':
+          openCreateSubfolderModal(folder)
+          break
+        case 'rename':
+          setRenameFolderId(folder.id)
+          setRenameValue(folder.name)
+          setRenameOpen(true)
+          break
+        case 'icon':
+          void openIconEditModal(folder)
+          break
+        case 'color':
+          setColorEditFolderId(folder.id)
+          setColorEditValue(folder.color?.trim() || '#64748b')
+          setColorEditOpen(true)
+          break
+        case 'delete':
+          confirmDeleteFolder(folder)
+          break
+        default:
+          break
+      }
+    },
+    [openCreateSubfolderModal, openIconEditModal, confirmDeleteFolder]
+  )
+
+  const openFolderContextMenu = useCallback((folder: FolderItem, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setFolderContextMenu({ folder, x: e.clientX, y: e.clientY })
+  }, [])
+
   return (
     <div className="h-full flex flex-col bg-av-bg-secondary overflow-y-auto scrollbar-hide">
-      {/* Libraries / Folders Section */}
-      <SidebarSection title="Libraries">
-        <div className="space-y-0.5">
-          <SidebarItem
-            icon="📁"
-            label="All Files"
-            active={!currentFolderId}
-            onClick={() => setCurrentFolder(null)}
-            count={null}
-          />
+      {/* 资料库 / 全部资产 / 文件夹树 */}
+      <SidebarSection title="资料库">
+        <LibrarySwitcherBar />
+      </SidebarSection>
+
+      <div className="px-3 py-2 border-b border-av-border/50">
+        <SidebarItem
+          icon="🗂"
+          label="全部资产"
+          active={!currentFolderId}
+          onClick={() => void setCurrentFolder(null)}
+          count={null}
+        />
+      </div>
+
+      <SidebarSection title="文件夹">
+        <div className="space-y-0.5 mt-0.5">
           <FolderTreeItem
             folders={folderTree}
             level={0}
@@ -42,12 +484,16 @@ const Sidebar: React.FC = () => {
             expandedIds={expandedFolders}
             onToggle={toggleFolder}
             onSelect={setCurrentFolder}
+            onFolderDrop={processFolderDrop}
+            onFolderContextMenu={openFolderContextMenu}
           />
         </div>
+        <p className="text-[10px] text-av-text-muted/90 px-0.5 mt-1 leading-relaxed">
+          顶层可有多个并列文件夹，各自含子文件夹；点选文件夹仅看该目录下素材。全部资产查看库内所有文件。Alt+拖到文件夹可加入分类。
+        </p>
         <button
-          onClick={() => {
-            // TODO: Create folder dialog
-          }}
+          type="button"
+          onClick={openCreateFolderModal}
           className="w-full mt-2 px-2 py-1.5 text-xs text-av-text-muted hover:text-av-accent-blue hover:bg-av-bg-hover rounded flex items-center gap-1.5 transition-colors"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -56,6 +502,177 @@ const Sidebar: React.FC = () => {
           New Folder
         </button>
       </SidebarSection>
+
+      <Modal
+        title="新建文件夹"
+        visible={createFolderOpen}
+        onOk={() => void submitCreateFolder()}
+        onCancel={() => closeCreateFolderModal()}
+        okText="创建"
+        cancelText="取消"
+        confirmLoading={createBusy}
+        mountOnEnter={false}
+      >
+        <p className="text-xs text-av-text-muted mb-2">
+          {newFolderParentId
+            ? `将在「${findFolderInTree(folderTree, newFolderParentId)?.name ?? '…'}」下创建子文件夹。`
+            : '将在顶层创建文件夹（可与现有根级文件夹并列）。'}
+        </p>
+        <Input
+          value={newFolderName}
+          onChange={(v) => setNewFolderName(v)}
+          placeholder="文件夹名称"
+          onPressEnter={() => void submitCreateFolder()}
+        />
+        <div className="flex gap-3 mt-3 items-center">
+          <label className="text-xs text-av-text-muted shrink-0">颜色</label>
+          <input
+            type="color"
+            value={newFolderColor}
+            onChange={(e) => setNewFolderColor(e.target.value)}
+            className="h-8 w-12 rounded border border-av-border bg-transparent cursor-pointer"
+            title="文件夹标识色"
+          />
+        </div>
+        <div className="flex gap-3 mt-2 items-center">
+          <label className="text-xs text-av-text-muted shrink-0">图标</label>
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            <Input
+              value={newFolderIconEmoji}
+              onChange={(v) => setNewFolderIconEmoji(v)}
+              placeholder="可选，如 📷 Logo"
+              className="flex-1"
+              maxLength={8}
+              disabled={Boolean(newFolderIconRel)}
+            />
+            <button
+              type="button"
+              onClick={() => void pickFolderIconFromDisk()}
+              className="shrink-0 px-2.5 py-1 text-xs rounded border border-av-border bg-av-bg-tertiary hover:bg-av-bg-hover text-av-text-secondary transition-colors"
+            >
+              本地选择
+            </button>
+          </div>
+        </div>
+        {newFolderIconPreview ? (
+          <div className="flex gap-3 mt-2 items-center">
+            <span className="w-6 shrink-0" aria-hidden />
+            <div className="flex-1 flex items-center gap-2 min-w-0">
+              <img
+                src={newFolderIconPreview}
+                alt=""
+                className="w-9 h-9 rounded object-cover border border-av-border shrink-0"
+              />
+              <button
+                type="button"
+                onClick={() => void clearLocalFolderIcon()}
+                className="text-xs text-av-text-muted hover:text-av-accent-blue shrink-0"
+              >
+                清除图片
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        title="重命名文件夹"
+        visible={renameOpen}
+        onOk={() => void submitRenameFolder()}
+        onCancel={() => {
+          setRenameOpen(false)
+          setRenameFolderId(null)
+        }}
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={renameBusy}
+        mountOnEnter={false}
+      >
+        <Input
+          value={renameValue}
+          onChange={(v) => setRenameValue(v)}
+          placeholder="文件夹名称"
+          onPressEnter={() => void submitRenameFolder()}
+        />
+      </Modal>
+
+      <Modal
+        title="修改文件夹颜色"
+        visible={colorEditOpen}
+        onOk={() => void submitColorEdit()}
+        onCancel={() => {
+          setColorEditOpen(false)
+          setColorEditFolderId(null)
+        }}
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={colorEditBusy}
+        mountOnEnter={false}
+      >
+        <div className="flex gap-3 items-center">
+          <label className="text-xs text-av-text-muted shrink-0">颜色</label>
+          <input
+            type="color"
+            value={colorEditValue}
+            onChange={(e) => setColorEditValue(e.target.value)}
+            className="h-8 w-12 rounded border border-av-border bg-transparent cursor-pointer"
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        title="修改文件夹图标"
+        visible={iconEditOpen}
+        onOk={() => void submitIconEdit()}
+        onCancel={() => closeIconEditModal()}
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={iconEditBusy}
+        mountOnEnter={false}
+      >
+        <div className="flex gap-3 mt-1 items-center">
+          <label className="text-xs text-av-text-muted shrink-0">图标</label>
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            <Input
+              value={iconEditEmoji}
+              onChange={(v) => setIconEditEmoji(v)}
+              placeholder="可选，如 📷"
+              className="flex-1"
+              maxLength={8}
+              disabled={Boolean(iconEditRel)}
+            />
+            <button
+              type="button"
+              onClick={() => void pickIconEditFromDisk()}
+              className="shrink-0 px-2.5 py-1 text-xs rounded border border-av-border bg-av-bg-tertiary hover:bg-av-bg-hover text-av-text-secondary transition-colors"
+            >
+              本地选择
+            </button>
+          </div>
+        </div>
+        {iconEditPreview ? (
+          <div className="flex gap-3 mt-2 items-center">
+            <span className="w-10 shrink-0" aria-hidden />
+            <div className="flex-1 flex items-center gap-2 min-w-0">
+              <img
+                src={iconEditPreview}
+                alt=""
+                className="w-9 h-9 rounded object-cover border border-av-border shrink-0"
+              />
+              <button
+                type="button"
+                onClick={() => void clearIconEditLocal()}
+                className="text-xs text-av-text-muted hover:text-av-accent-blue shrink-0"
+              >
+                清除图片
+              </button>
+            </div>
+          </div>
+        ) : null}
+        <p className="text-[10px] text-av-text-muted mt-3 leading-relaxed">
+          留空并保存可恢复默认文件夹图标。选择本地图片会替换当前图标；保存失败时临时文件会被清理。
+        </p>
+      </Modal>
 
       {/* Tags Section */}
       <SidebarSection title="Tags">
@@ -92,6 +709,13 @@ const Sidebar: React.FC = () => {
         <TypeFilterItem type="3d" label="3D" emoji="📦" />
         <TypeFilterItem type="code" label="Code" emoji="💻" />
       </SidebarSection>
+
+      <FolderContextMenu
+        state={folderContextMenu}
+        onClose={() => setFolderContextMenu(null)}
+        onAction={handleFolderContextAction}
+        maxParentLevel={FOLDER_MAX_PARENT_LEVEL_FOR_CHILD}
+      />
     </div>
   )
 }
@@ -112,30 +736,49 @@ function SidebarSection({
   )
 }
 
-function SidebarItem({
-  icon,
-  label,
-  active,
-  onClick,
-  count,
-  indent = 0
-}: {
-  icon?: React.ReactNode
-  label: string
-  active: boolean
-  onClick: () => void
-  count?: number | null
-  indent?: number
-}) {
+const SidebarItem = React.forwardRef<
+  HTMLButtonElement,
+  {
+    icon?: React.ReactNode
+    label: string
+    active: boolean
+    onClick: () => void
+    count?: number | null
+    indent?: number
+    onDragOver?: (e: React.DragEvent) => void
+    onDrop?: (e: React.DragEvent) => void
+    onContextMenu?: (e: React.MouseEvent) => void
+    rowStyle?: React.CSSProperties
+  }
+>(function SidebarItem(
+  {
+    icon,
+    label,
+    active,
+    onClick,
+    count,
+    indent = 0,
+    onDragOver,
+    onDrop,
+    onContextMenu,
+    rowStyle
+  },
+  ref
+) {
   return (
     <button
+      ref={ref}
+      type="button"
       onClick={onClick}
+      onContextMenu={onContextMenu}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       className={`w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm transition-colors ${
         active
           ? 'bg-av-accent-blue/15 text-av-text-primary'
           : 'text-av-text-secondary hover:text-av-text-primary hover:bg-av-bg-hover'
       }`}
-      style={{ paddingLeft: `${8 + indent * 16}px` }}
+      style={{ paddingLeft: `${8 + indent * 16}px`, ...(rowStyle || {}) }}
     >
       {icon != null && <span className="text-xs flex items-center shrink-0">{icon}</span>}
       <span className="truncate flex-1 text-left">{label}</span>
@@ -144,7 +787,7 @@ function SidebarItem({
       )}
     </button>
   )
-}
+})
 
 interface FolderTreeItemProps {
   folders: FolderItem[]
@@ -153,6 +796,8 @@ interface FolderTreeItemProps {
   expandedIds: Set<string>
   onToggle: (id: string) => void
   onSelect: (id: string | null) => void
+  onFolderDrop: (e: React.DragEvent, folderId: string) => void
+  onFolderContextMenu: (folder: FolderItem, e: React.MouseEvent) => void
 }
 
 const FolderTreeItem: React.FC<FolderTreeItemProps> = ({
@@ -161,43 +806,63 @@ const FolderTreeItem: React.FC<FolderTreeItemProps> = ({
   currentId,
   expandedIds,
   onToggle,
-  onSelect
+  onSelect,
+  onFolderDrop,
+  onFolderContextMenu
 }) => {
   if (!folders || folders.length === 0) return null
 
   return (
     <>
-      {folders.map((folder) => (
+      {folders.map((folder) => {
+        const accent = folder.color ?? '#64748b'
+        return (
         <div key={folder.id}>
           <SidebarItem
-            icon={
-              <span className="flex items-center w-3.5">
-                {(folder.children?.length ?? 0) > 0 ? (
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 10 10"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    className={`transition-transform ${expandedIds.has(folder.id) ? 'rotate-90' : ''}`}
-                  >
-                    <path d="M3 1l4 4-4 4" />
-                  </svg>
-                ) : (
-                  <span className="w-[10px]" />
-                )}
-              </span>
-            }
-            label={folder.name}
-            active={currentId === folder.id}
-            count={folder.assetCount}
-            indent={level + 1}
-            onClick={() => {
-              if ((folder.children?.length ?? 0) > 0) onToggle(folder.id)
-              onSelect(folder.id)
-            }}
-          />
+              icon={
+                <span className="flex items-center gap-0.5 shrink-0">
+                  <span className="flex items-center w-3.5">
+                    {(folder.children?.length ?? 0) > 0 ? (
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 10 10"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        className={`transition-transform ${expandedIds.has(folder.id) ? 'rotate-90' : ''}`}
+                      >
+                        <path d="M3 1l4 4-4 4" />
+                      </svg>
+                    ) : (
+                      <span className="w-[10px]" />
+                    )}
+                  </span>
+                  <FolderIconDisplay icon={folder.icon} fallbackEmoji="📂" size={13} />
+                </span>
+              }
+              label={folder.name}
+              active={currentId === folder.id}
+              count={folder.assetCount}
+              indent={level}
+              rowStyle={{ borderLeft: `3px solid ${accent}` }}
+              onContextMenu={(e) => onFolderContextMenu(folder, e)}
+              onDragOver={(e) => {
+                const types = e.dataTransfer.types
+                const ok =
+                  [...types].includes('application/x-assetvault-drag') ||
+                  [...types].includes('application/x-assetvault-asset-id')
+                if (ok) {
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'copy'
+                }
+              }}
+              onDrop={(e) => onFolderDrop(e, folder.id)}
+              onClick={() => {
+                if ((folder.children?.length ?? 0) > 0) onToggle(folder.id)
+                onSelect(folder.id)
+              }}
+            />
           {expandedIds.has(folder.id) &&
             (folder.children?.length ?? 0) > 0 && (
               <FolderTreeItem
@@ -207,10 +872,13 @@ const FolderTreeItem: React.FC<FolderTreeItemProps> = ({
                 expandedIds={expandedIds}
                 onToggle={onToggle}
                 onSelect={onSelect}
+                onFolderDrop={onFolderDrop}
+                onFolderContextMenu={onFolderContextMenu}
               />
             )}
         </div>
-      ))}
+        )
+      })}
     </>
   )
 }

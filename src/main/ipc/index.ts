@@ -3,6 +3,7 @@ import { handleFolderOperations } from './handlers/folders'
 import { handleAssetOperations } from './handlers/assets'
 import { handleTagOperations } from './handlers/tags'
 import { handleFsOperations } from './handlers/fs'
+import { handleLibraryOperations } from './handlers/library'
 
 export function registerIpcHandlers(ipc: typeof ipcMain): void {
   // Window controls
@@ -35,6 +36,7 @@ export function registerIpcHandlers(ipc: typeof ipcMain): void {
   handleAssetOperations(ipc)
   handleTagOperations(ipc)
   handleFsOperations(ipc)
+  handleLibraryOperations(ipc)
 
   console.log('[IPC] All handlers registered successfully')
 }

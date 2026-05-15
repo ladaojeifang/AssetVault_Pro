@@ -1,12 +1,47 @@
 import { app, BrowserWindow, shell, ipcMain } from 'electron'
 import { join } from 'path'
+import { mkdirSync } from 'fs'
 import { initDatabase, flushDatabase, stopDevAutosave } from './db'
+import { prepareOnStartup } from './services/libraryBundle'
+import { getThumbnailService } from './services/ThumbnailService'
+import { runLegacyPathsMigrationIfNeeded } from './services/libraryMigration'
+import { repairOrphanItemPacks } from './services/repairOrphanItemPacks'
+import { migrateOriginalExtToDisplayFilenames } from './services/migrateStorageFileNames'
 import { registerIpcHandlers } from './ipc'
 import { setupGlobalErrorHandlers } from './services/ErrorHandler'
 import { getHotkeyManager } from './services/HotkeyManager'
 import { getFileWatcher } from './services/FileWatcher'
+import { initModelThumbnailRenderer } from './services/modelThumbnailRenderer'
+import { setMainBrowserWindow } from './services/mainWindowRef'
+import {
+  registerModelFileProtocol,
+  setupModelFileProtocolHandler
+} from './services/modelFileProtocol'
+
+registerModelFileProtocol()
 
 const isDev = !app.isPackaged
+
+/**
+ * Dev runs sometimes use a generic Electron userData dir, so `active-library.json` appears to reset
+ * every `npm run dev`. Pin to the same folder name as production (`assetvault-pro` under appData).
+ * Must run before `app.whenReady()` / any `getPath('userData')` use.
+ */
+function pinUserDataForDev(): void {
+  if (app.isPackaged) return
+  try {
+    app.setName('assetvault-pro')
+    const base = app.getPath('appData')
+    const stable = join(base, 'assetvault-pro')
+    mkdirSync(stable, { recursive: true })
+    app.setPath('userData', stable)
+    console.log('[Main] Dev userData:', stable)
+  } catch (e) {
+    console.warn('[Main] Dev userData pin skipped:', e)
+  }
+}
+
+pinUserDataForDev()
 
 let signalShutdownStarted = false
 async function shutdownFromSignal(signal: string): Promise<void> {
@@ -69,18 +104,34 @@ function createWindow(): BrowserWindow {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
+  setMainBrowserWindow(mainWindow)
+  mainWindow.on('closed', () => setMainBrowserWindow(null))
+
   return mainWindow
 }
 
 app.whenReady().then(async () => {
+  setupModelFileProtocolHandler()
+
   // Set app user model id for windows
   app.setAppUserModelId('com.assetvault.app')
 
   // Setup global error handling (uncaughtException, unhandledRejection)
   setupGlobalErrorHandlers()
 
-  // Initialize database
-  await initDatabase()
+  const userData = app.getPath('userData')
+  const { libraryRoot, dbPath } = prepareOnStartup(userData)
+  getThumbnailService().setLibraryRoot(libraryRoot)
+
+  await initDatabase(dbPath)
+  await runLegacyPathsMigrationIfNeeded()
+  await migrateOriginalExtToDisplayFilenames()
+  await repairOrphanItemPacks()
+  await flushDatabase()
+
+  console.log('[Library] Active library root:', libraryRoot)
+
+  initModelThumbnailRenderer()
 
   // Register IPC handlers
   registerIpcHandlers(ipcMain)

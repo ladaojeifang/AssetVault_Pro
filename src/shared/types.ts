@@ -9,6 +9,10 @@ export interface FolderItem {
   path: string
   level: number
   assetCount: number
+  /** Sidebar accent (hex) */
+  color?: string
+  /** Optional emoji / icon label */
+  icon?: string | null
   createdAt: Date
   updatedAt: Date
   children?: FolderItem[]
@@ -23,6 +27,9 @@ export interface AssetItem {
   fileType: FileType
   folderId: string | null
   filePath: string
+  /** Absolute path for shell / file:// URLs; set by main when using portable library. */
+  resolvedFilePath?: string
+  resolvedThumbnailPath?: string | null
   fileSize: number
   width?: number | null
   height?: number | null
@@ -40,6 +47,10 @@ export interface AssetItem {
   fileModifiedAt?: Date | null
   importedAt: Date
   updatedAt: Date
+  /** Tag ids from server when listing assets */
+  tagIds?: string[]
+  /** Logical folder ids (multi-assign) */
+  folderIds?: string[]
   tags?: TagItem[]
 }
 

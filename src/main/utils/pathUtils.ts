@@ -21,7 +21,17 @@ export function toCanonicalFilePath(filePath: string): string {
   }
 }
 
-export function isSqliteUniqueFilePathError(e: unknown): boolean {
+export function isSqliteUniqueConstraintError(e: unknown): boolean {
   const msg = e instanceof Error ? e.message : String(e)
-  return msg.includes('UNIQUE') && msg.includes('file_path')
+  return (
+    msg.includes('UNIQUE') &&
+    (msg.includes('file_path') ||
+      msg.includes('import_source') ||
+      msg.includes('assets_search'))
+  )
+}
+
+/** @deprecated use isSqliteUniqueConstraintError */
+export function isSqliteUniqueFilePathError(e: unknown): boolean {
+  return isSqliteUniqueConstraintError(e)
 }

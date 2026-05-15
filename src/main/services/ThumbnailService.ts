@@ -4,28 +4,45 @@ import { app } from 'electron'
 import { join } from 'path'
 import { existsSync, mkdirSync, unlinkSync, statSync, readdirSync, writeFileSync, readFileSync } from 'fs'
 import { extractVideoFramePngBestEffort } from '../utils/videoFrame'
+import { renderModelToPngBuffer } from './modelThumbnailRenderer'
+import {
+  isModelThumbnailSkipped,
+  markModelThumbnailSkipped
+} from './modelThumbnailSkip'
+import { parseModel3dFormat } from '@/shared/model3dFormats'
+import {
+  THUMBNAIL_MAX_EDGE,
+  bufferToImageDataUrl,
+  shouldUseOriginalImageDimensions
+} from '../utils/thumbnailSizing'
+
+export type ThumbnailGenerateResult = {
+  buffer: Buffer
+  /** thumb.webp path, or source image path when `usedOriginal` */
+  path: string
+  usedOriginal?: boolean
+}
 
 /**
  * Three-level Thumbnail Cache System
  * Level 1: In-memory LRU cache (fastest, ~1000 entries)
- * Level 2: Disk cache (webp files in userData/thumbnails)
+ * Level 2: Disk cache (per-asset thumb under library items/ or legacy userData/thumbnails)
  * Level 3: Database (thumbnail_path reference)
- *
- * Uses @napi-rs/image (Rust-based, prebuilt binaries) instead of sharp
  */
 export class ThumbnailService {
   private lruCache: LRUCache<string, Buffer>
-  private thumbDir: string
+  private thumbDirLegacy: string
+  private libraryRoot: string | null = null
   private maxMemorySize: number // MB
   private maxDiskSize: number // MB
 
   constructor(options?: { maxMemoryMB?: number; maxDiskMB?: number }) {
     this.maxMemorySize = options?.maxMemoryMB ?? 256 // 256MB memory cache
     this.maxDiskSize = options?.maxDiskMB ?? 2048 // 2GB disk cache
-    this.thumbDir = join(app.getPath('userData'), 'thumbnails')
+    this.thumbDirLegacy = join(app.getPath('userData'), 'thumbnails')
 
-    if (!existsSync(this.thumbDir)) {
-      mkdirSync(this.thumbDir, { recursive: true })
+    if (!existsSync(this.thumbDirLegacy)) {
+      mkdirSync(this.thumbDirLegacy, { recursive: true })
     }
 
     this.lruCache = new LRUCache<string, Buffer>({
@@ -34,41 +51,59 @@ export class ThumbnailService {
       ttl: 1000 * 60 * 30 // 30 min TTL for memory
     })
 
-    console.log(`[ThumbnailService] Initialized - Memory: ${this.maxMemorySize}MB, Disk: ${this.thumbDir}`)
+    console.log(
+      `[ThumbnailService] Initialized - Memory: ${this.maxMemorySize}MB, legacy dir: ${this.thumbDirLegacy}`
+    )
+  }
+
+  /** When set, new thumbnails are written to {libraryRoot}/items/{assetId}/thumb.webp */
+  setLibraryRoot(root: string | null): void {
+    this.libraryRoot = root ? root : null
+    console.log(`[ThumbnailService] Library root: ${this.libraryRoot ?? '(legacy userData thumbs only)'}`)
+  }
+
+  private thumbDiskPath(assetId: string): string {
+    if (this.libraryRoot) {
+      const dir = join(this.libraryRoot, 'items', assetId)
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+      return join(dir, 'thumb.webp')
+    }
+    return join(this.thumbDirLegacy, `${assetId}.webp`)
   }
 
   /**
    * Generate thumbnail for an image file using @napi-rs/image
-   * Returns webp buffer at target size
    */
   async generate(
     filePath: string,
     assetId: string,
     options: { width?: number; height?: number; quality?: number } = {}
-  ): Promise<{ buffer: Buffer; path: string } | null> {
-    const { width = 256, height = 256, quality = 80 } = options
+  ): Promise<ThumbnailGenerateResult | null> {
+    const maxEdge = options.width ?? THUMBNAIL_MAX_EDGE
+    const { height = maxEdge, quality = 80 } = options
 
     try {
-      const outputPath = join(this.thumbDir, `${assetId}.webp`)
+      const fileBuffer = readFileSync(filePath)
+      const transformer = new Transformer(fileBuffer)
+      const imgInfo = await transformer.metadata()
 
-      // Check if already cached on disk
+      if (shouldUseOriginalImageDimensions(imgInfo.width, imgInfo.height)) {
+        this.lruCache.set(assetId, fileBuffer)
+        return { buffer: fileBuffer, path: filePath, usedOriginal: true }
+      }
+
+      const outputPath = this.thumbDiskPath(assetId)
       if (existsSync(outputPath)) {
         const diskBuffer = readFileSync(outputPath)
         this.lruCache.set(assetId, diskBuffer)
         return { buffer: diskBuffer, path: outputPath }
       }
 
-      // Load and process image with @napi-rs/image
-      const fileBuffer = readFileSync(filePath)
-      const transformer = new Transformer(fileBuffer)
+      const webpBuffer = await transformer
+        .resize(maxEdge, height, undefined, ResizeFit.Inside)
+        .webp(quality)
 
-      // Resize with inside fit
-      const webpBuffer = await transformer.resize(width, height, undefined, ResizeFit.Inside).webp(quality)
-
-      // Save to disk (Level 2)
-      writeFileSafely(outputPath, webpBuffer)
-
-      // Store in memory (Level 1)
+      writeFileSafely(outputPath, webpBuffer as Buffer)
       this.lruCache.set(assetId, webpBuffer as Buffer)
 
       return { buffer: webpBuffer as Buffer, path: outputPath }
@@ -79,18 +114,65 @@ export class ThumbnailService {
   }
 
   /**
-   * Generate a WebP thumbnail from a video file (ffmpeg frame → @napi-rs/image).
+   * Generate thumbnail for 3D models (GLB/GLTF/OBJ/STL/FBX) via hidden WebGL window.
    */
+  async generateModel(
+    filePath: string,
+    assetId: string,
+    ext: string,
+    options: { width?: number; height?: number; quality?: number } = {}
+  ): Promise<ThumbnailGenerateResult | null> {
+    const maxEdge = options.width ?? THUMBNAIL_MAX_EDGE
+    const { height = maxEdge, quality = 80 } = options
+    const outputPath = this.thumbDiskPath(assetId)
+
+    if (!parseModel3dFormat(ext)) {
+      console.warn(`[ThumbnailService] Unsupported 3D extension: ${ext}`)
+      return null
+    }
+
+    if (isModelThumbnailSkipped(assetId)) {
+      return null
+    }
+
+    try {
+      if (existsSync(outputPath)) {
+        const diskBuffer = readFileSync(outputPath)
+        this.lruCache.set(assetId, diskBuffer)
+        return { buffer: diskBuffer, path: outputPath }
+      }
+
+      const png = await renderModelToPngBuffer(filePath, ext)
+      if (!png?.length) {
+        markModelThumbnailSkipped(assetId)
+        return null
+      }
+
+      const transformer = new Transformer(png)
+      const webpBuffer = await transformer
+        .resize(maxEdge, height, undefined, ResizeFit.Inside)
+        .webp(quality)
+
+      writeFileSafely(outputPath, webpBuffer as Buffer)
+      this.lruCache.set(assetId, webpBuffer as Buffer)
+      return { buffer: webpBuffer as Buffer, path: outputPath }
+    } catch (error) {
+      markModelThumbnailSkipped(assetId)
+      console.warn(`[ThumbnailService] 3D thumbnail skipped for ${filePath}:`, error)
+      return null
+    }
+  }
+
   async generateVideo(
     filePath: string,
     assetId: string,
     options: { width?: number; height?: number; quality?: number } = {}
-  ): Promise<{ buffer: Buffer; path: string } | null> {
-    const { width = 256, height = 256, quality = 80 } = options
+  ): Promise<ThumbnailGenerateResult | null> {
+    const maxEdge = options.width ?? THUMBNAIL_MAX_EDGE
+    const { height = maxEdge, quality = 80 } = options
+    const outputPath = this.thumbDiskPath(assetId)
 
     try {
-      const outputPath = join(this.thumbDir, `${assetId}.webp`)
-
       if (existsSync(outputPath)) {
         const diskBuffer = readFileSync(outputPath)
         this.lruCache.set(assetId, diskBuffer)
@@ -101,7 +183,10 @@ export class ThumbnailService {
       if (!png) return null
 
       const transformer = new Transformer(png)
-      const webpBuffer = await transformer.resize(width, height, undefined, ResizeFit.Inside).webp(quality)
+      const frameInfo = await transformer.metadata()
+      const webpBuffer = shouldUseOriginalImageDimensions(frameInfo.width, frameInfo.height)
+        ? await transformer.webp(quality)
+        : await transformer.resize(maxEdge, height, undefined, ResizeFit.Inside).webp(quality)
 
       writeFileSafely(outputPath, webpBuffer as Buffer)
       this.lruCache.set(assetId, webpBuffer as Buffer)
@@ -113,48 +198,37 @@ export class ThumbnailService {
     }
   }
 
-  /**
-   * Get thumbnail from cache hierarchy:
-   * 1. Memory LRU -> 2. Disk -> 3. Regenerate
-   */
   async get(assetId: string, filePath: string): Promise<Buffer | null> {
-    // Level 1: Memory cache
     const memCached = this.lruCache.get(assetId)
     if (memCached) return memCached
 
-    // Level 2: Disk cache
-    const diskPath = join(this.thumbDir, `${assetId}.webp`)
+    const diskPath = this.thumbDiskPath(assetId)
     if (existsSync(diskPath)) {
       try {
         const diskBuffer = readFileSync(diskPath)
-        this.lruCache.set(assetId, diskBuffer) // Promote to L1
+        this.lruCache.set(assetId, diskBuffer)
         return diskBuffer
       } catch {
-        // Corrupted file, regenerate
         this.invalidate(assetId)
       }
     }
 
-    // Level 3: Regenerate
     const result = await this.generate(filePath, assetId)
     return result?.buffer ?? null
   }
 
-  /**
-   * Get thumbnail as base64 data URL for IPC transfer
-   */
-  async getDataUrl(assetId: string, filePath: string): Promise<string | null> {
-    const buffer = await this.get(assetId, filePath)
-    if (!buffer) return null
-    return `data:image/webp;base64,${buffer.toString('base64')}`
+  async getDataUrl(assetId: string, filePath: string, mimeType?: string): Promise<string | null> {
+    const result = await this.generate(filePath, assetId)
+    if (!result?.buffer?.length) return null
+    if (result.usedOriginal && mimeType) {
+      return bufferToImageDataUrl(result.buffer, mimeType)
+    }
+    return `data:image/webp;base64,${result.buffer.toString('base64')}`
   }
 
-  /**
-   * Invalidate a single thumbnail from all cache levels
-   */
   invalidate(assetId: string): void {
     this.lruCache.delete(assetId)
-    const diskPath = join(this.thumbDir, `${assetId}.webp`)
+    const diskPath = this.thumbDiskPath(assetId)
     try {
       if (existsSync(diskPath)) unlinkSync(diskPath)
     } catch {
@@ -162,17 +236,10 @@ export class ThumbnailService {
     }
   }
 
-  /**
-   * Clear all caches
-   */
   clearAll(): void {
     this.lruCache.clear()
-    // Note: Don't delete disk files here, they persist across sessions
   }
 
-  /**
-   * Get cache statistics
-   */
   getStats(): { memoryEntries: number; memorySizeMB: number } {
     return {
       memoryEntries: this.lruCache.size,
@@ -180,22 +247,18 @@ export class ThumbnailService {
     }
   }
 
-  /**
-   * Clean up old disk cache entries (call periodically)
-   */
   cleanDiskCache(maxAgeMs: number = 1000 * 60 * 60 * 24 * 7): number {
-    // Remove files older than 7 days by default
     let cleaned = 0
     const now = Date.now()
     try {
-      const files = readdirSync(this.thumbDir)
+      const files = readdirSync(this.thumbDirLegacy)
       for (const file of files) {
         if (!file.endsWith('.webp')) continue
-        const filePath = join(this.thumbDir, file)
+        const fp = join(this.thumbDirLegacy, file)
         try {
-          const stat = statSync(filePath)
+          const stat = statSync(fp)
           if (now - stat.mtimeMs > maxAgeMs) {
-            unlinkSync(filePath)
+            unlinkSync(fp)
             cleaned++
           }
         } catch {
@@ -209,7 +272,6 @@ export class ThumbnailService {
   }
 }
 
-// Singleton instance
 let instance: ThumbnailService | null = null
 
 export function getThumbnailService(): ThumbnailService {
@@ -219,7 +281,6 @@ export function getThumbnailService(): ThumbnailService {
   return instance
 }
 
-// Helper: atomic write
 function writeFileSafely(path: string, data: Buffer): void {
   const dirname_val = require('path').dirname(path)
   if (!existsSync(dirname_val)) mkdirSync(dirname_val, { recursive: true })

@@ -12,15 +12,13 @@ const MainLayout: React.FC = () => {
     sidebarOpen,
     detailPanelOpen,
     refreshFolders,
-    refreshTags,
     refreshAssets,
     isImporting
   } = useApp()
 
-  // Initialize data on mount
+  // Initialize data on mount (tags load after assets:query via refreshAssets)
   useEffect(() => {
     refreshFolders()
-    refreshTags()
     refreshAssets()
   }, [])
 
@@ -34,9 +32,9 @@ const MainLayout: React.FC = () => {
 
       {/* Main Content Area */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar - Left */}
+        {/* Sidebar: zoom 1.25 scales type/icons; width 192×1.25≈240px layout footprint */}
         {sidebarOpen && (
-          <div className="w-[240px] min-w-[200px] border-r border-av-border flex-shrink-0">
+          <div className="w-[192px] min-w-[160px] border-r border-av-border flex-shrink-0 av-sidebar-zoom">
             <Sidebar />
           </div>
         )}

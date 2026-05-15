@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import type { AssetItem } from '@/shared/types'
+import { ModelViewer } from './ModelViewer'
 
 interface PreviewModalProps {
   asset: AssetItem | null
@@ -21,11 +22,13 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   onPrev
 }) => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [modelFileUrl, setModelFileUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (!asset || !isOpen) {
       setPreviewUrl(null)
+      setModelFileUrl(null)
       return
     }
 
@@ -41,14 +44,17 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
     if (!asset) return
 
     setLoading(true)
+    setModelFileUrl(null)
     try {
       if (asset.fileType === 'image') {
-        // Use thumbnail or original file via IPC
         const thumbData = await window.assetVaultAPI.assets.getThumbnail(asset.id)
         setPreviewUrl(thumbData as string ?? null)
+      } else if (asset.fileType === '3d') {
+        const target = asset.resolvedFilePath ?? asset.filePath
+        const href = await window.assetVaultAPI.fs.pathToFileUrl(target)
+        setModelFileUrl(href)
+        setPreviewUrl(null)
       } else if (['video', 'audio'].includes(asset.fileType)) {
-        // For video/audio, we need to serve the file via a custom protocol
-        // For now, show placeholder with file info
         setPreviewUrl(null)
       } else {
         setPreviewUrl(null)
@@ -128,7 +134,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             <span>Loading preview...</span>
           </div>
         ) : (
-          renderContent(asset, previewUrl)
+          renderContent(asset, previewUrl, modelFileUrl)
         )}
       </div>
 
@@ -144,7 +150,11 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   )
 }
 
-function renderContent(currentAsset: AssetItem, previewUrl: string | null) {
+function renderContent(
+  currentAsset: AssetItem,
+  previewUrl: string | null,
+  modelFileUrl: string | null
+) {
   if (!currentAsset) return null
 
   switch (currentAsset.fileType) {
@@ -168,6 +178,19 @@ function renderContent(currentAsset: AssetItem, previewUrl: string | null) {
     case 'font':
       return <FontPreview asset={currentAsset} />
 
+    case '3d':
+      return modelFileUrl ? (
+        <div className="w-[min(90vw,960px)] h-[min(80vh,720px)]">
+          <ModelViewer
+            fileUrl={modelFileUrl}
+            extension={currentAsset.extension}
+            className="w-full h-full"
+          />
+        </div>
+      ) : (
+        <FilePreviewPlaceholder asset={currentAsset} />
+      )
+
     default:
       return <FilePreviewPlaceholder asset={currentAsset} />
   }
@@ -182,7 +205,7 @@ function ImagePlaceholder({ asset }: { asset: AssetItem }) {
         </svg>
       </div>
       <p className="text-white/50 text-sm">Image preview not available</p>
-      <p className="text-white/30 text-xs">{asset.filePath}</p>
+      <p className="text-white/30 text-xs break-all">{asset.resolvedFilePath ?? asset.filePath}</p>
     </div>
   )
 }
@@ -235,21 +258,27 @@ function FontPreview({ asset }: { asset: AssetItem }) {
   const [fontLoaded, setFontLoaded] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
     async function loadFont() {
       try {
-        const fontFace = new FontFace(
-          asset.originalName || 'CustomFont',
-          `url(${asset.filePath})`
-        )
+        setFontLoaded(false)
+        const target = asset.resolvedFilePath ?? asset.filePath
+        const href = await window.assetVaultAPI.fs.pathToFileUrl(target)
+        if (!href || cancelled) return
+        const fontFace = new FontFace(asset.originalName || 'CustomFont', `url(${href})`)
         await fontFace.load()
+        if (cancelled) return
         document.fonts.add(fontFace)
         setFontLoaded(true)
       } catch (error) {
         console.error('Font loading failed:', error)
       }
     }
-    loadFont()
-  }, [asset.id])
+    void loadFont()
+    return () => {
+      cancelled = true
+    }
+  }, [asset.id, asset.filePath, asset.resolvedFilePath, asset.originalName])
 
   return (
     <div className="flex flex-col items-center gap-4 p-8 min-w-[500px]">
@@ -287,7 +316,7 @@ function FilePreviewPlaceholder({ asset }: { asset: AssetItem }) {
       </div>
       <p className="text-white/70">{asset.filename}</p>
       <p className="text-white/40 text-sm">Type: {asset.fileType.toUpperCase()}</p>
-      <p className="text-white/30 text-xs">{asset.filePath}</p>
+      <p className="text-white/30 text-xs break-all">{asset.resolvedFilePath ?? asset.filePath}</p>
     </div>
   )
 }

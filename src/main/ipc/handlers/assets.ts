@@ -2,13 +2,20 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { existsSync, statSync, readdirSync, readFileSync } from 'fs'
 import { join, basename, extname, dirname } from 'path'
 import { db, flushDatabase, persistDatabase, getDatabase } from '../../db'
-import { assets, assetTags, assetsSearch } from '../../db/schema'
+import { assets, assetTags, assetFolders, assetsSearch } from '../../db/schema'
 import { eq, and, like, inArray, desc, asc, sql, count, type SQL } from 'drizzle-orm'
 import type { AssetItem, QueryParams, QueryResult, ImportProgress } from '@/shared/types'
 import { importSingleAsset } from '../../services/importSingleAsset'
 import { getFileWatcher } from '../../services/FileWatcher'
 import { getThumbnailService } from '../../services/ThumbnailService'
+import { isModelThumbnailSkipped } from '../../services/modelThumbnailSkip'
 import { ALL_SUPPORTED_IMPORT_EXTENSIONS } from '@/shared/supportedFormats'
+import { resolveLibraryPath, removeItemPack, itemThumbRelative } from '../../services/libraryBundle'
+import { syncAssetSidecarFromDb } from '../../services/assetSidecar'
+import { analyzeColorsFromFile } from '../../services/analyzeAssetColors'
+import { bufferToImageDataUrl, shouldUseOriginalImageDimensions } from '../../utils/thumbnailSizing'
+import { renameAsset } from '../../services/renameAsset'
+import { copyAssetsToOtherLibrary } from '../../services/copyAssetsToOtherLibrary'
 
 function escapeSqlLikePattern(raw: string): string {
   return raw.replace(/%/g, ' ').replace(/_/g, ' ')
@@ -21,6 +28,25 @@ async function getAssetTags(database: ReturnType<typeof getDatabase>, assetId: s
     .where(eq(assetTags.assetId, assetId))
     .all()
   return results.map((r) => r.tagId)
+}
+
+async function getAssetFolderIds(database: ReturnType<typeof getDatabase>, assetId: string): Promise<string[]> {
+  const results = await database
+    .select({ folderId: assetFolders.folderId })
+    .from(assetFolders)
+    .where(eq(assetFolders.assetId, assetId))
+    .all()
+  return results.map((r) => r.folderId)
+}
+
+function attachResolvedPaths<T extends { filePath: string; thumbnailPath?: string | null }>(
+  row: T
+): T & { resolvedFilePath: string; resolvedThumbnailPath: string | null } {
+  return {
+    ...row,
+    resolvedFilePath: resolveLibraryPath(row.filePath),
+    resolvedThumbnailPath: row.thumbnailPath ? resolveLibraryPath(row.thumbnailPath) : null
+  }
 }
 
 export function handleAssetOperations(ipc: typeof ipcMain): void {
@@ -52,7 +78,9 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     }
 
     if (params.folderId) {
-      conditions.push(eq(assets.folderId, params.folderId))
+      conditions.push(
+        sql`exists (select 1 from asset_folders af where af.asset_id = ${assets.id} and af.folder_id = ${params.folderId})`
+      )
     }
 
     if (params.fileType) {
@@ -104,8 +132,11 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
     const itemsWithTags = await Promise.all(
       items.map(async (item) => {
-        const tagIds = await getAssetTags(database, item.id)
-        return { ...item, tagIds }
+        const [tagIds, folderIds] = await Promise.all([
+          getAssetTags(database, item.id),
+          getAssetFolderIds(database, item.id)
+        ])
+        return { ...attachResolvedPaths(item), tagIds, folderIds }
       })
     )
 
@@ -130,17 +161,28 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
         .set({ viewCount: sql`${assets.viewCount} + 1`, accessCount: sql`${assets.accessCount} + 1` })
         .where(eq(assets.id, id))
 
-      const tagIds = await getAssetTags(database, id)
+      const [tagIds, folderIds] = await Promise.all([
+        getAssetTags(database, id),
+        getAssetFolderIds(database, id)
+      ])
       persistDatabase()
-      return { ...item, tagIds }
+      return { ...attachResolvedPaths(item), tagIds, folderIds }
     }
 
     return item ?? null
   })
 
   ipc.handle('assets:import', async (event, filePaths: string[], targetFolderId?: string) => {
-    const win = BrowserWindow.fromWebContents(event.sender)!
+    const win = BrowserWindow.fromWebContents(event.sender)
     const results: string[] = []
+
+    const sendProgress = (data: ImportProgress) => {
+      try {
+        win?.webContents.send('import:progress', data)
+      } catch {
+        /* window gone */
+      }
+    }
 
     for (let i = 0; i < filePaths.length; i++) {
       const filePath = filePaths[i]
@@ -158,7 +200,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
           status: 'processing'
         }
 
-        win.webContents.send('import:progress', progressData)
+        sendProgress(progressData)
 
         const asset = await importSingleAsset(filePath, targetFolderId)
         if (asset) {
@@ -171,11 +213,11 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
         }
 
         progressData.status = 'done'
-        win.webContents.send('import:progress', progressData)
+        sendProgress(progressData)
       } catch (error) {
         console.error(`[Import] Error importing ${basename(filePath)}:`, error)
 
-        win.webContents.send('import:progress', {
+        sendProgress({
           current: i + 1,
           total: filePaths.length,
           filename: basename(filePath),
@@ -250,17 +292,61 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
   ipc.handle('assets:delete', async (_event, ids: string[]) => {
     const database = db!
+    for (const id of ids) {
+      removeItemPack(id)
+    }
     await database.delete(assets).where(inArray(assets.id, ids))
     persistDatabase()
     return true
   })
 
+  ipc.handle('assets:add-to-folders', async (_event, assetIds: string[], folderIds: string[]) => {
+    const database = db!
+    if (assetIds.length === 0 || folderIds.length === 0) return true
+    for (const assetId of assetIds) {
+      for (const folderId of folderIds) {
+        const existing = await database
+          .select()
+          .from(assetFolders)
+          .where(and(eq(assetFolders.assetId, assetId), eq(assetFolders.folderId, folderId)))
+          .get()
+        if (!existing) {
+          await database.insert(assetFolders).values({ assetId, folderId })
+        }
+      }
+      await syncAssetSidecarFromDb(database, assetId)
+    }
+    persistDatabase()
+    return true
+  })
+
+  ipc.handle('assets:remove-from-folders', async (_event, assetIds: string[], folderIds: string[]) => {
+    const database = db!
+    if (assetIds.length === 0 || folderIds.length === 0) return true
+    await database
+      .delete(assetFolders)
+      .where(and(inArray(assetFolders.assetId, assetIds), inArray(assetFolders.folderId, folderIds)))
+    for (const id of assetIds) {
+      await syncAssetSidecarFromDb(database, id)
+    }
+    persistDatabase()
+    return true
+  })
+
+  /** @deprecated Use assets:add-to-folders — kept for compatibility; adds to folder without removing others */
   ipc.handle('assets:move', async (_event, ids: string[], targetFolderId: string) => {
     const database = db!
-    await database
-      .update(assets)
-      .set({ folderId: targetFolderId, updatedAt: new Date() })
-      .where(inArray(assets.id, ids))
+    for (const assetId of ids) {
+      const existing = await database
+        .select()
+        .from(assetFolders)
+        .where(and(eq(assetFolders.assetId, assetId), eq(assetFolders.folderId, targetFolderId)))
+        .get()
+      if (!existing) {
+        await database.insert(assetFolders).values({ assetId, folderId: targetFolderId })
+      }
+      await syncAssetSidecarFromDb(database, assetId)
+    }
     persistDatabase()
     return true
   })
@@ -272,6 +358,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       .set({ metadata: JSON.stringify(metadata), updatedAt: new Date() })
       .where(eq(assets.id, id))
     persistDatabase()
+    await syncAssetSidecarFromDb(database, id)
     return true
   })
 
@@ -284,7 +371,64 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       .set({ notes: trimmed.length > 0 ? trimmed : null, updatedAt: new Date() })
       .where(eq(assets.id, id))
     persistDatabase()
+    await syncAssetSidecarFromDb(database, id)
     return true
+  })
+
+  ipc.handle('assets:rename', async (_event, id: string, newName: string) => {
+    return renameAsset(id, newName)
+  })
+
+  ipc.handle('assets:analyze-colors-batch', async (_event, ids: string[]) => {
+    const database = db!
+    let updated = 0
+    for (const id of ids) {
+      const asset = await database.select().from(assets).where(eq(assets.id, id)).get()
+      if (!asset || (asset.fileType !== 'image' && asset.fileType !== 'video')) continue
+      const absFile = resolveLibraryPath(asset.filePath)
+      const result = await analyzeColorsFromFile(absFile, asset.fileType)
+      if (!result) continue
+      await database
+        .update(assets)
+        .set({
+          dominantColor: result.dominantColor,
+          colors: result.colorsJson,
+          updatedAt: new Date()
+        })
+        .where(eq(assets.id, id))
+      await syncAssetSidecarFromDb(database, id)
+      updated++
+    }
+    if (updated > 0) persistDatabase()
+    return { updated }
+  })
+
+  ipc.handle('assets:copy-to-library', async (_event, assetIds: string[], targetLibraryRoot: string) => {
+    return copyAssetsToOtherLibrary(assetIds, targetLibraryRoot)
+  })
+
+  ipc.handle('assets:analyze-colors', async (_event, id: string) => {
+    const database = db!
+    const asset = await database.select().from(assets).where(eq(assets.id, id)).get()
+    if (!asset) return null
+    if (asset.fileType !== 'image' && asset.fileType !== 'video') return null
+
+    const absFile = resolveLibraryPath(asset.filePath)
+    const result = await analyzeColorsFromFile(absFile, asset.fileType)
+    if (!result) return null
+
+    await database
+      .update(assets)
+      .set({
+        dominantColor: result.dominantColor,
+        colors: result.colorsJson,
+        updatedAt: new Date()
+      })
+      .where(eq(assets.id, id))
+    persistDatabase()
+    await syncAssetSidecarFromDb(database, id)
+
+    return { dominantColor: result.dominantColor, colors: result.colors }
   })
 
   ipc.handle('assets:get-thumbnail', async (_event, id: string) => {
@@ -294,6 +438,9 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
         id: assets.id,
         filePath: assets.filePath,
         fileType: assets.fileType,
+        mimeType: assets.mimeType,
+        width: assets.width,
+        height: assets.height,
         thumbnailPath: assets.thumbnailPath,
         hasThumbnail: assets.hasThumbnail
       })
@@ -303,13 +450,30 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
     if (!asset) return null
 
-    const readWebpDataUrl = (p: string): string | null => {
+    const readWebpDataUrl = (storedPath: string): string | null => {
       try {
-        if (!existsSync(p)) return null
-        const buffer = readFileSync(p)
+        const abs = resolveLibraryPath(storedPath)
+        if (!existsSync(abs)) return null
+        const buffer = readFileSync(abs)
         return `data:image/webp;base64,${buffer.toString('base64')}`
       } catch {
         return null
+      }
+    }
+
+    const absFile = asset.filePath ? resolveLibraryPath(asset.filePath) : ''
+
+    if (
+      asset.fileType === 'image' &&
+      absFile &&
+      existsSync(absFile) &&
+      shouldUseOriginalImageDimensions(asset.width, asset.height)
+    ) {
+      try {
+        const buffer = readFileSync(absFile)
+        return bufferToImageDataUrl(buffer, asset.mimeType || 'image/jpeg')
+      } catch {
+        // fall through
       }
     }
 
@@ -318,17 +482,43 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       if (fromDisk) return fromDisk
     }
 
-    if (asset.fileType === 'image' && asset.filePath && existsSync(asset.filePath)) {
-      const gen = await getThumbnailService().generate(asset.filePath, asset.id, {
+    if (asset.fileType === 'image' && absFile && existsSync(absFile)) {
+      const gen = await getThumbnailService().generate(absFile, asset.id, {
         width: 256,
         height: 256,
         quality: 80
       })
       if (gen?.buffer?.length) {
+        if (!gen.usedOriginal) {
+          const relThumb = itemThumbRelative(asset.id)
+          await database
+            .update(assets)
+            .set({
+              thumbnailPath: relThumb,
+              hasThumbnail: true,
+              updatedAt: new Date()
+            })
+            .where(eq(assets.id, id))
+          persistDatabase()
+          const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
+          return `data:image/webp;base64,${buf.toString('base64')}`
+        }
+        return bufferToImageDataUrl(gen.buffer, asset.mimeType || 'image/jpeg')
+      }
+    }
+
+    if (asset.fileType === 'video' && absFile && existsSync(absFile)) {
+      const gen = await getThumbnailService().generateVideo(absFile, asset.id, {
+        width: 256,
+        height: 256,
+        quality: 80
+      })
+      if (gen?.buffer?.length) {
+        const relThumb = itemThumbRelative(asset.id)
         await database
           .update(assets)
           .set({
-            thumbnailPath: gen.path,
+            thumbnailPath: relThumb,
             hasThumbnail: true,
             updatedAt: new Date()
           })
@@ -339,17 +529,19 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       }
     }
 
-    if (asset.fileType === 'video' && asset.filePath && existsSync(asset.filePath)) {
-      const gen = await getThumbnailService().generateVideo(asset.filePath, asset.id, {
+    if (asset.fileType === '3d' && absFile && existsSync(absFile) && !isModelThumbnailSkipped(asset.id)) {
+      const ext = asset.filePath.split('.').pop() ?? ''
+      const gen = await getThumbnailService().generateModel(absFile, asset.id, ext, {
         width: 256,
         height: 256,
         quality: 80
       })
       if (gen?.buffer?.length) {
+        const relThumb = itemThumbRelative(asset.id)
         await database
           .update(assets)
           .set({
-            thumbnailPath: gen.path,
+            thumbnailPath: relThumb,
             hasThumbnail: true,
             updatedAt: new Date()
           })
