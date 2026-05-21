@@ -4,6 +4,7 @@ import { handleAssetOperations } from './handlers/assets'
 import { handleTagOperations } from './handlers/tags'
 import { handleFsOperations } from './handlers/fs'
 import { handleLibraryOperations } from './handlers/library'
+import { handleAiCanvasOperations } from './handlers/aiCanvas'
 
 export function registerIpcHandlers(ipc: typeof ipcMain): void {
   // Window controls
@@ -37,6 +38,7 @@ export function registerIpcHandlers(ipc: typeof ipcMain): void {
   handleTagOperations(ipc)
   handleFsOperations(ipc)
   handleLibraryOperations(ipc)
+  handleAiCanvasOperations(ipc)
 
   console.log('[IPC] All handlers registered successfully')
 }

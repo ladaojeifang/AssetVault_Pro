@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react'
 import { useApp } from '../../stores/AppContext'
+import { useAiCanvasNav } from '../../stores/AiCanvasNavContext'
 
 const Toolbar: React.FC = () => {
   const {
@@ -15,6 +16,7 @@ const Toolbar: React.FC = () => {
     isImporting,
     refreshAssets
   } = useApp()
+  const { openCanvasList } = useAiCanvasNav()
 
   const [searchFocused, setSearchFocused] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -75,6 +77,20 @@ const Toolbar: React.FC = () => {
           Folder
         </button>
       </div>
+
+      <button
+        type="button"
+        className="btn-secondary text-xs"
+        onClick={openCanvasList}
+        title="AI 无限画布（节点编排生成）"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="6" cy="6" r="2" />
+          <circle cx="18" cy="18" r="2" />
+          <path d="M8 6h8a4 4 0 014 4v2M6 18V10a4 4 0 014-4h2" />
+        </svg>
+        AI 画布
+      </button>
 
       {/* Divider */}
       <div className="w-px h-6 bg-av-border" />

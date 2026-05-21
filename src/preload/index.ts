@@ -165,6 +165,23 @@ const api = {
       ipcRenderer.invoke('fs:copy-paths-to-clipboard', assetIds) as Promise<number>
   },
 
+  aiCanvas: {
+    list: () => ipcRenderer.invoke('aiCanvas:list'),
+    get: (id: string) => ipcRenderer.invoke('aiCanvas:get', id),
+    create: (name: string) => ipcRenderer.invoke('aiCanvas:create', name),
+    save: (doc: import('../shared/aiCanvasTypes').AiCanvasDocument) =>
+      ipcRenderer.invoke('aiCanvas:save', doc),
+    delete: (id: string) => ipcRenderer.invoke('aiCanvas:delete', id),
+    importOutput: (payload: {
+      pngBase64: string
+      filename: string
+      canvasId: string
+      nodeId: string
+      targetFolderId?: string
+    }) =>
+      ipcRenderer.invoke('aiCanvas:import-output', payload) as Promise<{ assetId: string } | null>
+  },
+
   // Import progress events
   onImportProgress: (callback: (data: {
     current: number

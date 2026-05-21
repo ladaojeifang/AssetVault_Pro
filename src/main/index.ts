@@ -78,9 +78,19 @@ function createWindow(): BrowserWindow {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
-    // 开发模式下自动打开开发者工具
-    if (isDev) {
-      mainWindow.webContents.openDevTools()
+    // 开发模式：Detached DevTools 可减少 Chromium 在拖放时误报 dragEvent 的噪音
+    if (isDev && process.env.ASSETVAULT_NO_DEVTOOLS !== '1') {
+      mainWindow.webContents.openDevTools({ mode: 'detach' })
+    }
+  })
+
+  // 已知 Chromium DevTools 内部 bug（与业务代码无关）
+  mainWindow.webContents.on('console-message', (_event, _level, message) => {
+    if (
+      message.includes('dragEvent is not defined') ||
+      (message.includes('Failed to fetch') && message.includes('devtools'))
+    ) {
+      return
     }
   })
 

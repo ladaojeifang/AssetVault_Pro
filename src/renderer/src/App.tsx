@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { ConfigProvider } from '@arco-design/web-react'
 import Layout from './components/Layout/MainLayout'
+import AiCanvasShell from './components/AiCanvas/AiCanvasShell'
 import { AppProvider } from './stores/AppContext'
+import { AiCanvasNavProvider, useAiCanvasNav } from './stores/AiCanvasNavContext'
 import { ToastProvider } from './components/Common/Toast'
 import DropZone from './components/Common/DropZone'
 import SettingsPage from './components/Settings/SettingsPage'
@@ -20,6 +22,7 @@ const arcoTheme = {
 }
 
 const AppInner: React.FC = () => {
+  const { screen } = useAiCanvasNav()
   const [settingsVisible, setSettingsVisible] = useState(false)
 
   useEffect(() => {
@@ -31,10 +34,12 @@ const AppInner: React.FC = () => {
   // Register global keyboard shortcuts
   useGlobalHotkeys()
 
+  const inLibrary = screen === 'library'
+
   return (
     <>
-      <Layout />
-      <DropZone />
+      {inLibrary ? <Layout /> : <AiCanvasShell />}
+      {inLibrary && <DropZone />}
       <SettingsPage visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
     </>
   )
@@ -44,9 +49,11 @@ const App: React.FC = () => {
   return (
     <ConfigProvider theme={arcoTheme}>
       <AppProvider>
-        <ToastProvider>
-          <AppInner />
-        </ToastProvider>
+        <AiCanvasNavProvider>
+          <ToastProvider>
+            <AppInner />
+          </ToastProvider>
+        </AiCanvasNavProvider>
       </AppProvider>
     </ConfigProvider>
   )

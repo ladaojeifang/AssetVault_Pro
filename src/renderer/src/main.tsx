@@ -5,11 +5,15 @@ import './modelSnapshotBridge'
 import '@arco-design/web-react/dist/css/arco.css'
 import './styles/globals.css'
 
-// Suppress non-fatal Electron/Chromium internal errors (e.g. dragEvent from drag handling)
+// 已知 Electron/Chromium DevTools 内部 bug：拖放或切换 DevTools 标签时会误报 dragEvent，与业务无关
+function isBenignChromiumDragNoise(message: string | undefined): boolean {
+  if (!message) return false
+  return message.includes('dragEvent is not defined')
+}
+
 window.addEventListener('error', (e) => {
-  if (e.message?.includes('dragEvent') || e.error?.message?.includes('dragEvent')) {
+  if (isBenignChromiumDragNoise(e.message) || isBenignChromiumDragNoise(e.error?.message)) {
     e.preventDefault()
-    console.warn('[Renderer] Suppressed non-fatal dragEvent error')
     return false
   }
 })
@@ -21,9 +25,8 @@ window.addEventListener('unhandledrejection', (e) => {
       : e.reason instanceof Error
         ? e.reason.message
         : ''
-  if (msg.includes('dragEvent')) {
+  if (isBenignChromiumDragNoise(msg)) {
     e.preventDefault()
-    console.warn('[Renderer] Suppressed dragEvent rejection')
   }
 })
 

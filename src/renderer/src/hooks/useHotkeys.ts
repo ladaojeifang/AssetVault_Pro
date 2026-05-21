@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useApp } from '../stores/AppContext'
+import { useAiCanvasNav, type AppScreen } from '../stores/AiCanvasNavContext'
 
 /**
  * Window-local shortcuts (only while AssetVault is focused).
@@ -107,6 +108,7 @@ const IPC_CHANNEL_TO_ACTION: Record<string, keyof typeof HOTKEY_MAP> = {
 
 export function useGlobalHotkeys() {
   const appCtx = useApp()
+  const { screen } = useAiCanvasNav()
 
   useEffect(() => {
     function isTypingTarget(el: EventTarget | null): boolean {
@@ -121,7 +123,7 @@ export function useGlobalHotkeys() {
     function handleKeyDown(e: KeyboardEvent) {
       if (isTypingTarget(e.target)) return
 
-      const hotkeyId = resolveHotkeyId(e)
+      const hotkeyId = resolveHotkeyId(e, screen)
       if (hotkeyId && HOTKEY_MAP[hotkeyId]) {
         e.preventDefault()
         HOTKEY_MAP[hotkeyId](appCtx)
@@ -136,10 +138,10 @@ export function useGlobalHotkeys() {
       window.removeEventListener('keydown', handleKeyDown)
       cleanupIpc()
     }
-  }, [appCtx])
+  }, [appCtx, screen])
 }
 
-function resolveHotkeyId(e: KeyboardEvent): string | null {
+function resolveHotkeyId(e: KeyboardEvent, screen: AppScreen): string | null {
   const ctrl = e.ctrlKey || e.metaKey
   const shift = e.shiftKey
   const key = e.key.toLowerCase()
@@ -153,8 +155,11 @@ function resolveHotkeyId(e: KeyboardEvent): string | null {
   if (ctrl && !shift && key === 'g') return 'view-grid'
   if (ctrl && shift && key === 'g') return 'view-list'
   if (ctrl && !shift && key === 'a') return 'select-all'
-  if (key === 'delete' || (key === 'backspace' && !(e.target as HTMLElement).isContentEditable))
+  if (key === 'delete' || (key === 'backspace' && !(e.target as HTMLElement).isContentEditable)) {
+    // AI 画布内 Delete/Backspace 用于删除节点，勿触发资源库删除
+    if (screen === 'ai-canvas-editor') return null
     return 'delete-selected'
+  }
   if (key === 'f5' || (key === 'r' && ctrl)) return 'refresh'
   if (key === ' ') return 'preview'
   if (ctrl && !shift && key === ',') return 'open-settings'
