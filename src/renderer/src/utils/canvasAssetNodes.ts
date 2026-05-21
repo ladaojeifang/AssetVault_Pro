@@ -1,6 +1,13 @@
 import type { Node } from '@xyflow/react'
 import type { AssetItem } from '@/shared/types'
+import type { FlowNodeType } from '../components/AiCanvas/canvasNodeTypes'
 import { createFlowNodeId } from '../components/AiCanvas/genNodeData'
+
+const FILE_TYPE_TO_BASE: Partial<Record<AssetItem['fileType'], FlowNodeType>> = {
+  image: 'base_image',
+  video: 'base_video',
+  audio: 'base_audio'
+}
 
 const MEDIA_MIME: Record<string, string> = {
   mp4: 'video/mp4',
@@ -77,36 +84,66 @@ function nextIndex(nodes: Node[], type: string): number {
   return list.reduce((m, n) => Math.max(m, Number(n.data.displayIndex) || 0), 0) + 1
 }
 
+/** 从素材库拖入 → 按文件类型创建 BASE 素材节点 */
+export async function buildBaseAssetNodesFromAssetIds(
+  assetIds: string[],
+  origin: { x: number; y: number },
+  existingNodes: Node[] = []
+): Promise<{ nodes: Node[]; skipped: number }> {
+  const nodes: Node[] = []
+  const stamp = Date.now()
+  let skipped = 0
+  const indexByType = new Map<string, number>()
+
+  const nextForType = (flowType: FlowNodeType): number => {
+    const cur = indexByType.get(flowType) ?? nextIndex(existingNodes, flowType)
+    indexByType.set(flowType, cur + 1)
+    return cur
+  }
+
+  for (let i = 0; i < assetIds.length; i++) {
+    const assetId = assetIds[i]
+    const asset = (await window.assetVaultAPI.assets.getById(assetId)) as AssetItem | null
+    if (!asset) {
+      skipped++
+      continue
+    }
+
+    const flowType = FILE_TYPE_TO_BASE[asset.fileType]
+    if (!flowType) {
+      skipped++
+      continue
+    }
+
+    const displayIndex = nextForType(flowType)
+    const previewUrl =
+      flowType === 'base_text' ? null : await resolveAssetPreviewUrl(asset)
+
+    nodes.push({
+      id: `${flowType}-${asset.id}-${stamp}-${i}`,
+      type: flowType,
+      position: { x: origin.x + i * 48, y: origin.y + i * 48 },
+      data: {
+        displayIndex,
+        previewUrl,
+        assetId: asset.id,
+        label: asset.originalName || asset.filename,
+        content: ''
+      }
+    })
+  }
+
+  return { nodes, skipped }
+}
+
 /** 从素材库拖入 → BASE_IMAGE 素材节点（可连到生成节点） */
 export async function buildBaseImageNodesFromAssetIds(
   assetIds: string[],
   origin: { x: number; y: number },
   existingNodes: Node[] = []
 ): Promise<Node[]> {
-  const nodes: Node[] = []
-  const stamp = Date.now()
-  let index = nextIndex(existingNodes, 'base_image')
-
-  for (let i = 0; i < assetIds.length; i++) {
-    const assetId = assetIds[i]
-    const asset = (await window.assetVaultAPI.assets.getById(assetId)) as AssetItem | null
-    if (!asset) continue
-
-    const previewUrl = await resolveAssetPreviewUrl(asset)
-    nodes.push({
-      id: `base_image-${asset.id}-${stamp}-${i}`,
-      type: 'base_image',
-      position: { x: origin.x + i * 48, y: origin.y + i * 48 },
-      data: {
-        displayIndex: index++,
-        previewUrl,
-        assetId: asset.id,
-        label: asset.originalName || asset.filename
-      }
-    })
-  }
-
-  return nodes
+  const { nodes } = await buildBaseAssetNodesFromAssetIds(assetIds, origin, existingNodes)
+  return nodes.filter((n) => n.type === 'base_image')
 }
 
 /** @deprecated */

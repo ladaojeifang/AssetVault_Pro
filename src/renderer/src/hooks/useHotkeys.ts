@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useApp } from '../stores/AppContext'
-import { useAiCanvasNav, type AppScreen } from '../stores/AiCanvasNavContext'
+import { useAiCanvasNavOptional, type AppScreen } from '../stores/AiCanvasNavContext'
 
 /**
  * Window-local shortcuts (only while AssetVault is focused).
@@ -108,7 +108,8 @@ const IPC_CHANNEL_TO_ACTION: Record<string, keyof typeof HOTKEY_MAP> = {
 
 export function useGlobalHotkeys() {
   const appCtx = useApp()
-  const { screen } = useAiCanvasNav()
+  const nav = useAiCanvasNavOptional()
+  const screen: AppScreen = nav?.screen ?? 'library'
 
   useEffect(() => {
     function isTypingTarget(el: EventTarget | null): boolean {

@@ -26,7 +26,36 @@ const api = {
     minimize: () => ipcRenderer.invoke('window:minimize'),
     maximize: () => ipcRenderer.invoke('window:maximize'),
     close: () => ipcRenderer.invoke('window:close'),
-    isMaximized: () => ipcRenderer.invoke('window:is-maximized')
+    isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
+    openAiCanvas: (canvasId?: string | null) =>
+      ipcRenderer.invoke('window:open-ai-canvas', canvasId ?? null) as Promise<boolean>,
+    focusMain: () => ipcRenderer.invoke('window:focus-main') as Promise<boolean>,
+    getRole: () => ipcRenderer.invoke('window:get-role') as Promise<'main' | 'ai-canvas' | 'unknown'>
+  },
+
+  assetDrag: {
+    set: (assetIds: string[]) => ipcRenderer.invoke('assetDrag:set', assetIds) as Promise<boolean>,
+    clear: () => ipcRenderer.invoke('assetDrag:clear') as Promise<boolean>,
+    isActive: () => ipcRenderer.invoke('assetDrag:is-active') as Promise<boolean>,
+    consume: () => ipcRenderer.invoke('assetDrag:consume') as Promise<string[] | null>,
+    onStateChange: (
+      callback: (state: { active: boolean; assetIds: string[] }) => void
+    ) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        state: { active: boolean; assetIds: string[] }
+      ) => callback(state)
+      ipcRenderer.on('asset-drag:state', handler)
+      return () => ipcRenderer.removeListener('asset-drag:state', handler)
+    },
+    onNavigate: (callback: (payload: { canvasId: string | null }) => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: { canvasId: string | null }
+      ) => callback(payload)
+      ipcRenderer.on('ai-canvas:navigate', handler)
+      return () => ipcRenderer.removeListener('ai-canvas:navigate', handler)
+    }
   },
 
   // Folder operations
@@ -69,9 +98,16 @@ const api = {
       sortOrder?: 'asc' | 'desc'
     }) => ipcRenderer.invoke('assets:query', params),
     getById: (id: string) => ipcRenderer.invoke('assets:get-by-id', id),
-    import: (filePaths: string[], targetFolderId?: string) =>
-      ipcRenderer.invoke('assets:import', filePaths, targetFolderId),
-    importFolder: (folderPath: string) => ipcRenderer.invoke('assets:import-folder', folderPath),
+    import: (
+      filePaths: string[],
+      options?: string | import('../../shared/importTypes').ImportAssetOptions
+    ) => ipcRenderer.invoke('assets:import', filePaths, options),
+    importFolder: (
+      folderPath: string,
+      options?: string | import('../../shared/importTypes').ImportAssetOptions
+    ) => ipcRenderer.invoke('assets:import-folder', folderPath, options),
+    scanContentHashes: () =>
+      ipcRenderer.invoke('assets:scan-content-hashes') as Promise<import('../../shared/importTypes').ContentHashScanResult>,
     delete: (ids: string[]) => ipcRenderer.invoke('assets:delete', ids),
     move: (ids: string[], targetFolderId: string) =>
       ipcRenderer.invoke('assets:move', ids, targetFolderId),
@@ -189,13 +225,46 @@ const api = {
     filename: string
     status: 'processing' | 'done' | 'error'
   }) => void) => {
-      const handler = (
-        _event: Electron.IpcRendererEvent,
-        data: { current: number; total: number; filename: string; status: 'processing' | 'done' | 'error' }
-      ) => callback(data)
-      ipcRenderer.on('import:progress', handler)
-      return () => ipcRenderer.removeListener('import:progress', handler)
-    }
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: { current: number; total: number; filename: string; status: 'processing' | 'done' | 'error' }
+    ) => callback(data)
+    ipcRenderer.on('import:progress', handler)
+    return () => ipcRenderer.removeListener('import:progress', handler)
+  },
+
+  onAssetsImported: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('assets:imported', handler)
+    return () => ipcRenderer.removeListener('assets:imported', handler)
+  },
+
+  onDuplicateImportPrompt: (
+    callback: (payload: import('../../shared/importTypes').DuplicateImportPromptPayload) => void
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: import('../../shared/importTypes').DuplicateImportPromptPayload
+    ) => callback(payload)
+    ipcRenderer.on('import:duplicate-prompt', handler)
+    return () => ipcRenderer.removeListener('import:duplicate-prompt', handler)
+  },
+
+  answerDuplicateImport: (
+    requestId: string,
+    answer: import('../../shared/importTypes').DuplicateImportAnswer
+  ) => ipcRenderer.invoke('import:duplicate-answer', requestId, answer) as Promise<boolean>,
+
+  onContentHashScanProgress: (
+    callback: (data: import('../../shared/importTypes').ContentHashScanProgress) => void
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: import('../../shared/importTypes').ContentHashScanProgress
+    ) => callback(data)
+    ipcRenderer.on('content-hash:scan-progress', handler)
+    return () => ipcRenderer.removeListener('content-hash:scan-progress', handler)
+  }
 }
 
 // Expose protected methods to renderer

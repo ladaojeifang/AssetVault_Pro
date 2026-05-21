@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { ConfigProvider } from '@arco-design/web-react'
 import Layout from './components/Layout/MainLayout'
-import AiCanvasShell from './components/AiCanvas/AiCanvasShell'
+import AiCanvasApp from './AiCanvasApp'
 import { AppProvider } from './stores/AppContext'
-import { AiCanvasNavProvider, useAiCanvasNav } from './stores/AiCanvasNavContext'
 import { ToastProvider } from './components/Common/Toast'
+import DuplicateImportBridge from './components/Import/DuplicateImportBridge'
 import DropZone from './components/Common/DropZone'
 import SettingsPage from './components/Settings/SettingsPage'
 import { useGlobalHotkeys } from './hooks/useHotkeys'
 
-// Arco Design theme overrides for dark mode
 const arcoTheme = {
   colorPrimary: '#3B82F6',
   colorBgLayout: '#0F1117',
@@ -21,8 +20,12 @@ const arcoTheme = {
   borderRadiusMedium: '6px'
 }
 
-const AppInner: React.FC = () => {
-  const { screen } = useAiCanvasNav()
+export function isAiCanvasWindowLocation(): boolean {
+  const h = window.location.hash.replace(/^#\/?/, '')
+  return h === 'ai-canvas' || h.startsWith('ai-canvas/')
+}
+
+const MainApp: React.FC = () => {
   const [settingsVisible, setSettingsVisible] = useState(false)
 
   useEffect(() => {
@@ -31,29 +34,27 @@ const AppInner: React.FC = () => {
     return () => window.removeEventListener('assetvault:open-settings', open)
   }, [])
 
-  // Register global keyboard shortcuts
   useGlobalHotkeys()
-
-  const inLibrary = screen === 'library'
 
   return (
     <>
-      {inLibrary ? <Layout /> : <AiCanvasShell />}
-      {inLibrary && <DropZone />}
+      <Layout />
+      <DropZone />
       <SettingsPage visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
     </>
   )
 }
 
 const App: React.FC = () => {
+  const canvasWindow = isAiCanvasWindowLocation()
+
   return (
     <ConfigProvider theme={arcoTheme}>
       <AppProvider>
-        <AiCanvasNavProvider>
-          <ToastProvider>
-            <AppInner />
-          </ToastProvider>
-        </AiCanvasNavProvider>
+        <ToastProvider>
+          <DuplicateImportBridge />
+          {canvasWindow ? <AiCanvasApp /> : <MainApp />}
+        </ToastProvider>
       </AppProvider>
     </ConfigProvider>
   )

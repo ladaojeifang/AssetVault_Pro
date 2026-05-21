@@ -70,9 +70,9 @@ export async function copyAssetsToOtherLibrary(
     targetSql.run(
       `INSERT OR IGNORE INTO assets (
         id, filename, original_name, extension, mime_type, file_type, folder_id, file_path, import_source,
-        file_size, width, height, dominant_color, colors, duration, thumbnail_path, has_thumbnail,
+        file_size, content_hash, content_hash_computed_at, width, height, dominant_color, colors, duration, thumbnail_path, has_thumbnail,
         metadata, notes, view_count, access_count, file_created_at, file_modified_at, imported_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
       [
         newId,
         row.filename,
@@ -82,6 +82,10 @@ export async function copyAssetsToOtherLibrary(
         row.fileType,
         filePath,
         row.fileSize,
+        row.contentHash ?? null,
+        row.contentHashComputedAt
+          ? Math.floor(new Date(row.contentHashComputedAt).getTime() / 1000)
+          : null,
         row.width ?? null,
         row.height ?? null,
         row.dominantColor ?? null,

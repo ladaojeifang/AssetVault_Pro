@@ -42,13 +42,11 @@ import { isAssetDragEvent, parseAssetDragPayload } from '../../utils/assetDragDr
 
 import {
 
-  buildBaseImageNodesFromAssetIds,
+  buildBaseAssetNodesFromAssetIds,
 
   createEmptyBaseTextNode,
 
   hydrateReferencePreviewUrls,
-
-  resolveAssetPreviewUrl,
 
   revokePreviewUrlIfBlob,
 
@@ -99,6 +97,9 @@ import { docToFlow, flowToDoc } from './docFlow'
 import { migrateLoadedCanvas } from './migrateLoadedNodes'
 
 import { AiCanvasNodeGenContext } from './AiCanvasNodeGenContext'
+import { AiCanvasBaseAssetContext } from './AiCanvasBaseAssetContext'
+import { useApp } from '../../stores/AppContext'
+import { assetToNodePreview, pickAndImportLibraryAsset } from '../../utils/canvasAssetImport'
 
 import { runNodeGenMock } from './runNodeGenMock'
 
@@ -107,8 +108,6 @@ import { runTextTranslateMock } from './runTextTranslateMock'
 import { canConnectNodes } from './modeConfigCatalog'
 
 import { canvasTypeFromNode, createFlowNodeId, defaultGenNodeDataForFlow } from './genNodeData'
-
-import AiCanvasAssetRail from './AiCanvasAssetRail'
 
 import AiCanvasLeftToolbar from './AiCanvasLeftToolbar'
 
@@ -149,9 +148,7 @@ const nodeTypes = {
 
 
 interface AiCanvasEditorProps {
-
   canvasId: string
-
 }
 
 
@@ -165,8 +162,9 @@ function nextIndex(nodes: Node[], type: string): number {
 
 
 const AiCanvasEditorInner: React.FC<AiCanvasEditorProps> = ({ canvasId }) => {
-
   const { backToCanvasList } = useAiCanvasNav()
+  const { refreshAssets } = useApp()
+  const crossWindowDragRef = useRef(false)
 
   const { screenToFlowPosition } = useReactFlow()
 
@@ -352,112 +350,59 @@ const AiCanvasEditorInner: React.FC<AiCanvasEditorProps> = ({ canvasId }) => {
 
 
 
-  const uploadReferenceAsset = useCallback(
-
-    async (nodeId: string, kind: 'image' | 'video') => {
-
+  const attachLibraryAssetToNode = useCallback(
+    async (nodeId: string, kind: 'image' | 'video', mode: 'base' | 'generate') => {
       try {
-
-        const filters =
-
-          kind === 'video'
-
-            ? [
-
-                {
-
-                  name: 'Videos',
-
-                  extensions: ['mp4', 'mov', 'webm', 'mkv', 'avi', 'm4v']
-
-                }
-
-              ]
-
-            : [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }]
-
-        const paths = await window.assetVaultAPI.fs.selectDialog({ multi: false, filters })
-
-        if (!paths.length) return
-
-        const imported = await window.assetVaultAPI.assets.import(paths)
-
-        const assetId = imported[0]
-
-        if (!assetId) {
-
-          notify.error('导入失败')
-
-          return
-
-        }
-
-        const asset = (await window.assetVaultAPI.assets.getById(assetId)) as AssetItem | null
-
+        const asset = await pickAndImportLibraryAsset(kind)
         if (!asset) return
 
-        if (kind === 'video' && asset.fileType !== 'video') {
-
-          notify.warning('请选择视频文件')
-
-          return
-
-        }
-
-        const previewUrl = await resolveAssetPreviewUrl(asset)
-
+        const previewUrl = await assetToNodePreview(asset)
         const prev = nodes.find((n) => n.id === nodeId)
         revokePreviewUrlIfBlob(prev?.data.previewUrl as string | undefined)
 
-        patchNode(nodeId, {
+        const patch: Record<string, unknown> = {
           previewUrl,
-
           assetId: asset.id,
+          label: asset.originalName || asset.filename
+        }
+        if (mode === 'generate') patch.status = 'draft'
 
-          label: asset.originalName || asset.filename,
-
-          status: 'draft'
-
-        })
+        patchNode(nodeId, patch)
+        await refreshAssets()
 
         notify.success(
-
-          kind === 'video' ? '已载入参考视频，可编辑提示词后生成' : '已载入参考图，可编辑提示词后生成'
-
+          mode === 'base'
+            ? '已导入素材库并载入节点'
+            : kind === 'video'
+              ? '已载入参考视频，可编辑提示词后生成'
+              : '已载入参考图，可编辑提示词后生成'
         )
-
       } catch (e) {
-
         console.error(e)
-
-        notify.error('上传失败')
-
+        notify.error('导入失败')
       }
-
     },
-
-    [patchNode, nodes]
-
+    [nodes, patchNode, refreshAssets]
   )
 
+  const loadLocalImage = useCallback(
+    (nodeId: string) => attachLibraryAssetToNode(nodeId, 'image', 'base'),
+    [attachLibraryAssetToNode]
+  )
 
+  const loadLocalVideo = useCallback(
+    (nodeId: string) => attachLibraryAssetToNode(nodeId, 'video', 'base'),
+    [attachLibraryAssetToNode]
+  )
 
   const uploadImage = useCallback(
-
-    (nodeId: string) => void uploadReferenceAsset(nodeId, 'image'),
-
-    [uploadReferenceAsset]
-
+    (nodeId: string) => attachLibraryAssetToNode(nodeId, 'image', 'generate'),
+    [attachLibraryAssetToNode]
   )
 
-
-
   const uploadVideo = useCallback(
-
-    (nodeId: string) => void uploadReferenceAsset(nodeId, 'video'),
-
-    [uploadReferenceAsset]
-
+    (nodeId: string) => attachLibraryAssetToNode(nodeId, 'video', 'generate'),
+    [attachLibraryAssetToNode]
   )
 
 
@@ -489,6 +434,14 @@ const AiCanvasEditorInner: React.FC<AiCanvasEditorProps> = ({ canvasId }) => {
   )
 
 
+
+  const baseAssetActions = useMemo(
+    () => ({
+      loadLocalImage,
+      loadLocalVideo
+    }),
+    [loadLocalImage, loadLocalVideo]
+  )
 
   const nodeGenActions = useMemo(
 
@@ -649,64 +602,74 @@ const AiCanvasEditorInner: React.FC<AiCanvasEditorProps> = ({ canvasId }) => {
 
 
   const onDragOver = useCallback((e: React.DragEvent) => {
-
-    if (!isAssetDragEvent(e)) return
-
+    if (!isAssetDragEvent(e) && !crossWindowDragRef.current) return
     e.preventDefault()
-
     e.dataTransfer.dropEffect = 'copy'
-
     setDropActive(true)
-
   }, [])
-
-
 
   const onDragLeave = useCallback(() => setDropActive(false), [])
 
-  const onDragEnd = useCallback(() => setDropActive(false), [])
-
-
+  const onDragEndCanvas = useCallback(() => setDropActive(false), [])
 
   const onDrop = useCallback(
-
     (e: React.DragEvent) => {
-
       setDropActive(false)
-
-      if (!isAssetDragEvent(e)) return
-
       e.preventDefault()
 
-      const payload = parseAssetDragPayload(e)
+      void (async () => {
+        let assetIds: string[] = []
+        const payload = parseAssetDragPayload(e)
+        if (payload?.assetIds.length) {
+          assetIds = payload.assetIds
+        } else {
+          const consumed = await window.assetVaultAPI.assetDrag.consume()
+          if (consumed?.length) assetIds = consumed
+        }
+        if (!assetIds.length) return
 
-      if (!payload?.assetIds.length) return
-
-
-
-      const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-
-      void buildBaseImageNodesFromAssetIds(payload.assetIds, position, nodes).then((newNodes) => {
-
+        const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
+        const { nodes: newNodes, skipped } = await buildBaseAssetNodesFromAssetIds(
+          assetIds,
+          position,
+          nodes
+        )
         if (newNodes.length === 0) {
-
-          notify.warning('无法添加所选素材')
-
+          notify.warning(
+            skipped > 0
+              ? '所选素材类型不支持拖入画布（仅图片/视频/音频）'
+              : '无法添加所选素材'
+          )
           return
-
         }
 
         setNodes((prev) => [...prev, ...newNodes])
-
-        notify.success(`已添加 ${newNodes.length} 个图片素材节点`)
-
-      })
-
+        const msg =
+          skipped > 0
+            ? `已添加 ${newNodes.length} 个素材节点（${skipped} 项已跳过）`
+            : `已添加 ${newNodes.length} 个素材节点`
+        notify.success(msg)
+      })()
     },
-
     [screenToFlowPosition, nodes, setNodes]
-
   )
+
+  useEffect(() => {
+    const unsub = window.assetVaultAPI.assetDrag.onStateChange((state) => {
+      crossWindowDragRef.current = state.active
+      if (!state.active) setDropActive(false)
+    })
+    return unsub
+  }, [])
+
+  useEffect(() => {
+    const onDocDragOver = (e: DragEvent) => {
+      if (!crossWindowDragRef.current) return
+      e.preventDefault()
+    }
+    document.addEventListener('dragover', onDocDragOver)
+    return () => document.removeEventListener('dragover', onDocDragOver)
+  }, [])
 
 
 
@@ -806,7 +769,7 @@ const AiCanvasEditorInner: React.FC<AiCanvasEditorProps> = ({ canvasId }) => {
 
             position: pos,
 
-            data: { displayIndex: nextIndex(nodes, flowType), previewUrl: null, label: '' }
+            data: { displayIndex: nextIndex(nodes, flowType), previewUrl: null, assetId: null, label: '' }
 
           }
 
@@ -865,23 +828,13 @@ const AiCanvasEditorInner: React.FC<AiCanvasEditorProps> = ({ canvasId }) => {
 
 
   return (
+    <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+      <div
+        className={`flex-1 relative ai-canvas-flow ${dropActive ? 'ring-2 ring-inset ring-blue-500/40' : ''}`}
+        onDragEnd={onDragEndCanvas}
+      >
 
-    <div className="flex flex-1 overflow-hidden">
-
-      <AiCanvasAssetRail />
-
-
-
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-
-        <div
-
-          className={`flex-1 relative ai-canvas-flow ${dropActive ? 'ring-2 ring-inset ring-blue-500/40' : ''}`}
-
-          onDragEnd={onDragEnd}
-
-        >
-
+          <AiCanvasBaseAssetContext.Provider value={baseAssetActions}>
           <AiCanvasNodeGenContext.Provider value={nodeGenActions}>
 
             <ReactFlow
@@ -952,9 +905,9 @@ const AiCanvasEditorInner: React.FC<AiCanvasEditorProps> = ({ canvasId }) => {
 
 
 
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none max-w-[min(90%,420px)]">
 
-              <span className="px-3 py-1 rounded-full bg-av-bg-elevated/80 border border-av-border text-xs text-av-text-secondary">
+              <span className="px-3 py-1 rounded-full bg-av-bg-elevated/80 border border-av-border text-xs text-av-text-secondary truncate block">
 
                 {docMeta.name}
 
@@ -962,20 +915,17 @@ const AiCanvasEditorInner: React.FC<AiCanvasEditorProps> = ({ canvasId }) => {
 
                 {runningCount > 0 ? ` · ${runningCount} 个生成中` : ''}
 
+                {' · 可从资源库窗口拖入素材'}
+
               </span>
 
             </div>
 
           </AiCanvasNodeGenContext.Provider>
-
+          </AiCanvasBaseAssetContext.Provider>
         </div>
-
-      </div>
-
     </div>
-
   )
-
 }
 
 

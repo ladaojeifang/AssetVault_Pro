@@ -38,6 +38,10 @@ export const assets = sqliteTable('assets', {
   importSource: text('import_source'),
   fileSize: integer('file_size').notNull(), // bytes
 
+  /** SHA-256 hex digest of file bytes (content-addressable dedup) */
+  contentHash: text('content_hash'),
+  contentHashComputedAt: integer('content_hash_computed_at', { mode: 'timestamp' }),
+
   // Dimensions
   width: integer('width'), // pixels (for image/video)
   height: integer('height'),

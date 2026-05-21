@@ -5,7 +5,8 @@ import { db, flushDatabase, persistDatabase, getDatabase } from '../../db'
 import { assets, assetTags, assetFolders, assetsSearch } from '../../db/schema'
 import { eq, and, like, inArray, desc, asc, sql, count, type SQL } from 'drizzle-orm'
 import type { AssetItem, QueryParams, QueryResult, ImportProgress } from '@/shared/types'
-import { importSingleAsset } from '../../services/importSingleAsset'
+import type { DuplicatePolicy, ImportAssetOptions } from '@/shared/importTypes'
+import { importSingleAsset, type ImportSingleAssetOptions } from '../../services/importSingleAsset'
 import { getFileWatcher } from '../../services/FileWatcher'
 import { getThumbnailService } from '../../services/ThumbnailService'
 import { isModelThumbnailSkipped } from '../../services/modelThumbnailSkip'
@@ -16,6 +17,41 @@ import { analyzeColorsFromFile } from '../../services/analyzeAssetColors'
 import { bufferToImageDataUrl, shouldUseOriginalImageDimensions } from '../../utils/thumbnailSizing'
 import { renameAsset } from '../../services/renameAsset'
 import { copyAssetsToOtherLibrary } from '../../services/copyAssetsToOtherLibrary'
+import { promptDuplicateImport, registerDuplicateImportPromptHandlers } from '../../services/duplicateImportPrompt'
+import { scanLibraryContentHashes } from '../../services/contentHashService'
+
+registerDuplicateImportPromptHandlers()
+
+function normalizeImportOptions(
+  optionsOrFolderId?: string | ImportAssetOptions
+): ImportAssetOptions {
+  if (typeof optionsOrFolderId === 'string') return { targetFolderId: optionsOrFolderId }
+  return optionsOrFolderId ?? {}
+}
+
+function createImportSession(win: BrowserWindow | undefined) {
+  let batchDuplicatePolicy: DuplicatePolicy | null = null
+
+  const buildSingleImportOptions = (targetFolderId?: string): ImportSingleAssetOptions => ({
+    targetFolderId,
+    duplicatePolicy: batchDuplicatePolicy ?? 'ask',
+    resolveDuplicate: async (payload) => {
+      if (batchDuplicatePolicy === 'use_existing') {
+        return { resolution: 'use_existing' }
+      }
+      if (batchDuplicatePolicy === 'import_copy') {
+        return { resolution: 'import_copy' }
+      }
+      const answer = await promptDuplicateImport(win, payload)
+      if (answer.applyToAll && answer.resolution !== 'cancel') {
+        batchDuplicatePolicy = answer.resolution === 'use_existing' ? 'use_existing' : 'import_copy'
+      }
+      return answer
+    }
+  })
+
+  return { buildSingleImportOptions }
+}
 
 function escapeSqlLikePattern(raw: string): string {
   return raw.replace(/%/g, ' ').replace(/_/g, ' ')
@@ -172,8 +208,10 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     return item ?? null
   })
 
-  ipc.handle('assets:import', async (event, filePaths: string[], targetFolderId?: string) => {
+  ipc.handle('assets:import', async (event, filePaths: string[], optionsOrFolderId?: string | ImportAssetOptions) => {
     const win = BrowserWindow.fromWebContents(event.sender)
+    const importOptions = normalizeImportOptions(optionsOrFolderId)
+    const session = createImportSession(win ?? undefined)
     const results: string[] = []
 
     const sendProgress = (data: ImportProgress) => {
@@ -202,7 +240,10 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
         sendProgress(progressData)
 
-        const asset = await importSingleAsset(filePath, targetFolderId)
+        const asset = await importSingleAsset(
+          filePath,
+          session.buildSingleImportOptions(importOptions.targetFolderId)
+        )
         if (asset) {
           results.push(asset)
           try {
@@ -227,11 +268,16 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     }
 
     await flushDatabase()
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) w.webContents.send('assets:imported')
+    }
     return results
   })
 
-  ipc.handle('assets:import-folder', async (event, folderPath: string) => {
+  ipc.handle('assets:import-folder', async (event, folderPath: string, optionsOrFolderId?: string | ImportAssetOptions) => {
     const win = BrowserWindow.fromWebContents(event.sender)!
+    const importOptions = normalizeImportOptions(optionsOrFolderId)
+    const session = createImportSession(win)
     const supportedExts = ALL_SUPPORTED_IMPORT_EXTENSIONS
 
     function scanDir(dir: string): string[] {
@@ -265,7 +311,10 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
         })
 
         const fp = allFiles[i]
-        const asset = await importSingleAsset(fp)
+        const asset = await importSingleAsset(
+          fp,
+          session.buildSingleImportOptions(importOptions.targetFolderId)
+        )
         if (asset) {
           imported.push(asset)
           try {
@@ -553,5 +602,20 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     }
 
     return null
+  })
+
+  ipc.handle('assets:scan-content-hashes', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+
+    const result = await scanLibraryContentHashes((data) => {
+      try {
+        win?.webContents.send('content-hash:scan-progress', data)
+      } catch {
+        /* window gone */
+      }
+    })
+
+    await flushDatabase()
+    return result
   })
 }

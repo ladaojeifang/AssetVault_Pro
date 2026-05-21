@@ -31,6 +31,9 @@ export interface AssetItem {
   resolvedFilePath?: string
   resolvedThumbnailPath?: string | null
   fileSize: number
+  /** SHA-256 hex of file content */
+  contentHash?: string | null
+  contentHashComputedAt?: Date | null
   width?: number | null
   height?: number | null
   dominantColor?: string | null

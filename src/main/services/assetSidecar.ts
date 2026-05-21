@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm'
 import { getDatabase } from '../db'
 import { assets, tags, assetTags, assetFolders } from '../db/schema'
 import { getLibraryRoot, itemThumbRelative } from './libraryBundle'
+import { CONTENT_HASH_ALGO } from '@/shared/importTypes'
 
 /** Relative path to meta.json for a given asset id */
 export function metaJsonRelative(assetId: string): string {
@@ -34,6 +35,8 @@ export function writeAssetSidecarMeta(
     hasThumbnail: boolean
     metadata?: string | null
     notes?: string | null
+    contentHash?: string | null
+    contentHashComputedAt?: Date | null
     fileCreatedAt?: Date | null
     fileModifiedAt?: Date | null
     importedAt: Date
@@ -69,6 +72,13 @@ export function writeAssetSidecarMeta(
     folderId: row.folderId,
     folderIds,
     fileSize: row.fileSize,
+    contentHash: row.contentHash
+      ? {
+          algo: CONTENT_HASH_ALGO,
+          value: row.contentHash,
+          computedAt: ts(row.contentHashComputedAt)
+        }
+      : null,
     width: row.width ?? null,
     height: row.height ?? null,
     dominantColor: row.dominantColor ?? null,

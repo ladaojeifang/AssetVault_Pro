@@ -209,9 +209,20 @@ const AssetGrid: React.FC = () => {
       } catch {
         // Some platforms restrict custom MIME types during drag
       }
+      void window.assetVaultAPI.assetDrag.set(assetIds)
     },
     [selectedAssetIds]
   )
+
+  const handleDragEnd = useCallback(() => {
+    dragStartRef.current = null
+    void window.assetVaultAPI.assetDrag.clear()
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('dragend', handleDragEnd)
+    return () => window.removeEventListener('dragend', handleDragEnd)
+  }, [handleDragEnd])
 
   const handleDropOnSubfolder = useCallback(
     async (e: React.DragEvent, folderId: string) => {

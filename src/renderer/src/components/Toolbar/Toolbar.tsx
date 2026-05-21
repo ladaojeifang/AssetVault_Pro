@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react'
 import { useApp } from '../../stores/AppContext'
-import { useAiCanvasNav } from '../../stores/AiCanvasNavContext'
+import { openAiCanvasWindow } from '../../stores/AiCanvasNavContext'
 
 const Toolbar: React.FC = () => {
   const {
@@ -16,7 +16,6 @@ const Toolbar: React.FC = () => {
     isImporting,
     refreshAssets
   } = useApp()
-  const { openCanvasList } = useAiCanvasNav()
 
   const [searchFocused, setSearchFocused] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -81,8 +80,8 @@ const Toolbar: React.FC = () => {
       <button
         type="button"
         className="btn-secondary text-xs"
-        onClick={openCanvasList}
-        title="AI 无限画布（节点编排生成）"
+        onClick={() => openAiCanvasWindow()}
+        title="打开 AI 画布窗口（可与资源库叠放，拖素材到画布）"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="6" cy="6" r="2" />

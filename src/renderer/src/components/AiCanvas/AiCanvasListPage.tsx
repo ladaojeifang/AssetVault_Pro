@@ -46,14 +46,14 @@ const AiCanvasListPage: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-av-bg-primary">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-av-border">
-        <div>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-av-border shrink-0">
+        <div className="min-w-0">
           <button type="button" className="btn-ghost text-xs mb-2" onClick={backToLibrary}>
-            ← 返回资源库
+            ← 切换到资源库窗口
           </button>
-          <h1 className="text-lg font-semibold text-av-text-primary">AI 画布</h1>
-          <p className="text-xs text-av-text-secondary mt-1">
-            节点编排提示词、参考图与生成任务；与「快速生成」并列的无限画布模式（原型）。
+          <h1 className="text-base font-semibold text-av-text-primary">AI 画布</h1>
+          <p className="text-[11px] text-av-text-secondary mt-0.5">
+            独立窗口与资源库叠放；从资源库拖素材到本窗口画布即可引用。
           </p>
         </div>
         <button type="button" className="btn-primary text-sm" disabled={creating} onClick={() => void handleCreate()}>

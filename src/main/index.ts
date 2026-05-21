@@ -13,6 +13,7 @@ import { getHotkeyManager } from './services/HotkeyManager'
 import { getFileWatcher } from './services/FileWatcher'
 import { initModelThumbnailRenderer } from './services/modelThumbnailRenderer'
 import { setMainBrowserWindow } from './services/mainWindowRef'
+import { attachMainWindowLifecycle } from './services/aiCanvasWindow'
 import {
   registerModelFileProtocol,
   setupModelFileProtocolHandler
@@ -115,6 +116,7 @@ function createWindow(): BrowserWindow {
   }
 
   setMainBrowserWindow(mainWindow)
+  attachMainWindowLifecycle(mainWindow)
   mainWindow.on('closed', () => setMainBrowserWindow(null))
 
   return mainWindow

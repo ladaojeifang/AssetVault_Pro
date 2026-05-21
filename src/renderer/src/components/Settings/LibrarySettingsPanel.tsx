@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react'
+import { ContentHashScanButton } from './ContentHashScanButton'
 
 export function LibrarySettingsPanel(): React.ReactElement {
   const [state, setState] = useState<{
@@ -143,6 +144,14 @@ export function LibrarySettingsPanel(): React.ReactElement {
             新建空资料库…
           </button>
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="text-xs font-medium text-av-text-muted uppercase tracking-wide">内容指纹（SHA-256）</div>
+        <p className="text-sm text-av-text-secondary leading-relaxed">
+          导入时会按文件大小与 SHA-256 检测重复，并询问是否使用已有资产。对已入库但尚未计算指纹的文件，可手动增量扫描。
+        </p>
+        <ContentHashScanButton disabled={busy} />
       </div>
 
       <div className="space-y-2">

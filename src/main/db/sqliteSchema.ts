@@ -77,10 +77,26 @@ export function createInitialSchemaOnSqlite(sqlite: initSqlJs.Database): void {
   }
 
   try {
+    sqlite.run('ALTER TABLE assets ADD COLUMN content_hash TEXT')
+  } catch {
+    /* column already exists */
+  }
+
+  try {
+    sqlite.run('ALTER TABLE assets ADD COLUMN content_hash_computed_at INTEGER')
+  } catch {
+    /* column already exists */
+  }
+
+  try {
     sqlite.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_import_source ON assets(import_source)')
   } catch {
     /* ignore */
   }
+
+  sqlite.run(
+    `CREATE INDEX IF NOT EXISTS idx_assets_size_hash ON assets(file_size, content_hash) WHERE content_hash IS NOT NULL`
+  )
 
   sqlite.run(`
     CREATE TABLE IF NOT EXISTS asset_folders (

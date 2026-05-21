@@ -232,6 +232,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return unsub
   }, [reloadAfterLibrarySwitch])
 
+  useEffect(() => {
+    const unsub = window.assetVaultAPI.onAssetsImported(() => {
+      void fetchAssets()
+    })
+    return unsub
+  }, [fetchAssets])
+
   const actions: AppActions = {
     setViewMode: (mode) => setState((prev) => ({ ...prev, viewMode: mode })),
     toggleSidebar: () => setState((prev) => ({ ...prev, sidebarOpen: !prev.sidebarOpen })),

@@ -8,7 +8,9 @@ import ExifReader from 'exifreader'
 import { db, persistDatabase } from '../db'
 import { assets, assetFolders } from '../db/schema'
 import { eq, and } from 'drizzle-orm'
+import type { DuplicateImportAnswer, DuplicateImportPromptPayload, DuplicatePolicy, ImportAssetOptions } from '@/shared/importTypes'
 import { getFileType } from '../utils/fileUtils'
+import { computeFileSha256 } from '../utils/contentHash'
 import { getThumbnailService } from './ThumbnailService'
 import { shouldUseOriginalImageDimensions } from '../utils/thumbnailSizing'
 import { extractPaletteFromImageBuffer, serializePaletteColors } from '../utils/colorPalette'
@@ -21,6 +23,16 @@ import {
 } from './libraryBundle'
 import { syncAssetSidecarFromDb, writeAssetSidecarMeta } from './assetSidecar'
 import { isModelThumbnailSkipped, markModelThumbnailSkipped } from './modelThumbnailSkip'
+import { buildDuplicatePromptPayload, findAssetIdByContentHash } from './contentHashService'
+
+export interface ImportSingleAssetOptions extends ImportAssetOptions {
+  resolveDuplicate?: (payload: Omit<DuplicateImportPromptPayload, 'requestId'>) => Promise<DuplicateImportAnswer>
+}
+
+function normalizeImportOptions(options?: string | ImportSingleAssetOptions): ImportSingleAssetOptions {
+  if (typeof options === 'string') return { targetFolderId: options }
+  return options ?? {}
+}
 
 function posixRelToFsAbs(libraryRoot: string, rel: string): string {
   return join(libraryRoot, rel.split('/').join(sep))
@@ -63,9 +75,11 @@ function copyObjCompanionMtl(sourceObjPath: string, itemDirAbs: string): void {
  */
 export async function importSingleAsset(
   filePath: string,
-  targetFolderId?: string
+  options?: string | ImportSingleAssetOptions
 ): Promise<string | null> {
   const database = db!
+  const opts = normalizeImportOptions(options)
+  const targetFolderId = opts.targetFolderId
 
   const filePathCanonical = toCanonicalFilePath(filePath)
 
@@ -77,22 +91,44 @@ export async function importSingleAsset(
 
   if (dupSource) {
     console.log(`[Import] Same source path already imported, skipping: ${basename(filePathCanonical)}`)
-    if (targetFolderId) {
-      const existing = await database
-        .select()
-        .from(assetFolders)
-        .where(and(eq(assetFolders.assetId, dupSource.id), eq(assetFolders.folderId, targetFolderId)))
-        .get()
-      if (!existing) {
-        await database.insert(assetFolders).values({ assetId: dupSource.id, folderId: targetFolderId })
-        persistDatabase()
-        await syncAssetSidecarFromDb(database, dupSource.id)
-      }
-    }
-    return dupSource.id
+    return linkExistingAsset(database, dupSource.id, targetFolderId)
   }
 
   const stat = statSync(filePathCanonical)
+  const contentHash = await computeFileSha256(filePathCanonical)
+  const hashDuplicateId = await findAssetIdByContentHash(database, stat.size, contentHash)
+
+  if (hashDuplicateId) {
+    const policy: DuplicatePolicy = opts.duplicatePolicy ?? 'ask'
+
+    if (policy === 'use_existing') {
+      console.log(`[Import] Content hash match, using existing asset: ${basename(filePathCanonical)}`)
+      return linkExistingAsset(database, hashDuplicateId, targetFolderId)
+    }
+
+    if (policy === 'ask') {
+      if (opts.resolveDuplicate) {
+        const promptPayload = await buildDuplicatePromptPayload(
+          database,
+          hashDuplicateId,
+          filePathCanonical,
+          contentHash,
+          stat.size
+        )
+        const answer = await opts.resolveDuplicate(promptPayload)
+        if (!answer || answer.resolution === 'cancel') {
+          console.log(`[Import] User cancelled duplicate import: ${basename(filePathCanonical)}`)
+          return null
+        }
+        if (answer.resolution === 'use_existing') {
+          return linkExistingAsset(database, hashDuplicateId, targetFolderId)
+        }
+      } else {
+        console.log(`[Import] Content duplicate, no prompt handler — importing copy: ${basename(filePathCanonical)}`)
+      }
+    }
+  }
+
   const extWithDot = extname(filePathCanonical).toLowerCase()
   const extNoDot = extWithDot.replace(/^\./, '')
   const mimeType = mime.lookup(filePathCanonical) || 'application/octet-stream'
@@ -111,6 +147,8 @@ export async function importSingleAsset(
   if (extNoDot === 'obj') {
     copyObjCompanionMtl(filePathCanonical, itemDirAbs)
   }
+
+  const hashComputedAt = new Date()
 
   let width: number | undefined
   let height: number | undefined
@@ -230,6 +268,8 @@ export async function importSingleAsset(
     filePath: relOriginal,
     importSource: filePathCanonical,
     fileSize: stat.size,
+    contentHash,
+    contentHashComputedAt: hashComputedAt,
     width,
     height,
     dominantColor,
@@ -386,4 +426,24 @@ export async function schedule3dThumbnailAfterImport(
 function removeOrphanItemDir(libraryRoot: string, id: string): void {
   const dir = join(libraryRoot, 'items', id)
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
+}
+
+async function linkExistingAsset(
+  database: NonNullable<typeof db>,
+  existingId: string,
+  targetFolderId?: string
+): Promise<string> {
+  if (targetFolderId) {
+    const existingAf = await database
+      .select()
+      .from(assetFolders)
+      .where(and(eq(assetFolders.assetId, existingId), eq(assetFolders.folderId, targetFolderId)))
+      .get()
+    if (!existingAf) {
+      await database.insert(assetFolders).values({ assetId: existingId, folderId: targetFolderId })
+      persistDatabase()
+      await syncAssetSidecarFromDb(database, existingId)
+    }
+  }
+  return existingId
 }
