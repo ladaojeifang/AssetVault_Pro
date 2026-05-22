@@ -11,6 +11,7 @@ import {
   type FolderContextMenuState
 } from './FolderContextMenu'
 import { addDraggedAssetsToFolder } from '../../utils/addAssetsToFolder'
+import { FontFamiliesSidebar } from './FontFamiliesSidebar'
 
 /** Parent folder at this level cannot have children (must match `MAX_FOLDER_LEVEL` in main `folders.ts`). */
 const FOLDER_MAX_PARENT_LEVEL_FOR_CHILD = 4
@@ -697,6 +698,8 @@ const Sidebar: React.FC = () => {
           )}
         </div>
       </SidebarSection>
+
+      <FontFamiliesSidebar />
 
       {/* File Types Section */}
       <SidebarSection title="Types">

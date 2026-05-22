@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import type { AssetItem } from '@/shared/types'
+import { FONT_THUMB_SAMPLE_TEXT } from '@/shared/fontTypes'
 import { ModelViewer } from './ModelViewer'
+import { useFontFace } from '../../hooks/useFontFace'
+import { fontFamilyLabel, parseFontMetadataFromAsset } from '../../utils/fontAssetMeta'
 
 interface PreviewModalProps {
   asset: AssetItem | null
@@ -255,51 +258,32 @@ function AudioPlaceholder({ asset }: { asset: AssetItem }) {
 }
 
 function FontPreview({ asset }: { asset: AssetItem }) {
-  const [fontLoaded, setFontLoaded] = useState(false)
+  const meta = useMemo(() => parseFontMetadataFromAsset(asset), [asset])
+  const familyLabel = fontFamilyLabel(asset, meta)
+  const { familyName, loaded: fontLoaded } = useFontFace(asset)
 
-  useEffect(() => {
-    let cancelled = false
-    async function loadFont() {
-      try {
-        setFontLoaded(false)
-        const target = asset.resolvedFilePath ?? asset.filePath
-        const href = await window.assetVaultAPI.fs.pathToFileUrl(target)
-        if (!href || cancelled) return
-        const fontFace = new FontFace(asset.originalName || 'CustomFont', `url(${href})`)
-        await fontFace.load()
-        if (cancelled) return
-        document.fonts.add(fontFace)
-        setFontLoaded(true)
-      } catch (error) {
-        console.error('Font loading failed:', error)
-      }
-    }
-    void loadFont()
-    return () => {
-      cancelled = true
-    }
-  }, [asset.id, asset.filePath, asset.resolvedFilePath, asset.originalName])
+  const sampleText = useMemo(() => {
+    return meta?.sampleText?.trim() || FONT_THUMB_SAMPLE_TEXT
+  }, [meta])
 
   return (
     <div className="flex flex-col items-center gap-4 p-8 min-w-[500px]">
       <div className="w-full rounded-xl bg-white/5 p-8 space-y-4">
-        <div style={{ fontFamily: `'${asset.originalName || 'CustomFont'}', sans-serif` }}>
-          <p className="text-5xl text-white mb-4">
-            {fontLoaded ? 'AaBbCcDdEeFfGg' : 'Loading Font...'}
+        <div style={{ fontFamily: `'${familyName}', '${familyLabel}', sans-serif` }}>
+          <p className="text-5xl text-white mb-4 text-center">
+            {fontLoaded ? sampleText : 'Loading Font...'}
           </p>
-          <p className="text-3xl text-white/90 mb-4">
-            {fontLoaded
-              ? 'The quick brown fox jumps over the lazy dog. 1234567890!'
-              : ''}
+          <p className="text-3xl text-white/90 mb-4 text-center">
+            {fontLoaded ? 'The quick brown fox jumps over the lazy dog. 1234567890!' : ''}
           </p>
-          <p className="text-xl text-white/70">
+          <p className="text-xl text-white/70 text-center">
             {fontLoaded
               ? 'ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789 !@#$%'
               : ''}
           </p>
         </div>
-        <p className="text-white/40 text-xs mt-4 pt-4 border-t border-white/10">
-          Font: {asset.originalName} · Size: {formatSize(asset.fileSize)}
+        <p className="text-white/40 text-xs mt-4 pt-4 border-t border-white/10 text-center">
+          {familyLabel} · {formatSize(asset.fileSize)}
         </p>
       </div>
     </div>

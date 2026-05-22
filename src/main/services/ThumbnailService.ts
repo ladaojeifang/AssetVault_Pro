@@ -5,6 +5,8 @@ import { join } from 'path'
 import { existsSync, mkdirSync, unlinkSync, statSync, readdirSync, writeFileSync, readFileSync } from 'fs'
 import { extractVideoFramePngBestEffort } from '../utils/videoFrame'
 import { renderModelToPngBuffer } from './modelThumbnailRenderer'
+import { renderFontPreviewPng, FONT_THUMB_CANVAS_SIZE } from '../utils/fontPreviewRender'
+import { FONT_THUMB_SAMPLE_TEXT } from '@/shared/fontTypes'
 import {
   isModelThumbnailSkipped,
   markModelThumbnailSkipped
@@ -159,6 +161,54 @@ export class ThumbnailService {
     } catch (error) {
       markModelThumbnailSkipped(assetId)
       console.warn(`[ThumbnailService] 3D thumbnail skipped for ${filePath}:`, error)
+      return null
+    }
+  }
+
+  /** Font preview thumbnail — renders sample text via fontkit + Skia canvas. */
+  async generateFont(
+    filePath: string,
+    assetId: string,
+    options: {
+      width?: number
+      height?: number
+      quality?: number
+      sampleText?: string
+      ttcIndex?: number
+      /** Delete existing thumb.webp and bypass disk cache. */
+      force?: boolean
+    } = {}
+  ): Promise<ThumbnailGenerateResult | null> {
+    const size = options.width ?? options.height ?? FONT_THUMB_CANVAS_SIZE
+    const { quality = 85, force = false, ttcIndex = 0 } = options
+    const outputPath = this.thumbDiskPath(assetId)
+
+    try {
+      if (force) {
+        this.invalidate(assetId)
+      } else if (existsSync(outputPath)) {
+        const diskBuffer = readFileSync(outputPath)
+        this.lruCache.set(assetId, diskBuffer)
+        return { buffer: diskBuffer, path: outputPath }
+      }
+
+      const png = renderFontPreviewPng(
+        filePath,
+        options.sampleText ?? FONT_THUMB_SAMPLE_TEXT,
+        ttcIndex
+      )
+      if (!png?.length) return null
+
+      const transformer = new Transformer(png)
+      const webpBuffer = await transformer
+        .resize(size, size, undefined, ResizeFit.Inside)
+        .webp(quality)
+
+      writeFileSafely(outputPath, webpBuffer as Buffer)
+      this.lruCache.set(assetId, webpBuffer as Buffer)
+      return { buffer: webpBuffer as Buffer, path: outputPath }
+    } catch (error) {
+      console.error(`[ThumbnailService] Failed to generate font thumbnail for ${filePath}:`, error)
       return null
     }
   }

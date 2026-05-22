@@ -2,11 +2,14 @@ import type { Node } from '@xyflow/react'
 import type { AssetItem } from '@/shared/types'
 import type { FlowNodeType } from '../components/AiCanvas/canvasNodeTypes'
 import { createFlowNodeId } from '../components/AiCanvas/genNodeData'
+import { parseFontMetadataFromAsset, fontFamilyLabel } from './fontAssetMeta'
+import { FONT_THUMB_SAMPLE_TEXT } from '@/shared/fontTypes'
 
 const FILE_TYPE_TO_BASE: Partial<Record<AssetItem['fileType'], FlowNodeType>> = {
   image: 'base_image',
   video: 'base_video',
-  audio: 'base_audio'
+  audio: 'base_audio',
+  font: 'base_text'
 }
 
 const MEDIA_MIME: Record<string, string> = {
@@ -119,6 +122,16 @@ export async function buildBaseAssetNodesFromAssetIds(
     const previewUrl =
       flowType === 'base_text' ? null : await resolveAssetPreviewUrl(asset)
 
+    let content = ''
+    let fontAssetId: string | undefined
+    let fontFamilyName: string | undefined
+    if (asset.fileType === 'font') {
+      const meta = parseFontMetadataFromAsset(asset)
+      content = meta?.sampleText?.trim() || FONT_THUMB_SAMPLE_TEXT
+      fontAssetId = asset.id
+      fontFamilyName = fontFamilyLabel(asset, meta)
+    }
+
     nodes.push({
       id: `${flowType}-${asset.id}-${stamp}-${i}`,
       type: flowType,
@@ -127,8 +140,9 @@ export async function buildBaseAssetNodesFromAssetIds(
         displayIndex,
         previewUrl,
         assetId: asset.id,
-        label: asset.originalName || asset.filename,
-        content: ''
+        label: fontFamilyName ?? asset.originalName ?? asset.filename,
+        content,
+        ...(fontAssetId ? { fontAssetId, fontFamilyName } : {})
       }
     })
   }

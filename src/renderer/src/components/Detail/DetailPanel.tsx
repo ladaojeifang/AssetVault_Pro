@@ -2,12 +2,17 @@ import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { useApp } from '../../stores/AppContext'
 import { flattenFolderTree } from '../../utils/flattenFolderTree'
 import { formatFileSize } from '@/shared/types'
+import type { AssetItem } from '@/shared/types'
+import type { ParsedFontMetadata, FontFaceSummary } from '@/shared/fontTypes'
+import { parseFontMetadataFromAsset } from '../../utils/fontAssetMeta'
+import { notify } from '../Common/notify'
 import { FolderIconDisplay } from '../Common/FolderIconDisplay'
 import { ColorPaletteStrip, parseAssetPaletteColors } from '../Common/ColorPaletteStrip'
+import DetailContextPanel from './DetailContextPanel'
 import { ModelViewer } from '../Preview/ModelViewer'
 
 const DetailPanel: React.FC = () => {
-  const { selectedAssetIds, assets, tags, folderTree, clearSelection, refreshAssets, refreshFolders, setDetailPanelOpen, refreshTags } = useApp()
+  const { selectedAssetIds, assets, tags, folderTree, clearSelection, refreshAssets, refreshFolders, setDetailPanelOpen, refreshTags, openFontPreview } = useApp()
   const [assetTagIds, setAssetTagIds] = useState<string[]>([])
   const [assetFolderIds, setAssetFolderIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -114,11 +119,7 @@ const DetailPanel: React.FC = () => {
   }, [assets, selectedAssetIds, notesDraft, refreshAssets])
 
   if (!selectedAsset) {
-    return (
-      <div className="flex items-center justify-center h-full text-av-text-muted text-sm">
-        Select an asset to view details
-      </div>
-    )
+    return <DetailContextPanel onClose={() => setDetailPanelOpen(false)} />
   }
 
   const asset = selectedAsset
@@ -242,7 +243,18 @@ const DetailPanel: React.FC = () => {
           <InfoRow label="Views" value={String(asset.viewCount)} />
         </InfoSection>
 
-        {/* Logical folders (multi) */}
+        {asset.fileType === 'font' && (
+          <>
+            <button
+              type="button"
+              className="w-full btn-primary text-sm py-2"
+              onClick={() => openFontPreview(asset.id)}
+            >
+              字体预览
+            </button>
+            <FontDetailSection asset={asset} onRefresh={() => void refreshAssets()} />
+          </>
+        )}
         <InfoSection title="文件夹">
           <p className="text-[11px] text-av-text-muted mb-2 leading-relaxed">
             逻辑分类，同一素材可属于多个文件夹；与磁盘目录无关。
@@ -480,7 +492,7 @@ function DetailPreview({ asset }: { asset: any }) {
       }
     }
 
-    if (asset.hasThumbnail || asset.fileType === 'image' || asset.fileType === 'video') {
+    if (asset.hasThumbnail || asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === 'font') {
       void window.assetVaultAPI.assets.getThumbnail(asset.id).then((data) => {
         if (!cancelled && data) setPreviewSrc(data as string)
       })
@@ -563,6 +575,166 @@ function FilePlaceholder({ fileType, color }: { fileType: string; color?: string
 }
 
 // Info section helper components
+function FontDetailSection({
+  asset,
+  onRefresh
+}: {
+  asset: AssetItem
+  onRefresh: () => void
+}) {
+  const font = parseFontMetadataFromAsset(asset)
+  const [faces, setFaces] = useState<FontFaceSummary[]>([])
+  const [faceBusy, setFaceBusy] = useState(false)
+  const [actionBusy, setActionBusy] = useState(false)
+
+  useEffect(() => {
+    if (!font?.ttcFaceCount || font.ttcFaceCount <= 1) {
+      setFaces([])
+      return
+    }
+    void window.assetVaultAPI.fonts.listFaces(asset.id).then(setFaces)
+  }, [asset.id, font?.ttcFaceCount])
+
+  if (!font) return null
+
+  const onFaceChange = async (index: number) => {
+    setFaceBusy(true)
+    try {
+      const res = await window.assetVaultAPI.fonts.updateFaceIndex(asset.id, index, true)
+      if (!res.ok) notify.error(res.error)
+      else {
+        notify.success('已切换 TTC 字重')
+        onRefresh()
+      }
+    } finally {
+      setFaceBusy(false)
+    }
+  }
+
+  const install = async () => {
+    setActionBusy(true)
+    try {
+      const res = await window.assetVaultAPI.fonts.installToSystem(asset.id)
+      if (res.ok) notify.success(res.dest ? `已安装到 ${res.dest}` : '已安装到用户字体目录')
+      else notify.error(res.error)
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
+  const exportCopy = async () => {
+    setActionBusy(true)
+    try {
+      const res = await window.assetVaultAPI.fonts.exportCopy(asset.id)
+      if (res.ok) notify.success(`已导出到 ${res.path}`)
+      else if (res.error !== 'cancelled') notify.error(res.error)
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="btn-secondary text-xs flex-1" disabled={actionBusy} onClick={() => void install()}>
+          安装到系统
+        </button>
+        <button type="button" className="btn-secondary text-xs flex-1" disabled={actionBusy} onClick={() => void exportCopy()}>
+          导出副本
+        </button>
+        <button
+          type="button"
+          className="btn-secondary text-xs w-full"
+          disabled={actionBusy}
+          onClick={() => void window.assetVaultAPI.fonts.openItemFolder(asset.id)}
+        >
+          打开字体目录
+        </button>
+      </div>
+      <FontInfoSection font={font} faces={faces} faceBusy={faceBusy} onFaceChange={(i) => void onFaceChange(i)} />
+    </>
+  )
+}
+
+function FontInfoSection({
+  font,
+  faces,
+  faceBusy,
+  onFaceChange
+}: {
+  font: ParsedFontMetadata
+  faces: FontFaceSummary[]
+  faceBusy?: boolean
+  onFaceChange?: (index: number) => void
+}) {
+  const cov = font.unicodeCoverage
+
+  return (
+    <InfoSection title="Font">
+      <InfoRow label="Family" value={font.familyName} />
+      {font.subfamilyName ? <InfoRow label="Subfamily" value={font.subfamilyName} /> : null}
+      {font.postscriptName ? <InfoRow label="PostScript" value={font.postscriptName} /> : null}
+      <InfoRow label="Glyphs" value={String(font.glyphCount)} />
+      <InfoRow label="Units/em" value={String(font.unitsPerEm)} />
+      {font.ttcFaceCount != null && font.ttcFaceCount > 1 ? (
+        <>
+          <InfoRow label="TTC faces" value={String(font.ttcFaceCount)} />
+          {faces.length > 0 && onFaceChange ? (
+            <div className="pt-1">
+              <label className="text-[11px] text-av-text-muted block mb-1">当前字重</label>
+              <select
+                className="input-base py-1 text-xs w-full"
+                disabled={faceBusy}
+                value={font.ttcIndex ?? 0}
+                onChange={(e) => onFaceChange(Number(e.target.value))}
+              >
+                {faces.map((f) => (
+                  <option key={f.index} value={f.index}>
+                    {f.subfamilyName || f.fullName || `#${f.index + 1}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <InfoRow label="Active face" value={`#${(font.ttcIndex ?? 0) + 1}`} />
+          )}
+        </>
+      ) : null}
+      {cov ? (
+        <div className="pt-1 space-y-0.5">
+          <p className="text-[11px] text-av-text-muted">Unicode 覆盖（抽样）</p>
+          <InfoRow label="Total" value={String(cov.totalCodePoints)} />
+          <InfoRow label="Latin" value={String(cov.latinBasic + cov.latinExtended)} />
+          <InfoRow label="CJK" value={String(cov.cjkUnified)} />
+          <InfoRow label="Digits" value={String(cov.digits)} />
+        </div>
+      ) : null}
+      {font.variationAxes && font.variationAxes.length > 0 ? (
+        <div className="pt-1">
+          <p className="text-[11px] text-av-text-muted mb-1">可变轴</p>
+          {font.variationAxes.map((a) => (
+            <p key={a.tag} className="text-[11px] text-av-text-secondary font-mono">
+              {a.name} ({a.tag}) {a.min}–{a.max} default {a.default}
+            </p>
+          ))}
+        </div>
+      ) : null}
+      {font.sampleGlyphs.length > 0 ? (
+        <div className="pt-1">
+          <p className="text-[11px] text-av-text-muted mb-1">Sample glyphs · {font.sampleText}</p>
+          <div className="space-y-1">
+            {font.sampleGlyphs.map((g, idx) => (
+              <p key={`glyph-${idx}-${g.codePoint}-${g.id}`} className="text-[11px] text-av-text-secondary font-mono">
+                {g.char} id={g.id} advance={Math.round(g.advanceWidth)}
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </InfoSection>
+  )
+}
+
 function InfoSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>

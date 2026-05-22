@@ -108,6 +108,10 @@ const api = {
     ) => ipcRenderer.invoke('assets:import-folder', folderPath, options),
     scanContentHashes: () =>
       ipcRenderer.invoke('assets:scan-content-hashes') as Promise<import('../../shared/importTypes').ContentHashScanResult>,
+    regenerateFontThumbnails: () =>
+      ipcRenderer.invoke('assets:regenerate-font-thumbnails') as Promise<
+        import('../../shared/fontTypes').FontRegenerateResult
+      >,
     delete: (ids: string[]) => ipcRenderer.invoke('assets:delete', ids),
     move: (ids: string[], targetFolderId: string) =>
       ipcRenderer.invoke('assets:move', ids, targetFolderId),
@@ -160,6 +164,56 @@ const api = {
       const handler = () => callback()
       ipcRenderer.on('library:switched', handler)
       return () => ipcRenderer.removeListener('library:switched', handler)
+    }
+  },
+
+  fonts: {
+    getSettings: () =>
+      ipcRenderer.invoke('fonts:get-settings') as Promise<import('../../shared/fontSettings').FontAppSettings>,
+    setSettings: (settings: import('../../shared/fontSettings').FontAppSettings) =>
+      ipcRenderer.invoke('fonts:set-settings', settings),
+    getEffectiveSampleText: () =>
+      ipcRenderer.invoke('fonts:get-effective-sample-text') as Promise<{
+        sampleText: string
+        sampleVersion: number
+      }>,
+    listFaces: (assetId: string) =>
+      ipcRenderer.invoke('fonts:list-faces', assetId) as Promise<
+        import('../../shared/fontTypes').FontFaceSummary[]
+      >,
+    renderPreview: (req: import('../../shared/fontTypes').FontPreviewRenderRequest) =>
+      ipcRenderer.invoke('fonts:render-preview', req) as Promise<
+        { ok: true; dataUrl: string } | { ok: false; error: string }
+      >,
+    updateFaceIndex: (assetId: string, ttcIndex: number, reparse?: boolean) =>
+      ipcRenderer.invoke('fonts:update-face-index', assetId, ttcIndex, reparse) as Promise<
+        { ok: true; font: import('../../shared/fontTypes').ParsedFontMetadata | null } | { ok: false; error: string }
+      >,
+    listFamilyGroups: () =>
+      ipcRenderer.invoke('fonts:list-family-groups') as Promise<
+        import('../../shared/fontTypes').FontFamilyGroup[]
+      >,
+    installToSystem: (assetId: string) =>
+      ipcRenderer.invoke('fonts:install-to-system', assetId) as Promise<
+        { ok: true; dest?: string } | { ok: false; error: string }
+      >,
+    exportCopy: (assetId: string) =>
+      ipcRenderer.invoke('fonts:export-copy', assetId) as Promise<
+        { ok: true; path: string } | { ok: false; error: string }
+      >,
+    openPreviewWindow: (assetId: string) =>
+      ipcRenderer.invoke('fonts:open-preview-window', assetId) as Promise<
+        { ok: true } | { ok: false; error: string }
+      >,
+    openItemFolder: (assetId: string) =>
+      ipcRenderer.invoke('fonts:open-item-folder', assetId) as Promise<
+        { ok: true } | { ok: false; error: string }
+      >,
+    onOpenPreview: (callback: (payload: { assetId: string }) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, payload: { assetId: string }) =>
+        callback(payload)
+      ipcRenderer.on('fonts:open-preview', handler)
+      return () => ipcRenderer.removeListener('fonts:open-preview', handler)
     }
   },
 
@@ -264,6 +318,17 @@ const api = {
     ) => callback(data)
     ipcRenderer.on('content-hash:scan-progress', handler)
     return () => ipcRenderer.removeListener('content-hash:scan-progress', handler)
+  },
+
+  onFontThumbRegenerateProgress: (
+    callback: (data: { current: number; total: number; assetId: string; status: string }) => void
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: { current: number; total: number; assetId: string; status: string }
+    ) => callback(data)
+    ipcRenderer.on('font-thumb:regenerate-progress', handler)
+    return () => ipcRenderer.removeListener('font-thumb:regenerate-progress', handler)
   }
 }
 

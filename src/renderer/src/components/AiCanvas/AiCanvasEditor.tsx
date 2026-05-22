@@ -637,7 +637,7 @@ const AiCanvasEditorInner: React.FC<AiCanvasEditorProps> = ({ canvasId }) => {
         if (newNodes.length === 0) {
           notify.warning(
             skipped > 0
-              ? '所选素材类型不支持拖入画布（仅图片/视频/音频）'
+              ? '所选素材类型不支持拖入画布（仅图片/视频/音频/字体）'
               : '无法添加所选素材'
           )
           return

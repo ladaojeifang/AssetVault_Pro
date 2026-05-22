@@ -12,6 +12,11 @@ import type { DuplicateImportAnswer, DuplicateImportPromptPayload, DuplicatePoli
 import { getFileType } from '../utils/fileUtils'
 import { computeFileSha256 } from '../utils/contentHash'
 import { getThumbnailService } from './ThumbnailService'
+import { FONT_THUMB_CANVAS_SIZE } from '../utils/fontPreviewRender'
+import {
+  getEffectiveThumbSampleText,
+  getEffectiveThumbSampleVersion
+} from './fontSettingsStore'
 import { shouldUseOriginalImageDimensions } from '../utils/thumbnailSizing'
 import { extractPaletteFromImageBuffer, serializePaletteColors } from '../utils/colorPalette'
 import { extractVideoFramePngBestEffort } from '../utils/videoFrame'
@@ -24,6 +29,7 @@ import {
 import { syncAssetSidecarFromDb, writeAssetSidecarMeta } from './assetSidecar'
 import { isModelThumbnailSkipped, markModelThumbnailSkipped } from './modelThumbnailSkip'
 import { buildDuplicatePromptPayload, findAssetIdByContentHash } from './contentHashService'
+import { parseFontFile } from './fontMetadata'
 
 export interface ImportSingleAssetOptions extends ImportAssetOptions {
   resolveDuplicate?: (payload: Omit<DuplicateImportPromptPayload, 'requestId'>) => Promise<DuplicateImportAnswer>
@@ -253,6 +259,33 @@ export async function importSingleAsset(
       // optional metadata
     }
     metadataObj.duration = duration ?? null
+  } else if (fileType === 'font') {
+    const parsed = parseFontFile(
+      destAbs,
+      getEffectiveThumbSampleText(),
+      0,
+      getEffectiveThumbSampleVersion()
+    )
+    if (parsed) {
+      metadataObj.font = parsed
+    }
+    try {
+      const thumb = await getThumbnailService().generateFont(destAbs, id, {
+        width: FONT_THUMB_CANVAS_SIZE,
+        height: FONT_THUMB_CANVAS_SIZE,
+        quality: 85,
+        sampleText: getEffectiveThumbSampleText(),
+        ttcIndex: parsed?.ttcIndex ?? 0
+      })
+      if (thumb) {
+        thumbnailPath = itemThumbRelative(id)
+        hasThumbnail = true
+      } else {
+        console.warn(`[Import] Font thumbnail not generated for ${basename(filePathCanonical)}`)
+      }
+    } catch (error) {
+      console.error('[Import] Font thumbnail error:', error)
+    }
   }
   // 3D thumbnails run after DB + meta.json (see schedule3dThumbnailAfterImport) — rendering can take minutes
   // and must not block import; killing the app mid-render used to leave only items/{id}/original.* on disk.

@@ -25,6 +25,7 @@ const AssetGrid: React.FC = () => {
     selectMultiple,
     clearSelection,
     setDetailPanelOpen,
+    openFontPreview,
     loadMoreAssets,
     tagFilters,
     fileTypeFilter,
@@ -181,12 +182,19 @@ const AssetGrid: React.FC = () => {
   const handleAssetDoubleClick = useCallback(
     async (id: string) => {
       const asset = assets.find((a) => a.id === id)
-      const p = asset?.resolvedFilePath ?? asset?.filePath
+      if (!asset) return
+
+      if (asset.fileType === 'font') {
+        openFontPreview(id)
+        return
+      }
+
+      const p = asset.resolvedFilePath ?? asset.filePath
       if (p) {
         await window.assetVaultAPI.fs.openInExplorer(p)
       }
     },
-    [assets]
+    [assets, openFontPreview]
   )
 
   const handleDragStart = useCallback(
@@ -253,7 +261,6 @@ const AssetGrid: React.FC = () => {
       }
       if (e.key === 'Escape') {
         selectMultiple([])
-        setDetailPanelOpen(false)
       }
     },
     [assets, selectedAssetIds, selectMultiple]
@@ -758,8 +765,13 @@ function AssetCard({
       {/* Thumbnail or placeholder */}
       <div className="absolute inset-0 bg-av-bg-tertiary">
         {!imgError &&
-        (asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === '3d' || asset.hasThumbnail) ? (
-          <ThumbnailImage assetId={asset.id} onError={() => setImgError(true)} />
+        (asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === '3d' || asset.fileType === 'font' || asset.hasThumbnail) ? (
+          <ThumbnailImage
+            assetId={asset.id}
+            cacheKey={asset.updatedAt}
+            objectFit={asset.fileType === 'font' ? 'contain' : 'cover'}
+            onError={() => setImgError(true)}
+          />
         ) : (
           <FilePlaceholder fileType={asset.fileType} color={asset.dominantColor} />
         )}
@@ -786,11 +798,22 @@ function AssetCard({
 }
 
 // Thumbnail Image component with lazy loading + cache
-const ThumbnailImage = ({ assetId, onError }: { assetId: string; onError: () => void }) => {
+const ThumbnailImage = ({
+  assetId,
+  cacheKey,
+  objectFit = 'cover',
+  onError
+}: {
+  assetId: string
+  cacheKey?: string | number
+  objectFit?: 'cover' | 'contain'
+  onError: () => void
+}) => {
   const [src, setSrc] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
+    setSrc(null)
     window.assetVaultAPI.assets
       .getThumbnail(assetId)
       .then((data) => {
@@ -802,12 +825,18 @@ const ThumbnailImage = ({ assetId, onError }: { assetId: string; onError: () => 
     return () => {
       cancelled = true
     }
-  }, [assetId])
+  }, [assetId, cacheKey])
 
   if (!src) return <ThumbnailSkeleton />
 
   return (
-    <img src={src} alt="" className="w-full h-full object-cover" onError={onError} loading="lazy" />
+    <img
+      src={src}
+      alt=""
+      className={`w-full h-full ${objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+      onError={onError}
+      loading="lazy"
+    />
   )
 }
 
@@ -1001,9 +1030,14 @@ function AssetListItem({
     >
       {/* Mini thumbnail */}
       <div className="w-10 h-10 rounded bg-av-bg-tertiary shrink-0 flex items-center justify-center overflow-hidden">
-        {asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === '3d' || asset.hasThumbnail ? (
-          <div className="w-full h-full [&_img]:w-full [&_img]:h-full [&_img]:object-cover">
-            <ThumbnailImage assetId={asset.id} onError={() => {}} />
+        {asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === '3d' || asset.fileType === 'font' || asset.hasThumbnail ? (
+          <div className="w-full h-full [&_img]:w-full [&_img]:h-full">
+            <ThumbnailImage
+              assetId={asset.id}
+              cacheKey={asset.updatedAt}
+              objectFit={asset.fileType === 'font' ? 'contain' : 'cover'}
+              onError={() => {}}
+            />
           </div>
         ) : (
           <FilePlaceholder fileType={asset.fileType} color={asset.dominantColor} />

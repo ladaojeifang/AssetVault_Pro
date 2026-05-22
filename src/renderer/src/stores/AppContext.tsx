@@ -30,6 +30,9 @@ interface AppState {
   isLoading: boolean
   isLoadingMore: boolean
   isImporting: boolean
+
+  /** Full-page font preview (double-click font asset) */
+  fontPreviewAssetId: string | null
 }
 
 interface AppActions {
@@ -54,12 +57,14 @@ interface AppActions {
   startImport: () => void
   stopImport: () => void
   setDetailPanelOpen: (open: boolean) => void
+  openFontPreview: (assetId: string) => void
+  closeFontPreview: () => void
 }
 
 const defaultState: AppState = {
   viewMode: 'grid',
   sidebarOpen: true,
-  detailPanelOpen: false,
+  detailPanelOpen: true,
   selectedAssetIds: new Set(),
   currentFolderId: null,
   folderTree: [],
@@ -74,7 +79,8 @@ const defaultState: AppState = {
   sortOrder: 'desc',
   isLoading: false,
   isLoadingMore: false,
-  isImporting: false
+  isImporting: false,
+  fontPreviewAssetId: null
 }
 
 const AppContext = createContext<(AppState & AppActions) | null>(null)
@@ -254,7 +260,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     selectMultiple: (ids) =>
       setState((prev) => ({ ...prev, selectedAssetIds: new Set(ids) })),
     clearSelection: () =>
-      setState((prev) => ({ ...prev, selectedAssetIds: new Set(), detailPanelOpen: false })),
+      setState((prev) => ({ ...prev, selectedAssetIds: new Set() })),
     setCurrentFolder: async (id) => {
       setState((prev) => ({ ...prev, currentFolderId: id }))
       await fetchAssets({ folderId: id || undefined })
@@ -293,6 +299,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     startImport: () => setState((prev) => ({ ...prev, isImporting: true })),
     stopImport: () => setState((prev) => ({ ...prev, isImporting: false })),
     setDetailPanelOpen: (open) => setState((prev) => ({ ...prev, detailPanelOpen: open })),
+    openFontPreview: (assetId) =>
+      setState((prev) => ({
+        ...prev,
+        fontPreviewAssetId: assetId,
+        selectedAssetIds: new Set([assetId]),
+        detailPanelOpen: true
+      })),
+    closeFontPreview: () => setState((prev) => ({ ...prev, fontPreviewAssetId: null }))
   }
 
   return <AppContext.Provider value={{ ...state, ...actions }}>{children}</AppContext.Provider>

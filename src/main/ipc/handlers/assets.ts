@@ -19,6 +19,7 @@ import { renameAsset } from '../../services/renameAsset'
 import { copyAssetsToOtherLibrary } from '../../services/copyAssetsToOtherLibrary'
 import { promptDuplicateImport, registerDuplicateImportPromptHandlers } from '../../services/duplicateImportPrompt'
 import { scanLibraryContentHashes } from '../../services/contentHashService'
+import { regenerateFontThumbnails } from '../../services/regenerateFontThumbnails'
 
 registerDuplicateImportPromptHandlers()
 
@@ -578,6 +579,28 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       }
     }
 
+    if (asset.fileType === 'font' && absFile && existsSync(absFile)) {
+      const gen = await getThumbnailService().generateFont(absFile, asset.id, {
+        width: 512,
+        height: 512,
+        quality: 85
+      })
+      if (gen?.buffer?.length) {
+        const relThumb = itemThumbRelative(asset.id)
+        await database
+          .update(assets)
+          .set({
+            thumbnailPath: relThumb,
+            hasThumbnail: true,
+            updatedAt: new Date()
+          })
+          .where(eq(assets.id, id))
+        persistDatabase()
+        const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
+        return `data:image/webp;base64,${buf.toString('base64')}`
+      }
+    }
+
     if (asset.fileType === '3d' && absFile && existsSync(absFile) && !isModelThumbnailSkipped(asset.id)) {
       const ext = asset.filePath.split('.').pop() ?? ''
       const gen = await getThumbnailService().generateModel(absFile, asset.id, ext, {
@@ -616,6 +639,24 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     })
 
     await flushDatabase()
+    return result
+  })
+
+  ipc.handle('assets:regenerate-font-thumbnails', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+
+    const result = await regenerateFontThumbnails((data) => {
+      try {
+        win?.webContents.send('font-thumb:regenerate-progress', data)
+      } catch {
+        /* window gone */
+      }
+    })
+
+    await flushDatabase()
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) w.webContents.send('assets:imported')
+    }
     return result
   })
 }

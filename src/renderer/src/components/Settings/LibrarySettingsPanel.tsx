@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { ContentHashScanButton } from './ContentHashScanButton'
+import { FontThumbRegenerateButton } from './FontThumbRegenerateButton'
+import { FontSettingsSection } from './FontSettingsSection'
 
 export function LibrarySettingsPanel(): React.ReactElement {
   const [state, setState] = useState<{
@@ -152,6 +154,8 @@ export function LibrarySettingsPanel(): React.ReactElement {
           导入时会按文件大小与 SHA-256 检测重复，并询问是否使用已有资产。对已入库但尚未计算指纹的文件，可手动增量扫描。
         </p>
         <ContentHashScanButton disabled={busy} />
+        <FontSettingsSection />
+        <FontThumbRegenerateButton disabled={busy} />
       </div>
 
       <div className="space-y-2">

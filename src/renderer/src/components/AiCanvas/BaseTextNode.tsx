@@ -29,7 +29,9 @@ const BaseTextNodeInner: React.FC<NodeProps> = ({ id, data, selected }) => {
       <Handle type="source" position={Position.Right} id="out" className="ai-flow-handle" />
 
       <div className="ai-base-node-header ai-base-node-header--text">
-        <span className="ai-base-node-title">文本素材 {displayIndex}</span>
+        <span className="ai-base-node-title">
+          {data.fontFamilyName ? String(data.fontFamilyName) : `文本素材 ${displayIndex}`}
+        </span>
         <div className="ai-base-node-text-tabs nodrag titlebar-no-drag" onPointerDown={stop}>
           <button
             type="button"

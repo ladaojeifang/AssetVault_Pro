@@ -57,7 +57,7 @@ export const AUDIO_EXTENSIONS = new Set([
   '.opus'
 ])
 
-export const FONT_EXTENSIONS = new Set(['.ttf', '.otf', '.woff', '.woff2', '.eot'])
+export const FONT_EXTENSIONS = new Set(['.ttf', '.otf', '.woff', '.woff2', '.eot', '.ttc'])
 
 /** PSD, AI, Sketch, Figma, XD, PDF, EPS */
 export const DESIGN_EXTENSIONS = new Set([

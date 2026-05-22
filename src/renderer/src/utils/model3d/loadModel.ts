@@ -23,13 +23,17 @@ import {
 import { FramingBehavior } from '@babylonjs/core/Behaviors/Cameras/framingBehavior'
 import { FBXLoader } from 'babylonjs-fbx-loader'
 import { parseModel3dFormat, type Model3dFormat } from '@/shared/model3dFormats'
+import {
+  fileUrlToPath,
+  toAppFileProtocolUrl as toAppModelProtocolUrl
+} from '../appFileProtocolUrl'
 
 export { parseModel3dFormat, type Model3dFormat }
 
+export { fileUrlToPath, toAppModelProtocolUrl }
+
 export const THUMB_SCENE_COLOR = new Color4(0.1, 0.11, 0.18, 1)
 export const VIEWER_SCENE_COLOR = new Color4(0.08, 0.09, 0.12, 1)
-
-const MODEL_PROTOCOL = 'assetvault-model'
 
 /** OBJ+MTL textures need longer than bare meshes; still capped so FBX cannot hang forever. */
 const THUMB_SCENE_READY_MS = 12_000
@@ -59,18 +63,6 @@ export function parseModelFileUrl(fileUrl: string): { rootUrl: string; filename:
   const filename = pathname.slice(slash + 1)
   const dir = pathname.slice(0, slash + 1)
   return { rootUrl: `file://${dir}`, filename }
-}
-
-export function fileUrlToPath(fileUrl: string): string {
-  const pathname = decodeURIComponent(new URL(fileUrl).pathname).replace(/\\/g, '/')
-  if (/^\/[a-zA-Z]:/.test(pathname)) return pathname.slice(1)
-  return pathname
-}
-
-/** Registered in main — fetchable from http://localhost renderer. */
-export function toAppModelProtocolUrl(fileUrl: string): string {
-  const path = fileUrlToPath(fileUrl).replace(/\\/g, '/')
-  return `${MODEL_PROTOCOL}:///${encodeURI(path)}`
 }
 
 export function addDefaultLights(scene: Scene): void {
