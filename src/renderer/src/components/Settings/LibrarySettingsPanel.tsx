@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { ContentHashScanButton } from './ContentHashScanButton'
 import { FontThumbRegenerateButton } from './FontThumbRegenerateButton'
+import { ModelThumbRegenerateButton } from './ModelThumbRegenerateButton'
 import { FontSettingsSection } from './FontSettingsSection'
 
 export function LibrarySettingsPanel(): React.ReactElement {
@@ -156,6 +157,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
         <ContentHashScanButton disabled={busy} />
         <FontSettingsSection />
         <FontThumbRegenerateButton disabled={busy} />
+        <ModelThumbRegenerateButton disabled={busy} />
       </div>
 
       <div className="space-y-2">

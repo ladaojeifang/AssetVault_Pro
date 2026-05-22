@@ -4,6 +4,7 @@ import Toolbar from '../Toolbar/Toolbar'
 import AssetGrid from '../Assets/AssetGrid'
 import DetailPanel from '../Detail/DetailPanel'
 import FontPreviewPage from '../FontPreview/FontPreviewPage'
+import ModelPreviewPage from '../ModelPreview/ModelPreviewPage'
 import StatusBar from './StatusBar'
 import { useApp } from '../../stores/AppContext'
 
@@ -13,6 +14,7 @@ const LibraryPane: React.FC = () => {
     sidebarOpen,
     detailPanelOpen,
     fontPreviewAssetId,
+    modelPreviewAssetId,
     refreshFolders,
     refreshAssets,
     isImporting
@@ -27,6 +29,15 @@ const LibraryPane: React.FC = () => {
     return (
       <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-av-bg-primary">
         <FontPreviewPage assetId={fontPreviewAssetId} />
+        <StatusBar isImporting={isImporting} />
+      </div>
+    )
+  }
+
+  if (modelPreviewAssetId) {
+    return (
+      <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-av-bg-primary">
+        <ModelPreviewPage assetId={modelPreviewAssetId} />
         <StatusBar isImporting={isImporting} />
       </div>
     )

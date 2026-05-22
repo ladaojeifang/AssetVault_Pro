@@ -1,6 +1,7 @@
 import '@babylonjs/loaders/glTF'
 import '@babylonjs/loaders/OBJ'
 import '@babylonjs/loaders/STL'
+import '@babylonjs/loaders/SPLAT'
 
 import {
   Scene,
@@ -14,7 +15,8 @@ import {
   ArcRotateCamera,
   Tools,
   Engine,
-  type AbstractMesh
+  type AbstractMesh,
+  type AnimationGroup
 } from '@babylonjs/core'
 import {
   ImportMeshAsync,
@@ -22,7 +24,7 @@ import {
 } from '@babylonjs/core/Loading/sceneLoader'
 import { FramingBehavior } from '@babylonjs/core/Behaviors/Cameras/framingBehavior'
 import { FBXLoader } from 'babylonjs-fbx-loader'
-import { parseModel3dFormat, type Model3dFormat } from '@/shared/model3dFormats'
+import { parseModel3dFormat, type Model3dFormat, type ModelAnimationClipInfo } from '@/shared/model3dFormats'
 import {
   fileUrlToPath,
   toAppFileProtocolUrl as toAppModelProtocolUrl
@@ -34,6 +36,28 @@ export { fileUrlToPath, toAppModelProtocolUrl }
 
 export const THUMB_SCENE_COLOR = new Color4(0.1, 0.11, 0.18, 1)
 export const VIEWER_SCENE_COLOR = new Color4(0.08, 0.09, 0.12, 1)
+/** Default fps for Babylon animation groups (glTF / FBX imports). */
+export const MODEL_ANIMATION_FPS = 60
+
+export function animationGroupDurationSeconds(group: AnimationGroup, fps = MODEL_ANIMATION_FPS): number {
+  return Math.max(0, (group.to - group.from) / fps)
+}
+
+export function animationGroupTimeToFrame(group: AnimationGroup, seconds: number, fps = MODEL_ANIMATION_FPS): number {
+  const frame = group.from + seconds * fps
+  return Math.min(group.to, Math.max(group.from, frame))
+}
+
+export function animationGroupFrameToTime(group: AnimationGroup, frame: number, fps = MODEL_ANIMATION_FPS): number {
+  return Math.max(0, (frame - group.from) / fps)
+}
+
+export function collectSceneAnimationClips(scene: Scene): ModelAnimationClipInfo[] {
+  return scene.animationGroups.map((group, index) => ({
+    name: group.name?.trim() || `动画 ${index + 1}`,
+    durationSeconds: animationGroupDurationSeconds(group)
+  }))
+}
 
 /** OBJ+MTL textures need longer than bare meshes; still capped so FBX cannot hang forever. */
 const THUMB_SCENE_READY_MS = 12_000
@@ -167,6 +191,13 @@ export async function loadModelMeshes(
   let result: ISceneLoaderAsyncResult
 
   const loadMeshes = async (): Promise<ISceneLoaderAsyncResult> => {
+    // FBX / PLY: protocol fetch can hang without rejecting; read bytes via IPC when possible.
+    if ((format === 'fbx' || format === 'ply') && options?.libraryPath) {
+      const bytes = await resolveModelBytes(fileUrl, options?.fileBytes, options.libraryPath)
+      if (bytes && bytes.byteLength > 0) {
+        return await importMeshesFromBytes(scene, bytes, format, filename)
+      }
+    }
     if (fileUrl.startsWith('file:')) {
       try {
         return await importFromModelUrl(scene, toAppModelProtocolUrl(fileUrl), format, filename)
@@ -237,10 +268,8 @@ export async function renderModelSnapshot(
   ext: string,
   size = 512,
   _fileBytes?: ArrayBufferView,
-  libraryPath?: string,
-  options?: { loadLikePreview?: boolean }
+  libraryPath?: string
 ): Promise<string> {
-  const loadLikePreview = options?.loadLikePreview === true
   const format = parseModel3dFormat(ext)
   if (!format) throw new Error(`Unsupported 3D extension: ${ext}`)
 
@@ -266,17 +295,24 @@ export async function renderModelSnapshot(
     scene
   )
 
+  engine.runRenderLoop(() => {
+    scene.render()
+  })
+
   try {
     const meshes = await loadModelMeshes(scene, fileUrl, format, {
-      thumbnail: !loadLikePreview,
+      thumbnail: true,
       libraryPath
     })
     centerMeshes(meshes, scene)
     frameArcCamera(camera, meshes)
-    await waitSceneReady(scene, !loadLikePreview)
-    scene.render()
+    await waitSceneReady(scene, true)
+    for (let i = 0; i < 5; i++) {
+      await new Promise<void>((r) => requestAnimationFrame(() => r()))
+    }
     return await Tools.CreateScreenshotAsync(engine, camera, { width: size, height: size })
   } finally {
+    engine.stopRenderLoop()
     scene.dispose()
     engine.dispose()
   }

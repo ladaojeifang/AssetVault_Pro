@@ -9,7 +9,8 @@ import type { DuplicatePolicy, ImportAssetOptions } from '@/shared/importTypes'
 import { importSingleAsset, type ImportSingleAssetOptions } from '../../services/importSingleAsset'
 import { getFileWatcher } from '../../services/FileWatcher'
 import { getThumbnailService } from '../../services/ThumbnailService'
-import { isModelThumbnailSkipped } from '../../services/modelThumbnailSkip'
+import { isModelThumbnailSkipped, clearModelThumbnailSkip } from '../../services/modelThumbnailSkip'
+import { waitForModelSnapshotBridge } from '../../services/modelThumbnailRenderer'
 import { ALL_SUPPORTED_IMPORT_EXTENSIONS } from '@/shared/supportedFormats'
 import { resolveLibraryPath, removeItemPack, itemThumbRelative } from '../../services/libraryBundle'
 import { syncAssetSidecarFromDb } from '../../services/assetSidecar'
@@ -20,6 +21,8 @@ import { copyAssetsToOtherLibrary } from '../../services/copyAssetsToOtherLibrar
 import { promptDuplicateImport, registerDuplicateImportPromptHandlers } from '../../services/duplicateImportPrompt'
 import { scanLibraryContentHashes } from '../../services/contentHashService'
 import { regenerateFontThumbnails } from '../../services/regenerateFontThumbnails'
+import { regenerateModelThumbnails } from '../../services/regenerateModelThumbnails'
+import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
 
 registerDuplicateImportPromptHandlers()
 
@@ -488,6 +491,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
         id: assets.id,
         filePath: assets.filePath,
         fileType: assets.fileType,
+        extension: assets.extension,
         mimeType: assets.mimeType,
         width: assets.width,
         height: assets.height,
@@ -601,15 +605,40 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       }
     }
 
-    if (asset.fileType === '3d' && absFile && existsSync(absFile) && !isModelThumbnailSkipped(asset.id)) {
-      const ext = asset.filePath.split('.').pop() ?? ''
+    if (asset.fileType === '3d' && absFile && existsSync(absFile)) {
+      const ext = asset.extension || asset.filePath.split('.').pop() || ''
+      if (!isModel3dPreviewExtension(ext)) return null
+
+      const relThumb = itemThumbRelative(asset.id)
+      const absThumb = resolveLibraryPath(relThumb)
+
+      if (existsSync(absThumb)) {
+        const fromDisk = readWebpDataUrl(relThumb)
+        if (fromDisk) {
+          if (!asset.hasThumbnail || asset.thumbnailPath !== relThumb) {
+            await database
+              .update(assets)
+              .set({
+                thumbnailPath: relThumb,
+                hasThumbnail: true,
+                updatedAt: new Date()
+              })
+              .where(eq(assets.id, id))
+            persistDatabase()
+          }
+          return fromDisk
+        }
+      }
+
+      clearModelThumbnailSkip(asset.id)
+      await waitForModelSnapshotBridge(90_000)
       const gen = await getThumbnailService().generateModel(absFile, asset.id, ext, {
         width: 256,
         height: 256,
-        quality: 80
+        quality: 80,
+        force: true
       })
       if (gen?.buffer?.length) {
-        const relThumb = itemThumbRelative(asset.id)
         await database
           .update(assets)
           .set({
@@ -657,6 +686,25 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     for (const w of BrowserWindow.getAllWindows()) {
       if (!w.isDestroyed()) w.webContents.send('assets:imported')
     }
+    return result
+  })
+
+  ipc.handle('assets:regenerate-model-thumbnails', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const database = getDatabase()
+    if (!database) {
+      return { scanned: 0, updated: 0, skipped: 0, errors: 0, failures: [] }
+    }
+
+    const result = await regenerateModelThumbnails(database, (data) => {
+      try {
+        win?.webContents.send('model-thumb:regenerate-progress', data)
+      } catch {
+        /* window gone */
+      }
+    })
+
+    await flushDatabase()
     return result
   })
 }

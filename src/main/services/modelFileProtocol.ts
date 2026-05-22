@@ -11,6 +11,7 @@ const MIME_BY_EXT: Record<string, string> = {
   '.glb': 'model/gltf-binary',
   '.fbx': 'application/octet-stream',
   '.stl': 'model/stl',
+  '.ply': 'application/octet-stream',
   '.ttf': 'font/ttf',
   '.otf': 'font/otf',
   '.woff': 'font/woff',

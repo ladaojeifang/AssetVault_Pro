@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import type { AssetItem } from '@/shared/types'
 import { FONT_THUMB_SAMPLE_TEXT } from '@/shared/fontTypes'
 import { ModelViewer } from './ModelViewer'
+import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
 import { useFontFace } from '../../hooks/useFontFace'
 import { fontFamilyLabel, parseFontMetadataFromAsset } from '../../utils/fontAssetMeta'
 
@@ -52,7 +53,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
       if (asset.fileType === 'image') {
         const thumbData = await window.assetVaultAPI.assets.getThumbnail(asset.id)
         setPreviewUrl(thumbData as string ?? null)
-      } else if (asset.fileType === '3d') {
+      } else if (asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)) {
         const target = asset.resolvedFilePath ?? asset.filePath
         const href = await window.assetVaultAPI.fs.pathToFileUrl(target)
         setModelFileUrl(href)

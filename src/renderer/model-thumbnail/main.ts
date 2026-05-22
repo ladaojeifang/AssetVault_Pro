@@ -5,7 +5,6 @@ type RenderPayload = {
   ext: string
   size: number
   libraryPath?: string
-  loadLikePreview?: boolean
 }
 
 declare global {
@@ -17,27 +16,22 @@ declare global {
   }
 }
 
-const HIDDEN_RENDER_MS = 90_000
+const HIDDEN_RENDER_MS = 120_000
 
 window.modelThumbHost.onRenderRequest(async (payload) => {
   try {
-    const snapOpts = payload.loadLikePreview ? { loadLikePreview: true as const } : undefined
-    const render = renderModelSnapshot(
-      payload.fileUrl,
-      payload.ext,
-      payload.size,
-      undefined,
-      payload.libraryPath,
-      snapOpts
-    )
-    const dataUrl = payload.loadLikePreview
-      ? await render
-      : await Promise.race([
-          render,
-          new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error('render timeout')), HIDDEN_RENDER_MS)
-          })
-        ])
+    const dataUrl = await Promise.race([
+      renderModelSnapshot(
+        payload.fileUrl,
+        payload.ext,
+        payload.size,
+        undefined,
+        payload.libraryPath
+      ),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('render timeout')), HIDDEN_RENDER_MS)
+      })
+    ])
     window.modelThumbHost.sendResult({ ok: true, dataUrl })
   } catch (err) {
     window.modelThumbHost.sendResult({

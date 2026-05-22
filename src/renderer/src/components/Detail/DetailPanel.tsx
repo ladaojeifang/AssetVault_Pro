@@ -10,9 +10,10 @@ import { FolderIconDisplay } from '../Common/FolderIconDisplay'
 import { ColorPaletteStrip, parseAssetPaletteColors } from '../Common/ColorPaletteStrip'
 import DetailContextPanel from './DetailContextPanel'
 import { ModelViewer } from '../Preview/ModelViewer'
+import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
 
 const DetailPanel: React.FC = () => {
-  const { selectedAssetIds, assets, tags, folderTree, clearSelection, refreshAssets, refreshFolders, setDetailPanelOpen, refreshTags, openFontPreview } = useApp()
+  const { selectedAssetIds, assets, tags, folderTree, clearSelection, refreshAssets, refreshFolders, setDetailPanelOpen, refreshTags, openFontPreview, openModelPreview } = useApp()
   const [assetTagIds, setAssetTagIds] = useState<string[]>([])
   const [assetFolderIds, setAssetFolderIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -242,6 +243,16 @@ const DetailPanel: React.FC = () => {
           />
           <InfoRow label="Views" value={String(asset.viewCount)} />
         </InfoSection>
+
+        {asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension) && (
+          <button
+            type="button"
+            className="w-full btn-primary text-sm py-2"
+            onClick={() => openModelPreview(asset.id)}
+          >
+            3D 预览
+          </button>
+        )}
 
         {asset.fileType === 'font' && (
           <>
@@ -478,7 +489,7 @@ function DetailPreview({ asset }: { asset: any }) {
     setModelFileUrl(null)
     setPreviewSrc(null)
 
-    if (asset.fileType === '3d') {
+    if (asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)) {
       void (async () => {
         const target = asset.resolvedFilePath ?? asset.filePath
         const href = await window.assetVaultAPI.fs.pathToFileUrl(target)
@@ -487,6 +498,12 @@ function DetailPreview({ asset }: { asset: any }) {
       void window.assetVaultAPI.assets.getThumbnail(asset.id).then((data) => {
         if (!cancelled && data) setPreviewSrc(data as string)
       })
+      return () => {
+        cancelled = true
+      }
+    }
+
+    if (asset.fileType === '3d') {
       return () => {
         cancelled = true
       }
@@ -502,7 +519,7 @@ function DetailPreview({ asset }: { asset: any }) {
     }
   }, [asset.id, asset.fileType, asset.filePath, asset.resolvedFilePath])
 
-  if (asset.fileType === '3d' && modelFileUrl) {
+  if (asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension) && modelFileUrl) {
     return (
       <ModelViewer
         fileUrl={modelFileUrl}

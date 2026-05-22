@@ -27,9 +27,10 @@ import {
   sanitizeStorageFileName
 } from './libraryBundle'
 import { syncAssetSidecarFromDb, writeAssetSidecarMeta } from './assetSidecar'
-import { isModelThumbnailSkipped, markModelThumbnailSkipped } from './modelThumbnailSkip'
-import { buildDuplicatePromptPayload, findAssetIdByContentHash } from './contentHashService'
 import { parseFontFile } from './fontMetadata'
+import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import { schedule3dThumbnailAfterImport } from './regenerateModelThumbnails'
+import { buildDuplicatePromptPayload, findAssetIdByContentHash } from './contentHashService'
 
 export interface ImportSingleAssetOptions extends ImportAssetOptions {
   resolveDuplicate?: (payload: Omit<DuplicateImportPromptPayload, 'requestId'>) => Promise<DuplicateImportAnswer>
@@ -411,49 +412,12 @@ async function finalizeImportedAsset(
 
   await syncAssetSidecarFromDb(database, id)
 
-  if (fileType === '3d') {
+  if (fileType === '3d' && isModel3dPreviewExtension(extNoDot)) {
     void schedule3dThumbnailAfterImport(database, id, destAbs, extNoDot)
   }
 
   persistDatabase()
   return id
-}
-
-/** Generate 3D thumb after import; updates DB + meta.json when done. */
-export async function schedule3dThumbnailAfterImport(
-  database: NonNullable<typeof db>,
-  assetId: string,
-  destAbs: string,
-  extNoDot: string
-): Promise<void> {
-  if (isModelThumbnailSkipped(assetId)) return
-
-  try {
-    const thumb = await getThumbnailService().generateModel(destAbs, assetId, extNoDot, {
-      width: 256,
-      height: 256,
-      quality: 80
-    })
-    if (!thumb) {
-      markModelThumbnailSkipped(assetId)
-      return
-    }
-
-    await database
-      .update(assets)
-      .set({
-        thumbnailPath: itemThumbRelative(assetId),
-        hasThumbnail: true,
-        updatedAt: new Date()
-      })
-      .where(eq(assets.id, assetId))
-
-    await syncAssetSidecarFromDb(database, assetId)
-    persistDatabase()
-  } catch (error) {
-    markModelThumbnailSkipped(assetId)
-    console.warn('[Import] 3D thumbnail skipped:', error)
-  }
 }
 
 function removeOrphanItemDir(libraryRoot: string, id: string): void {

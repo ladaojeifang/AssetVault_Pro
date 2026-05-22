@@ -33,6 +33,8 @@ interface AppState {
 
   /** Full-page font preview (double-click font asset) */
   fontPreviewAssetId: string | null
+  /** Full-page 3D model preview (double-click 3d asset) */
+  modelPreviewAssetId: string | null
 }
 
 interface AppActions {
@@ -59,6 +61,8 @@ interface AppActions {
   setDetailPanelOpen: (open: boolean) => void
   openFontPreview: (assetId: string) => void
   closeFontPreview: () => void
+  openModelPreview: (assetId: string) => void
+  closeModelPreview: () => void
 }
 
 const defaultState: AppState = {
@@ -80,7 +84,8 @@ const defaultState: AppState = {
   isLoading: false,
   isLoadingMore: false,
   isImporting: false,
-  fontPreviewAssetId: null
+  fontPreviewAssetId: null,
+  modelPreviewAssetId: null
 }
 
 const AppContext = createContext<(AppState & AppActions) | null>(null)
@@ -303,10 +308,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setState((prev) => ({
         ...prev,
         fontPreviewAssetId: assetId,
+        modelPreviewAssetId: null,
         selectedAssetIds: new Set([assetId]),
         detailPanelOpen: true
       })),
-    closeFontPreview: () => setState((prev) => ({ ...prev, fontPreviewAssetId: null }))
+    closeFontPreview: () => setState((prev) => ({ ...prev, fontPreviewAssetId: null })),
+    openModelPreview: (assetId) =>
+      setState((prev) => ({
+        ...prev,
+        modelPreviewAssetId: assetId,
+        fontPreviewAssetId: null,
+        selectedAssetIds: new Set([assetId]),
+        detailPanelOpen: true
+      })),
+    closeModelPreview: () => setState((prev) => ({ ...prev, modelPreviewAssetId: null }))
   }
 
   return <AppContext.Provider value={{ ...state, ...actions }}>{children}</AppContext.Provider>

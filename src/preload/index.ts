@@ -112,6 +112,10 @@ const api = {
       ipcRenderer.invoke('assets:regenerate-font-thumbnails') as Promise<
         import('../../shared/fontTypes').FontRegenerateResult
       >,
+    regenerateModelThumbnails: () =>
+      ipcRenderer.invoke('assets:regenerate-model-thumbnails') as Promise<
+        import('../../shared/model3dFormats').ModelRegenerateResult
+      >,
     delete: (ids: string[]) => ipcRenderer.invoke('assets:delete', ids),
     move: (ids: string[], targetFolderId: string) =>
       ipcRenderer.invoke('assets:move', ids, targetFolderId),
@@ -329,6 +333,17 @@ const api = {
     ) => callback(data)
     ipcRenderer.on('font-thumb:regenerate-progress', handler)
     return () => ipcRenderer.removeListener('font-thumb:regenerate-progress', handler)
+  },
+
+  onModelThumbRegenerateProgress: (
+    callback: (data: { current: number; total: number; assetId: string; status: string }) => void
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: { current: number; total: number; assetId: string; status: string }
+    ) => callback(data)
+    ipcRenderer.on('model-thumb:regenerate-progress', handler)
+    return () => ipcRenderer.removeListener('model-thumb:regenerate-progress', handler)
   }
 }
 

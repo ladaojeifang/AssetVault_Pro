@@ -2,6 +2,8 @@
  * Supported import extensions (leading dot, lowercase) — aligned with PRD format matrix.
  */
 
+import { MODEL3D_ALL_EXTENSIONS } from './model3dFormats'
+
 export const IMAGE_EXTENSIONS = new Set([
   '.jpg',
   '.jpeg',
@@ -89,7 +91,8 @@ export const DOCUMENT_EXTENSIONS = new Set([
   '.odp'
 ])
 
-export const THREED_EXTENSIONS = new Set(['.fbx', '.obj', '.glb', '.gltf', '.stl', '.usdz', '.blend'])
+/** 3D asset extensions (preview-capable + import-only). See `model3dFormats.ts`. */
+export const THREED_EXTENSIONS: ReadonlySet<string> = MODEL3D_ALL_EXTENSIONS
 
 /** PRD code row + common companions for same workflow */
 export const CODE_EXTENSIONS = new Set([

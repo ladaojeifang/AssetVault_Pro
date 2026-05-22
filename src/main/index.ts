@@ -1,17 +1,18 @@
 import { app, BrowserWindow, shell, ipcMain } from 'electron'
 import { join } from 'path'
 import { mkdirSync } from 'fs'
-import { initDatabase, flushDatabase, stopDevAutosave } from './db'
+import { initDatabase, flushDatabase, stopDevAutosave, getDatabase } from './db'
 import { prepareOnStartup } from './services/libraryBundle'
 import { getThumbnailService } from './services/ThumbnailService'
 import { runLegacyPathsMigrationIfNeeded } from './services/libraryMigration'
 import { repairOrphanItemPacks } from './services/repairOrphanItemPacks'
+import { processPending3dThumbnails } from './services/regenerateModelThumbnails'
 import { migrateOriginalExtToDisplayFilenames } from './services/migrateStorageFileNames'
 import { registerIpcHandlers } from './ipc'
 import { setupGlobalErrorHandlers } from './services/ErrorHandler'
 import { getHotkeyManager } from './services/HotkeyManager'
 import { getFileWatcher } from './services/FileWatcher'
-import { initModelThumbnailRenderer } from './services/modelThumbnailRenderer'
+import { initModelThumbnailRenderer, warmHiddenThumbnailWindow } from './services/modelThumbnailRenderer'
 import { setMainBrowserWindow } from './services/mainWindowRef'
 import { attachMainWindowLifecycle } from './services/aiCanvasWindow'
 import {
@@ -144,6 +145,7 @@ app.whenReady().then(async () => {
   console.log('[Library] Active library root:', libraryRoot)
 
   initModelThumbnailRenderer()
+  warmHiddenThumbnailWindow()
 
   // Register IPC handlers
   registerIpcHandlers(ipcMain)
@@ -157,6 +159,13 @@ app.whenReady().then(async () => {
   }
 
   createWindow()
+
+  void (async () => {
+    const database = getDatabase()
+    if (database) {
+      await processPending3dThumbnails(database)
+    }
+  })()
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

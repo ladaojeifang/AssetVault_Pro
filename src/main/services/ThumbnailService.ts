@@ -7,9 +7,11 @@ import { extractVideoFramePngBestEffort } from '../utils/videoFrame'
 import { renderModelToPngBuffer } from './modelThumbnailRenderer'
 import { renderFontPreviewPng, FONT_THUMB_CANVAS_SIZE } from '../utils/fontPreviewRender'
 import { FONT_THUMB_SAMPLE_TEXT } from '@/shared/fontTypes'
+import { getThumbnailService } from './ThumbnailService'
 import {
   isModelThumbnailSkipped,
-  markModelThumbnailSkipped
+  markModelThumbnailSkipped,
+  clearModelThumbnailSkip
 } from './modelThumbnailSkip'
 import { parseModel3dFormat } from '@/shared/model3dFormats'
 import {
@@ -122,10 +124,10 @@ export class ThumbnailService {
     filePath: string,
     assetId: string,
     ext: string,
-    options: { width?: number; height?: number; quality?: number } = {}
+    options: { width?: number; height?: number; quality?: number; force?: boolean } = {}
   ): Promise<ThumbnailGenerateResult | null> {
     const maxEdge = options.width ?? THUMBNAIL_MAX_EDGE
-    const { height = maxEdge, quality = 80 } = options
+    const { height = maxEdge, quality = 80, force = false } = options
     const outputPath = this.thumbDiskPath(assetId)
 
     if (!parseModel3dFormat(ext)) {
@@ -133,12 +135,15 @@ export class ThumbnailService {
       return null
     }
 
-    if (isModelThumbnailSkipped(assetId)) {
+    if (force) {
+      clearModelThumbnailSkip(assetId)
+      this.invalidate(assetId)
+    } else if (isModelThumbnailSkipped(assetId)) {
       return null
     }
 
     try {
-      if (existsSync(outputPath)) {
+      if (!force && existsSync(outputPath)) {
         const diskBuffer = readFileSync(outputPath)
         this.lruCache.set(assetId, diskBuffer)
         return { buffer: diskBuffer, path: outputPath }
@@ -146,7 +151,7 @@ export class ThumbnailService {
 
       const png = await renderModelToPngBuffer(filePath, ext)
       if (!png?.length) {
-        markModelThumbnailSkipped(assetId)
+        console.warn(`[ThumbnailService] 3D render returned empty for ${filePath}`)
         return null
       }
 
@@ -159,8 +164,7 @@ export class ThumbnailService {
       this.lruCache.set(assetId, webpBuffer as Buffer)
       return { buffer: webpBuffer as Buffer, path: outputPath }
     } catch (error) {
-      markModelThumbnailSkipped(assetId)
-      console.warn(`[ThumbnailService] 3D thumbnail skipped for ${filePath}:`, error)
+      console.warn(`[ThumbnailService] 3D thumbnail failed for ${filePath}:`, error)
       return null
     }
   }

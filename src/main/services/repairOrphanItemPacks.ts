@@ -7,8 +7,9 @@ import { assets } from '../db/schema'
 import { getLibraryRoot, itemPackFileRelative, ITEMS_DIR } from './libraryBundle'
 import { getFileType } from '../utils/fileUtils'
 import { writeAssetSidecarMeta, syncAssetSidecarFromDb } from './assetSidecar'
-import { schedule3dThumbnailAfterImport } from './importSingleAsset'
+import { schedule3dThumbnailAfterImport } from './regenerateModelThumbnails'
 import { isModelThumbnailSkipped } from './modelThumbnailSkip'
+import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -47,7 +48,12 @@ export async function repairOrphanItemPacks(): Promise<number> {
     const existing = await database.select().from(assets).where(eq(assets.id, id)).get()
     if (existing) {
       await syncAssetSidecarFromDb(database, id)
-      if (existing.fileType === '3d' && !existing.hasThumbnail && !isModelThumbnailSkipped(id)) {
+      if (
+        existing.fileType === '3d' &&
+        isModel3dPreviewExtension(extNoDot) &&
+        !existing.hasThumbnail &&
+        !isModelThumbnailSkipped(id)
+      ) {
         void schedule3dThumbnailAfterImport(database, id, origAbs, extNoDot)
       }
       repaired++
@@ -86,7 +92,7 @@ export async function repairOrphanItemPacks(): Promise<number> {
       const row = await database.select().from(assets).where(eq(assets.id, id)).get()
       if (row) {
         writeAssetSidecarMeta(row, [], [])
-        if (fileType === '3d' && !isModelThumbnailSkipped(id)) {
+        if (fileType === '3d' && isModel3dPreviewExtension(extNoDot) && !isModelThumbnailSkipped(id)) {
           void schedule3dThumbnailAfterImport(database, id, origAbs, extNoDot)
         }
       }

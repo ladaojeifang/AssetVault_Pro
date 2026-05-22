@@ -11,6 +11,7 @@ import { FolderIconDisplay } from '../Common/FolderIconDisplay'
 import { isAssetDragEvent } from '../../utils/assetDragDrop'
 import { addDraggedAssetsToFolder } from '../../utils/addAssetsToFolder'
 import { notify } from '../Common/notify'
+import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
 
 const AssetGrid: React.FC = () => {
   const {
@@ -26,6 +27,7 @@ const AssetGrid: React.FC = () => {
     clearSelection,
     setDetailPanelOpen,
     openFontPreview,
+    openModelPreview,
     loadMoreAssets,
     tagFilters,
     fileTypeFilter,
@@ -189,12 +191,17 @@ const AssetGrid: React.FC = () => {
         return
       }
 
+      if (asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)) {
+        openModelPreview(id)
+        return
+      }
+
       const p = asset.resolvedFilePath ?? asset.filePath
       if (p) {
         await window.assetVaultAPI.fs.openInExplorer(p)
       }
     },
-    [assets, openFontPreview]
+    [assets, openFontPreview, openModelPreview]
   )
 
   const handleDragStart = useCallback(
@@ -748,6 +755,7 @@ function AssetCard({
   onContextMenu: (e: React.MouseEvent) => void
 }) {
   const [imgError, setImgError] = React.useState(false)
+  const can3dPreview = asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)
 
   return (
     <div
@@ -765,11 +773,12 @@ function AssetCard({
       {/* Thumbnail or placeholder */}
       <div className="absolute inset-0 bg-av-bg-tertiary">
         {!imgError &&
-        (asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === '3d' || asset.fileType === 'font' || asset.hasThumbnail) ? (
+        (asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === 'font' || can3dPreview || asset.hasThumbnail) ? (
           <ThumbnailImage
             assetId={asset.id}
             cacheKey={asset.updatedAt}
             objectFit={asset.fileType === 'font' ? 'contain' : 'cover'}
+            retryWhileEmpty={can3dPreview && !asset.hasThumbnail}
             onError={() => setImgError(true)}
           />
         ) : (
@@ -802,30 +811,51 @@ const ThumbnailImage = ({
   assetId,
   cacheKey,
   objectFit = 'cover',
+  retryWhileEmpty = false,
   onError
 }: {
   assetId: string
   cacheKey?: string | number
   objectFit?: 'cover' | 'contain'
+  /** For 3D: poll while thumbnail is generating asynchronously. */
+  retryWhileEmpty?: boolean
   onError: () => void
 }) => {
   const [src, setSrc] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    setSrc(null)
-    window.assetVaultAPI.assets
-      .getThumbnail(assetId)
-      .then((data) => {
-        if (!cancelled && data) setSrc(data as string)
-      })
-      .catch(() => {
-        if (!cancelled) setSrc(null)
-      })
+    let attempt = 0
+    const maxAttempts = retryWhileEmpty ? 24 : 1
+
+    const load = () => {
+      setSrc(null)
+      void window.assetVaultAPI.assets
+        .getThumbnail(assetId)
+        .then((data) => {
+          if (cancelled) return
+          if (data) {
+            setSrc(data as string)
+            return
+          }
+          if (retryWhileEmpty && attempt < maxAttempts - 1) {
+            attempt++
+            window.setTimeout(load, Math.min(8000, 1500 + attempt * 1000))
+          }
+        })
+        .catch(() => {
+          if (!cancelled && retryWhileEmpty && attempt < maxAttempts - 1) {
+            attempt++
+            window.setTimeout(load, Math.min(8000, 1500 + attempt * 1000))
+          }
+        })
+    }
+
+    load()
     return () => {
       cancelled = true
     }
-  }, [assetId, cacheKey])
+  }, [assetId, cacheKey, retryWhileEmpty])
 
   if (!src) return <ThumbnailSkeleton />
 
@@ -1017,6 +1047,8 @@ function AssetListItem({
   onDragStart: (e: React.DragEvent) => void
   onContextMenu: (e: React.MouseEvent) => void
 }) {
+  const can3dPreview = asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)
+
   return (
     <div
       draggable
@@ -1030,12 +1062,13 @@ function AssetListItem({
     >
       {/* Mini thumbnail */}
       <div className="w-10 h-10 rounded bg-av-bg-tertiary shrink-0 flex items-center justify-center overflow-hidden">
-        {asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === '3d' || asset.fileType === 'font' || asset.hasThumbnail ? (
+        {asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === 'font' || can3dPreview || asset.hasThumbnail ? (
           <div className="w-full h-full [&_img]:w-full [&_img]:h-full">
             <ThumbnailImage
               assetId={asset.id}
               cacheKey={asset.updatedAt}
               objectFit={asset.fileType === 'font' ? 'contain' : 'cover'}
+              retryWhileEmpty={can3dPreview && !asset.hasThumbnail}
               onError={() => {}}
             />
           </div>
