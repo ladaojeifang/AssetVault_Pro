@@ -23,6 +23,12 @@ import { scanLibraryContentHashes } from '../../services/contentHashService'
 import { regenerateFontThumbnails } from '../../services/regenerateFontThumbnails'
 import { regenerateModelThumbnails } from '../../services/regenerateModelThumbnails'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import {
+  refreshAssetThumbnail,
+  setCustomThumbnailFromClipboard,
+  setCustomThumbnailFromFile,
+  isCustomThumbnail
+} from '../../services/assetThumbnailOverride'
 
 registerDuplicateImportPromptHandlers()
 
@@ -517,6 +523,11 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
     const absFile = asset.filePath ? resolveLibraryPath(asset.filePath) : ''
 
+    if (isCustomThumbnail(asset.id)) {
+      const fromCustom = readWebpDataUrl(itemThumbRelative(asset.id))
+      if (fromCustom) return fromCustom
+    }
+
     if (
       asset.fileType === 'image' &&
       absFile &&
@@ -706,5 +717,31 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
     await flushDatabase()
     return result
+  })
+
+  ipc.handle('assets:set-custom-thumbnail-file', async (_event, id: string, sourcePath: string) => {
+    const database = getDatabase()
+    if (!database) throw new Error('Database not ready')
+    if (!sourcePath?.trim()) throw new Error('未选择图片文件')
+    await setCustomThumbnailFromFile(database, id, sourcePath)
+    return { ok: true as const }
+  })
+
+  ipc.handle('assets:set-custom-thumbnail-clipboard', async (_event, id: string) => {
+    const database = getDatabase()
+    if (!database) throw new Error('Database not ready')
+    await setCustomThumbnailFromClipboard(database, id)
+    return { ok: true as const }
+  })
+
+  ipc.handle('assets:refresh-thumbnail', async (_event, ids: string[]) => {
+    const database = getDatabase()
+    if (!database) throw new Error('Database not ready')
+    let updated = 0
+    for (const id of ids) {
+      if (await refreshAssetThumbnail(database, id)) updated++
+    }
+    await flushDatabase()
+    return { updated, total: ids.length }
   })
 }

@@ -14,6 +14,7 @@ import {
   clearModelThumbnailSkip
 } from './modelThumbnailSkip'
 import { parseModel3dFormat } from '@/shared/model3dFormats'
+import { isCustomThumbnail } from './customThumbnail'
 import {
   THUMBNAIL_MAX_EDGE,
   bufferToImageDataUrl,
@@ -87,6 +88,15 @@ export class ThumbnailService {
     const { height = maxEdge, quality = 80 } = options
 
     try {
+      if (isCustomThumbnail(assetId)) {
+        const customPath = this.thumbDiskPath(assetId)
+        if (existsSync(customPath)) {
+          const diskBuffer = readFileSync(customPath)
+          this.lruCache.set(assetId, diskBuffer)
+          return { buffer: diskBuffer, path: customPath }
+        }
+      }
+
       const fileBuffer = readFileSync(filePath)
       const transformer = new Transformer(fileBuffer)
       const imgInfo = await transformer.metadata()
@@ -288,6 +298,11 @@ export class ThumbnailService {
     } catch {
       // ignore
     }
+  }
+
+  /** Drop in-memory thumb only (keep disk file). */
+  forgetMemoryCache(assetId: string): void {
+    this.lruCache.delete(assetId)
   }
 
   clearAll(): void {

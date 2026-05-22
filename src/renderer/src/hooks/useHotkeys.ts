@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useApp } from '../stores/AppContext'
 import { useAiCanvasNavOptional, type AppScreen } from '../stores/AiCanvasNavContext'
+import { notify } from '../components/Common/notify'
 
 /**
  * Window-local shortcuts (only while AssetVault is focused).
@@ -87,6 +88,53 @@ const HOTKEY_MAP: Record<string, (ctx: ReturnType<typeof useApp>) => void> = {
 
   'focus-library-switcher': () => {
     window.dispatchEvent(new CustomEvent('assetvault:focus-library-switcher'))
+  },
+
+  'custom-thumb-file': async (ctx) => {
+    if (ctx.selectedAssetIds.size !== 1) return
+    const id = Array.from(ctx.selectedAssetIds)[0]!
+    try {
+      const paths = await window.assetVaultAPI.fs.selectDialog({
+        multi: false,
+        filters: [
+          {
+            name: 'Images',
+            extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'avif']
+          }
+        ]
+      })
+      const source = paths[0]
+      if (!source) return
+      await window.assetVaultAPI.assets.setCustomThumbnailFile(id, source)
+      notify.success('已设置自定义缩略图')
+      await ctx.refreshAssets()
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : '设置缩略图失败')
+    }
+  },
+
+  'custom-thumb-clipboard': async (ctx) => {
+    if (ctx.selectedAssetIds.size !== 1) return
+    const id = Array.from(ctx.selectedAssetIds)[0]!
+    try {
+      await window.assetVaultAPI.assets.setCustomThumbnailFromClipboard(id)
+      notify.success('已从剪贴板设置自定义缩略图')
+      await ctx.refreshAssets()
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : '设置缩略图失败')
+    }
+  },
+
+  'refresh-thumbnail': async (ctx) => {
+    const ids = Array.from(ctx.selectedAssetIds)
+    if (ids.length === 0) return
+    try {
+      const { updated } = await window.assetVaultAPI.assets.refreshThumbnail(ids)
+      notify.success(`已刷新 ${updated}/${ids.length} 个缩略图`)
+      await ctx.refreshAssets()
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : '刷新缩略图失败')
+    }
   }
 }
 
@@ -145,7 +193,12 @@ export function useGlobalHotkeys() {
 function resolveHotkeyId(e: KeyboardEvent, screen: AppScreen): string | null {
   const ctrl = e.ctrlKey || e.metaKey
   const shift = e.shiftKey
+  const alt = e.altKey
   const key = e.key.toLowerCase()
+
+  if (ctrl && alt && !shift && key === 't') return 'custom-thumb-file'
+  if (ctrl && alt && shift && key === 't') return 'custom-thumb-clipboard'
+  if (ctrl && alt && !shift && key === 'r') return 'refresh-thumbnail'
 
   if (ctrl && !shift && key === 'k') return 'search'
   if (ctrl && !shift && key === 'i') return 'import-files'

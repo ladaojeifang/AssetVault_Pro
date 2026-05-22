@@ -127,6 +127,12 @@ const api = {
       ipcRenderer.invoke('assets:update-metadata', id, metadata),
     updateNotes: (id: string, notes: string) => ipcRenderer.invoke('assets:update-notes', id, notes),
     getThumbnail: (id: string) => ipcRenderer.invoke('assets:get-thumbnail', id),
+    setCustomThumbnailFile: (id: string, sourcePath: string) =>
+      ipcRenderer.invoke('assets:set-custom-thumbnail-file', id, sourcePath) as Promise<{ ok: true }>,
+    setCustomThumbnailFromClipboard: (id: string) =>
+      ipcRenderer.invoke('assets:set-custom-thumbnail-clipboard', id) as Promise<{ ok: true }>,
+    refreshThumbnail: (ids: string[]) =>
+      ipcRenderer.invoke('assets:refresh-thumbnail', ids) as Promise<{ updated: number; total: number }>,
     analyzeColors: (id: string) => ipcRenderer.invoke('assets:analyze-colors', id),
     rename: (id: string, newName: string) =>
       ipcRenderer.invoke('assets:rename', id, newName) as Promise<{ filename: string }>,

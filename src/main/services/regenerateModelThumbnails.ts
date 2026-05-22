@@ -9,6 +9,7 @@ import { isModelThumbnailSkipped, markModelThumbnailSkipped, clearModelThumbnail
 import { syncAssetSidecarFromDb } from './assetSidecar'
 import type { ModelRegenerateFailure, ModelRegenerateResult } from '@/shared/model3dFormats'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import { isCustomThumbnail } from './customThumbnail'
 import { waitForModelSnapshotBridge } from './modelThumbnailRenderer'
 
 type Database = NonNullable<typeof db>
@@ -37,6 +38,7 @@ export async function schedule3dThumbnailAfterImport(
   extNoDot: string
 ): Promise<void> {
   if (!isModel3dPreviewExtension(extNoDot)) return
+  if (isCustomThumbnail(assetId)) return
 
   const absThumb = resolveLibraryPath(itemThumbRelative(assetId))
   if (existsSync(absThumb)) {
@@ -108,6 +110,7 @@ export async function processPending3dThumbnails(database: Database): Promise<vo
   const rows = await database.select().from(assets).where(eq(assets.fileType, '3d')).all()
   for (const row of rows) {
     if (!isModel3dPreviewExtension(row.extension)) continue
+    if (isCustomThumbnail(row.id)) continue
     if (row.hasThumbnail && row.thumbnailPath) {
       const absThumb = resolveLibraryPath(row.thumbnailPath)
       if (existsSync(absThumb)) continue
@@ -153,6 +156,12 @@ export async function regenerateModelThumbnails(
     }
 
     if (!isModel3dPreviewExtension(row.extension)) {
+      skipped++
+      onProgress?.({ current: i + 1, total, assetId: row.id, status: 'done' })
+      continue
+    }
+
+    if (isCustomThumbnail(row.id)) {
       skipped++
       onProgress?.({ current: i + 1, total, assetId: row.id, status: 'done' })
       continue

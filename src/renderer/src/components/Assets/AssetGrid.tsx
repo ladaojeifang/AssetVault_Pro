@@ -357,6 +357,35 @@ const AssetGrid: React.FC = () => {
             await refreshAssets()
             break
           }
+          case 'custom-thumb-file': {
+            const paths = await window.assetVaultAPI.fs.selectDialog({
+              multi: false,
+              filters: [
+                {
+                  name: 'Images',
+                  extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'avif']
+                }
+              ]
+            })
+            const source = paths[0]
+            if (!source) break
+            await window.assetVaultAPI.assets.setCustomThumbnailFile(assetIds[0]!, source)
+            notify.success('已设置自定义缩略图')
+            await refreshAssets()
+            break
+          }
+          case 'custom-thumb-clipboard': {
+            await window.assetVaultAPI.assets.setCustomThumbnailFromClipboard(assetIds[0]!)
+            notify.success('已从剪贴板设置自定义缩略图')
+            await refreshAssets()
+            break
+          }
+          case 'refresh-thumbnail': {
+            const { updated } = await window.assetVaultAPI.assets.refreshThumbnail(assetIds)
+            notify.success(`已刷新 ${updated}/${assetIds.length} 个缩略图`)
+            await refreshAssets()
+            break
+          }
           case 'delete':
             await handleDelete(assetIds)
             break

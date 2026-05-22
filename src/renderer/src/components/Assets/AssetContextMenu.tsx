@@ -15,6 +15,8 @@ type MenuItem = {
   label: string
   disabled?: boolean
   danger?: boolean
+  separator?: boolean
+  shortcut?: string
   submenu?: 'folders' | 'libraries'
 }
 
@@ -137,6 +139,24 @@ export function AssetContextMenu({
       label: multi ? `重新分析颜色 (${assetIds.length})` : '重新分析颜色',
       disabled: !canAnalyzeColors
     },
+    { key: 'sep-thumb', label: '', separator: true },
+    {
+      key: 'custom-thumb-file',
+      label: '自定义缩略图 (选择文件)',
+      shortcut: 'Ctrl+Alt+T',
+      disabled: multi
+    },
+    {
+      key: 'custom-thumb-clipboard',
+      label: '自定义缩略图 (从剪贴板)',
+      shortcut: 'Ctrl+Shift+Alt+T',
+      disabled: multi
+    },
+    {
+      key: 'refresh-thumbnail',
+      label: '刷新缩略图',
+      shortcut: 'Ctrl+Alt+R'
+    },
     { key: 'delete', label: multi ? `删除 (${assetIds.length})` : '删除', danger: true }
   ]
 
@@ -148,7 +168,10 @@ export function AssetContextMenu({
       style={{ left: pos?.left ?? state.x, top: pos?.top ?? state.y }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {items.map((item) => (
+      {items.map((item) =>
+        item.separator ? (
+          <div key={item.key} className="h-px bg-av-border/80 my-1 mx-2" role="separator" />
+        ) : (
         <div
           key={item.key}
           className="relative"
@@ -161,7 +184,7 @@ export function AssetContextMenu({
             type="button"
             role="menuitem"
             disabled={item.disabled}
-            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 transition-colors ${
+            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-3 transition-colors ${
               item.disabled
                 ? 'text-av-text-muted/50 cursor-not-allowed'
                 : item.danger
@@ -177,6 +200,8 @@ export function AssetContextMenu({
             <span>{item.label}</span>
             {item.submenu && !item.disabled ? (
               <span className="text-av-text-muted text-xs">▶</span>
+            ) : item.shortcut ? (
+              <span className="text-av-text-muted text-[11px] shrink-0">{item.shortcut}</span>
             ) : null}
           </button>
 
@@ -238,7 +263,8 @@ export function AssetContextMenu({
             </div>
           ) : null}
         </div>
-      ))}
+        )
+      )}
     </div>,
     document.body
   )
