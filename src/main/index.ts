@@ -43,7 +43,36 @@ function pinUserDataForDev(): void {
   }
 }
 
+/**
+ * Chromium default cache lives under userData and can fail on Windows when another
+ * instance holds the lock ("Unable to move the cache" / 0x5). Pin dedicated dirs
+ * before any BrowserWindow is created.
+ */
+function configureChromiumCacheDirs(): void {
+  try {
+    const base = app.getPath('userData')
+    const diskCache = join(base, 'chromium-disk-cache')
+    const gpuCache = join(base, 'chromium-gpu-cache')
+    mkdirSync(diskCache, { recursive: true })
+    mkdirSync(gpuCache, { recursive: true })
+    app.commandLine.appendSwitch('disk-cache-dir', diskCache)
+    app.commandLine.appendSwitch('gpu-shader-disk-cache-dir', gpuCache)
+    if (process.platform === 'win32') {
+      // Avoid GPU shader disk cache races when dev restarts overlap a stale process.
+      app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
+    }
+  } catch (e) {
+    console.warn('[Main] Chromium cache dir setup skipped:', e)
+  }
+}
+
 pinUserDataForDev()
+configureChromiumCacheDirs()
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+}
 
 let signalShutdownStarted = false
 async function shutdownFromSignal(signal: string): Promise<void> {
@@ -123,54 +152,64 @@ function createWindow(): BrowserWindow {
   return mainWindow
 }
 
-app.whenReady().then(async () => {
-  setupModelFileProtocolHandler()
-
-  // Set app user model id for windows
-  app.setAppUserModelId('com.assetvault.app')
-
-  // Setup global error handling (uncaughtException, unhandledRejection)
-  setupGlobalErrorHandlers()
-
-  const userData = app.getPath('userData')
-  const { libraryRoot, dbPath } = prepareOnStartup(userData)
-  getThumbnailService().setLibraryRoot(libraryRoot)
-
-  await initDatabase(dbPath)
-  await runLegacyPathsMigrationIfNeeded()
-  await migrateOriginalExtToDisplayFilenames()
-  await repairOrphanItemPacks()
-  await flushDatabase()
-
-  console.log('[Library] Active library root:', libraryRoot)
-
-  initModelThumbnailRenderer()
-  warmHiddenThumbnailWindow()
-
-  // Register IPC handlers
-  registerIpcHandlers(ipcMain)
-
-  // OS-wide shortcuts: only when ASSETVAULT_GLOBAL_HOTKEYS=1 (otherwise they steal keys from IDE/browser)
-  if (process.env.ASSETVAULT_GLOBAL_HOTKEYS === '1') {
-    getHotkeyManager().registerAll()
-    console.log('[Hotkeys] OS-wide globalShortcut enabled (ASSETVAULT_GLOBAL_HOTKEYS=1)')
-  } else {
-    console.log('[Hotkeys] Using window-local shortcuts only (set ASSETVAULT_GLOBAL_HOTKEYS=1 for OS-wide)')
+app.on('second-instance', () => {
+  const win = BrowserWindow.getAllWindows()[0]
+  if (win) {
+    if (win.isMinimized()) win.restore()
+    win.focus()
   }
-
-  createWindow()
-
-  void (async () => {
-    const database = getDatabase()
-    if (database) {
-      await processPending3dThumbnails(database)
-    }
-  })()
-
-  app.on('activate', function () {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
 })
+
+if (gotSingleInstanceLock) {
+  app.whenReady().then(async () => {
+    setupModelFileProtocolHandler()
+
+    // Set app user model id for windows
+    app.setAppUserModelId('com.assetvault.app')
+
+    // Setup global error handling (uncaughtException, unhandledRejection)
+    setupGlobalErrorHandlers()
+
+    const userData = app.getPath('userData')
+    const { libraryRoot, dbPath } = prepareOnStartup(userData)
+    getThumbnailService().setLibraryRoot(libraryRoot)
+
+    await initDatabase(dbPath)
+    await runLegacyPathsMigrationIfNeeded()
+    await migrateOriginalExtToDisplayFilenames()
+    await repairOrphanItemPacks()
+    await flushDatabase()
+
+    console.log('[Library] Active library root:', libraryRoot)
+
+    initModelThumbnailRenderer()
+    warmHiddenThumbnailWindow()
+
+    // Register IPC handlers
+    registerIpcHandlers(ipcMain)
+
+    // OS-wide shortcuts: only when ASSETVAULT_GLOBAL_HOTKEYS=1 (otherwise they steal keys from IDE/browser)
+    if (process.env.ASSETVAULT_GLOBAL_HOTKEYS === '1') {
+      getHotkeyManager().registerAll()
+      console.log('[Hotkeys] OS-wide globalShortcut enabled (ASSETVAULT_GLOBAL_HOTKEYS=1)')
+    } else {
+      console.log('[Hotkeys] Using window-local shortcuts only (set ASSETVAULT_GLOBAL_HOTKEYS=1 for OS-wide)')
+    }
+
+    createWindow()
+
+    void (async () => {
+      const database = getDatabase()
+      if (database) {
+        await processPending3dThumbnails(database)
+      }
+    })()
+
+    app.on('activate', function () {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
+  })
+}
 
 app.on('window-all-closed', async () => {
   // Cleanup: unregister shortcuts before quit

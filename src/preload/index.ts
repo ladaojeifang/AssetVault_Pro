@@ -227,6 +227,41 @@ const api = {
     }
   },
 
+  settings: {
+    getAppAppearance: () =>
+      ipcRenderer.invoke('settings:get-app-appearance') as Promise<
+        import('../../shared/appTheme').AppAppearanceSettings
+      >,
+    setAppTheme: (theme: import('../../shared/appTheme').AppTheme) =>
+      ipcRenderer.invoke('settings:set-app-theme', theme) as Promise<
+        import('../../shared/appTheme').AppAppearanceSettings
+      >,
+    onAppAppearanceChanged: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('settings:app-appearance-changed', handler)
+      return () => ipcRenderer.removeListener('settings:app-appearance-changed', handler)
+    },
+    getFormatIconOverrides: () =>
+      ipcRenderer.invoke('settings:get-format-icon-overrides') as Promise<
+        import('../../shared/formatIconOverrides').FormatIconOverridesSettings
+      >,
+    setFormatIconOverrides: (
+      settings: import('../../shared/formatIconOverrides').FormatIconOverridesSettings
+    ) =>
+      ipcRenderer.invoke('settings:set-format-icon-overrides', settings) as Promise<
+        import('../../shared/formatIconOverrides').FormatIconOverridesSettings
+      >,
+    importFormatIconImage: (extension: string, sourcePath: string) =>
+      ipcRenderer.invoke('settings:import-format-icon-image', extension, sourcePath) as Promise<{
+        path: string
+      }>,
+    onFormatIconOverridesChanged: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('settings:format-icon-overrides-changed', handler)
+      return () => ipcRenderer.removeListener('settings:format-icon-overrides-changed', handler)
+    }
+  },
+
   // Tag operations
   tags: {
     list: () => ipcRenderer.invoke('tags:list'),

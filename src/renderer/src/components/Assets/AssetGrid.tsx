@@ -12,6 +12,8 @@ import { isAssetDragEvent } from '../../utils/assetDragDrop'
 import { addDraggedAssetsToFolder } from '../../utils/addAssetsToFolder'
 import { notify } from '../Common/notify'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import MasonryGrid from './MasonryGrid'
+import { FileTypePlaceholder } from '../Common/FileTypePlaceholder'
 
 const AssetGrid: React.FC = () => {
   const {
@@ -114,16 +116,6 @@ const AssetGrid: React.FC = () => {
     setSubfoldersOpen(true)
     setContentOpen(true)
   }, [currentFolderId])
-
-  const COLS = 8
-
-  // Virtual scrolling for grid mode (row = one row of COLS tiles)
-  const rowVirtualizer = useVirtualizer<Element, Element>({
-    count: Math.max(1, Math.ceil(assets.length / COLS)),
-    getScrollElement: () => containerRef.current,
-    estimateSize: () => (viewMode === 'grid' ? 252 : 56),
-    overscan: 4
-  })
 
   const listVirtualizer = useVirtualizer<Element, Element>({
     count: assets.length,
@@ -477,8 +469,11 @@ const AssetGrid: React.FC = () => {
           {assets.length > 1 && (
             <span className="text-av-text-muted/80 hidden sm:inline">
               {' '}
-              · Ctrl/⌘+单击多选 · Shift+单击范围 · 拖到上方子文件夹加入目录
+              · Ctrl/⌘+滚轮缩放 · Ctrl/⌘+单击多选 · Shift+单击范围 · 拖到上方子文件夹加入目录
             </span>
+          )}
+          {viewMode === 'grid' && assets.length > 0 && (
+            <span className="text-av-text-muted/80 hidden md:inline"> · 瀑布流</span>
           )}
         </span>
         {isLoadingMore && <span className="text-xs text-av-accent-blue">Loading more…</span>}
@@ -576,16 +571,16 @@ const AssetGrid: React.FC = () => {
           <>
             {assets.length > 0 ? (
               viewMode === 'grid' ? (
-                <GridContent
+                <MasonryGrid
                   assets={assets}
-                  columns={COLS}
-                  virtualizer={rowVirtualizer}
+                  scrollElementRef={containerRef}
+                  layoutKey={`${subfoldersOpen}-${contentOpen}-${showSubfolderStrip}-${childFolders.length}`}
                   selectedIds={selectedAssetIds}
+                  showCaptions={showFolderHierarchy}
                   onAssetClick={handleAssetClick}
                   onAssetDoubleClick={handleAssetDoubleClick}
                   onDragStart={handleDragStart}
                   onAssetContextMenu={handleAssetContextMenu}
-                  showCaptions={showFolderHierarchy}
                 />
               ) : (
                 <ListContent
@@ -627,87 +622,6 @@ const AssetGrid: React.FC = () => {
       >
         <Input value={renameValue} onChange={setRenameValue} placeholder="文件名（不含扩展名）" />
       </Modal>
-    </div>
-  )
-}
-
-// Grid View Component
-function GridContent({
-  assets,
-  columns,
-  virtualizer,
-  selectedIds,
-  onAssetClick,
-  onAssetDoubleClick,
-  onDragStart,
-  onAssetContextMenu,
-  showCaptions = false
-}: {
-  assets: typeof useApp extends () => infer T ? T extends { assets?: infer A } ? A : never : never
-  columns: number
-  virtualizer: Virtualizer<Element, Element>
-  selectedIds: Set<string>
-  onAssetClick: (id: string, e: React.MouseEvent) => void
-  onAssetDoubleClick: (id: string) => void
-  onDragStart: (
-    e: React.DragEvent,
-    asset: { id: string; filename: string; filePath: string; resolvedFilePath?: string }
-  ) => void
-  onAssetContextMenu: (e: React.MouseEvent, asset: AssetItem) => void
-  showCaptions?: boolean
-}) {
-  return (
-    <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative', width: '100%' }}>
-      {virtualizer.getVirtualItems().map((virtualRow) => {
-        const startIdx = virtualRow.index * columns
-        const rowItems = assets.slice(startIdx, startIdx + columns)
-
-        return (
-          <div
-            key={virtualRow.key}
-            data-index={virtualRow.index}
-            ref={virtualizer.measureElement}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              transform: `translateY(${virtualRow.start}px)`,
-              display: 'grid',
-              gridTemplateColumns: `repeat(${columns}, 1fr)`,
-              gap: '8px',
-              paddingBottom: '4px'
-            }}
-          >
-            {rowItems.map((asset: any, colIdx: number) =>
-              asset ? (
-                <div key={asset.id} className="flex flex-col min-w-0">
-                  <AssetCard
-                    asset={asset}
-                    selected={selectedIds.has(asset.id)}
-                    onClick={(e) => onAssetClick(asset.id, e)}
-                    onDoubleClick={() => onAssetDoubleClick(asset.id)}
-                    onDragStart={(e) => onDragStart(e, asset)}
-                    onContextMenu={(e) => onAssetContextMenu(e, asset)}
-                  />
-                  {showCaptions && (
-                    <div className="mt-1.5 px-0.5 space-y-0.5 shrink-0">
-                      <p className="text-xs truncate text-av-text-primary leading-tight">{asset.filename}</p>
-                      {asset.width && asset.height ? (
-                        <p className="text-[10px] text-av-text-muted tabular-nums">
-                          {asset.width} × {asset.height}
-                        </p>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div key={`empty-${colIdx}`} />
-              )
-            )}
-          </div>
-        )
-      })}
     </div>
   )
 }
@@ -763,74 +677,6 @@ function ListContent({
           </div>
         )
       })}
-    </div>
-  )
-}
-
-// Individual Asset Card for Grid View
-function AssetCard({
-  asset,
-  selected,
-  onClick,
-  onDoubleClick,
-  onDragStart,
-  onContextMenu
-}: {
-  asset: any
-  selected: boolean
-  onClick: (e: React.MouseEvent) => void
-  onDoubleClick: () => void
-  onDragStart: (e: React.DragEvent) => void
-  onContextMenu: (e: React.MouseEvent) => void
-}) {
-  const [imgError, setImgError] = React.useState(false)
-  const can3dPreview = asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)
-
-  return (
-    <div
-      draggable
-      onDragStart={onDragStart}
-      onClick={onClick}
-      onDoubleClick={onDoubleClick}
-      onContextMenu={onContextMenu}
-      className={`group relative aspect-square rounded-lg overflow-hidden cursor-pointer transition-all duration-150 ${
-        selected
-          ? 'ring-2 ring-av-accent-blue shadow-lg shadow-av-accent-blue/20'
-          : 'hover:ring-2 hover:ring-av-border-light hover:shadow-md'
-      }`}
-    >
-      {/* Thumbnail or placeholder */}
-      <div className="absolute inset-0 bg-av-bg-tertiary">
-        {!imgError &&
-        (asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === 'font' || can3dPreview || asset.hasThumbnail) ? (
-          <ThumbnailImage
-            assetId={asset.id}
-            cacheKey={asset.updatedAt}
-            objectFit={asset.fileType === 'font' ? 'contain' : 'cover'}
-            retryWhileEmpty={can3dPreview && !asset.hasThumbnail}
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <FilePlaceholder fileType={asset.fileType} color={asset.dominantColor} />
-        )}
-
-        {/* Selection overlay */}
-        {selected && (
-          <div className="absolute top-2 left-2 w-5 h-5 rounded bg-av-accent-blue flex items-center justify-center">
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="white">
-              <path d="M2 5l2 2 4-4" stroke="white" strokeWidth="1.5" fill="none" />
-            </svg>
-          </div>
-        )}
-
-        {/* Hover overlay - actions */}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-150 flex items-end justify-between p-2 opacity-0 group-hover:opacity-100">
-          <span className="text-[10px] text-white font-medium truncate max-w-[70%]">
-            {asset.filename}
-          </span>
-          <span className="text-[10px] text-white/80">{formatFileSize(asset.fileSize)}</span>
-        </div>
-      </div>
     </div>
   )
 }
@@ -980,86 +826,6 @@ function FolderBrowseCard({
   )
 }
 
-// File type placeholder when no thumbnail available
-function FilePlaceholder({ fileType, color }: { fileType: string; color?: string | null }) {
-  const config: Record<string, { icon: JSX.Element; bgClass: string }> = {
-    image: {
-      icon: (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <circle cx="9" cy="9" r="2" />
-          <path d="M21 15l-3.086-3.086a2 2 0 00-2.828 0L6 21" />
-        </svg>
-      ),
-      bgClass: 'bg-gradient-to-br from-green-900/30 to-emerald-800/20'
-    },
-    video: {
-      icon: (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-          <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" />
-        </svg>
-      ),
-      bgClass: 'bg-gradient-to-br from-purple-900/30 to-violet-800/20'
-    },
-    audio: {
-      icon: (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-          <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
-        </svg>
-      ),
-      bgClass: 'bg-gradient-to-br from-pink-900/30 to-rose-800/20'
-    },
-    font: {
-      icon: (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-          <polyline points="4 7 4 4 20 4 20 7" /><line x1="9" y1="20" x2="15" y2="20" /><line x1="12" y1="4" x2="12" y2="20" />
-        </svg>
-      ),
-      bgClass: 'bg-gradient-to-br from-orange-900/30 to-amber-800/20'
-    },
-    document: {
-      icon: (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" />
-        </svg>
-      ),
-      bgClass: 'bg-gradient-to-br from-blue-900/30 to-cyan-800/20'
-    },
-    design: {
-      icon: (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-          <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
-          <circle cx="12" cy="19" r="2" />
-        </svg>
-      ),
-      bgClass: 'bg-gradient-to-br from-fuchsia-900/30 to-pink-800/20'
-    },
-    '3d': {
-      icon: (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-        </svg>
-      ),
-      bgClass: 'bg-gradient-to-br from-slate-700/40 to-slate-900/40'
-    },
-    code: {
-      icon: (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-          <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
-        </svg>
-      ),
-      bgClass: 'bg-gradient-to-br from-emerald-900/30 to-teal-800/20'
-    }
-  }
-
-  const cfg = config[fileType] || config.document
-  return (
-    <div className={`w-full h-full flex items-center justify-center ${cfg.bgClass}`}>
-      <span className="text-av-text-muted">{cfg.icon}</span>
-    </div>
-  )
-}
-
 // Asset list item for list view
 function AssetListItem({
   asset,
@@ -1102,7 +868,12 @@ function AssetListItem({
             />
           </div>
         ) : (
-          <FilePlaceholder fileType={asset.fileType} color={asset.dominantColor} />
+          <FileTypePlaceholder
+            fileType={asset.fileType}
+            extension={asset.extension}
+            color={asset.dominantColor}
+            size="sm"
+          />
         )}
       </div>
 

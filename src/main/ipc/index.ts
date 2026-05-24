@@ -7,6 +7,7 @@ import { handleLibraryOperations } from './handlers/library'
 import { handleAiCanvasOperations } from './handlers/aiCanvas'
 import { handleWindowOperations } from './handlers/window'
 import { handleFontOperations } from './handlers/fonts'
+import { handleSettingsOperations } from './handlers/settings'
 
 export function registerIpcHandlers(ipc: typeof ipcMain): void {
   // Window controls
@@ -43,6 +44,7 @@ export function registerIpcHandlers(ipc: typeof ipcMain): void {
   handleAiCanvasOperations(ipc)
   handleWindowOperations(ipc)
   handleFontOperations(ipc)
+  handleSettingsOperations(ipc)
 
   console.log('[IPC] All handlers registered successfully')
 }

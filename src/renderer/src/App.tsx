@@ -3,22 +3,13 @@ import { ConfigProvider } from '@arco-design/web-react'
 import Layout from './components/Layout/MainLayout'
 import AiCanvasApp from './AiCanvasApp'
 import { AppProvider, useApp } from './stores/AppContext'
+import { FormatIconOverridesProvider } from './stores/FormatIconOverridesContext'
+import { ThemeProvider, useAppTheme } from './stores/ThemeContext'
 import { ToastProvider } from './components/Common/Toast'
 import DuplicateImportBridge from './components/Import/DuplicateImportBridge'
 import DropZone from './components/Common/DropZone'
 import SettingsPage from './components/Settings/SettingsPage'
 import { useGlobalHotkeys } from './hooks/useHotkeys'
-
-const arcoTheme = {
-  colorPrimary: '#3B82F6',
-  colorBgLayout: '#0F1117',
-  colorBgContainer: '#161822',
-  colorBgElevated: '#252837',
-  colorText: '#F1F5F9',
-  colorTextSecondary: '#94A3B8',
-  colorBorder: '#2D3044',
-  borderRadiusMedium: '6px'
-}
 
 export function isAiCanvasWindowLocation(): boolean {
   const h = window.location.hash.replace(/^#\/?/, '')
@@ -53,19 +44,28 @@ const MainApp: React.FC = () => {
   )
 }
 
-const App: React.FC = () => {
+const ThemedShell: React.FC = () => {
+  const { arcoTheme } = useAppTheme()
   const canvasWindow = isAiCanvasWindowLocation()
 
   return (
     <ConfigProvider theme={arcoTheme}>
       <AppProvider>
-        <ToastProvider>
-          <DuplicateImportBridge />
-          {canvasWindow ? <AiCanvasApp /> : <MainApp />}
-        </ToastProvider>
+        <FormatIconOverridesProvider>
+          <ToastProvider>
+            <DuplicateImportBridge />
+            {canvasWindow ? <AiCanvasApp /> : <MainApp />}
+          </ToastProvider>
+        </FormatIconOverridesProvider>
       </AppProvider>
     </ConfigProvider>
   )
 }
+
+const App: React.FC = () => (
+  <ThemeProvider>
+    <ThemedShell />
+  </ThemeProvider>
+)
 
 export default App

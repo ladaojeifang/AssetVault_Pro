@@ -1,4 +1,3 @@
-import { BrowserWindow } from 'electron'
 import { eq } from 'drizzle-orm'
 import { existsSync } from 'fs'
 import { db, persistDatabase } from '../db'
@@ -11,23 +10,14 @@ import type { ModelRegenerateFailure, ModelRegenerateResult } from '@/shared/mod
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
 import { isCustomThumbnail } from './customThumbnail'
 import { waitForModelSnapshotBridge } from './modelThumbnailRenderer'
+import { notifyAllWindowsAssetsImported } from './importNotify'
+
+export { notifyAllWindowsAssetsImported }
 
 type Database = NonNullable<typeof db>
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
-}
-
-export function notifyAllWindowsAssetsImported(): void {
-  for (const w of BrowserWindow.getAllWindows()) {
-    if (!w.isDestroyed()) {
-      try {
-        w.webContents.send('assets:imported')
-      } catch {
-        /* ignore */
-      }
-    }
-  }
 }
 
 /** Generate 3D thumb after import; updates DB + meta.json when done. */

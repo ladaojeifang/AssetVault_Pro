@@ -4,6 +4,9 @@ import App from './App'
 import './modelSnapshotBridge'
 import '@arco-design/web-react/dist/css/arco.css'
 import './styles/globals.css'
+import { applyAppTheme, loadStoredAppTheme } from './theme/applyAppTheme'
+
+applyAppTheme(loadStoredAppTheme())
 
 // 已知 Electron/Chromium DevTools 内部 bug：拖放或切换 DevTools 标签时会误报 dragEvent，与业务无关
 function isBenignChromiumDragNoise(message: string | undefined): boolean {

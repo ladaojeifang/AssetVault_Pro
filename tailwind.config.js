@@ -5,24 +5,23 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Design Token - Dark Theme
-        'av-bg-primary': '#0F1117',
-        'av-bg-secondary': '#161822',
-        'av-bg-tertiary': '#1E2030',
-        'av-bg-elevated': '#252837',
-        'av-bg-hover': '#2D3044',
-        'av-bg-active': '#35384D',
-        'av-text-primary': '#F1F5F9',
-        'av-text-secondary': '#94A3B8',
-        'av-text-muted': '#64748B',
-        'av-accent-blue': '#3B82F6',
-        'av-accent-blue-hover': '#2563EB',
+        'av-bg-primary': 'var(--av-bg-primary)',
+        'av-bg-secondary': 'var(--av-bg-secondary)',
+        'av-bg-tertiary': 'var(--av-bg-tertiary)',
+        'av-bg-elevated': 'var(--av-bg-elevated)',
+        'av-bg-hover': 'var(--av-bg-hover)',
+        'av-bg-active': 'var(--av-bg-active)',
+        'av-text-primary': 'var(--av-text-primary)',
+        'av-text-secondary': 'var(--av-text-secondary)',
+        'av-text-muted': 'var(--av-text-muted)',
+        'av-accent-blue': 'var(--av-accent-blue)',
+        'av-accent-blue-hover': 'var(--av-accent-blue-hover)',
         'av-accent-purple': '#8B5CF6',
         'av-accent-green': '#10B981',
         'av-accent-orange': '#F59E0B',
         'av-accent-red': '#EF4444',
-        'av-border': '#2D3044',
-        'av-border-light': '#3D4056'
+        'av-border': 'var(--av-border)',
+        'av-border-light': 'var(--av-border-light)'
       },
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],

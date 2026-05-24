@@ -11,7 +11,6 @@ import {
   type FolderContextMenuState
 } from './FolderContextMenu'
 import { addDraggedAssetsToFolder } from '../../utils/addAssetsToFolder'
-import { FontFamiliesSidebar } from './FontFamiliesSidebar'
 
 /** Parent folder at this level cannot have children (must match `MAX_FOLDER_LEVEL` in main `folders.ts`). */
 const FOLDER_MAX_PARENT_LEVEL_FOR_CHILD = 4
@@ -489,9 +488,6 @@ const Sidebar: React.FC = () => {
             onFolderContextMenu={openFolderContextMenu}
           />
         </div>
-        <p className="text-[10px] text-av-text-muted/90 px-0.5 mt-1 leading-relaxed">
-          顶层可有多个并列文件夹，各自含子文件夹；点选文件夹仅看该目录下素材。全部资产查看库内所有文件。Alt+拖到文件夹可加入分类。
-        </p>
         <button
           type="button"
           onClick={openCreateFolderModal}
@@ -698,8 +694,6 @@ const Sidebar: React.FC = () => {
           )}
         </div>
       </SidebarSection>
-
-      <FontFamiliesSidebar />
 
       {/* File Types Section */}
       <SidebarSection title="Types">

@@ -123,7 +123,7 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: () => voi
   return (
     <div
       role="status"
-      className={`pointer-events-auto relative flex items-start gap-3 pl-4 pr-3 py-3.5 rounded-xl min-w-[300px] max-w-[420px] overflow-hidden border border-av-border/90 bg-[#1a1d2e]/96 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.06] transition-all duration-300 ease-out ${
+      className={`pointer-events-auto relative flex items-start gap-3 pl-4 pr-3 py-3.5 rounded-xl min-w-[300px] max-w-[420px] overflow-hidden border border-av-border bg-av-bg-elevated/95 backdrop-blur-xl shadow-lg ring-1 ring-av-border-light/50 transition-all duration-300 ease-out ${
         visible ? 'opacity-100 translate-x-0 scale-100' : 'opacity-0 translate-x-3 scale-[0.98]'
       }`}
     >

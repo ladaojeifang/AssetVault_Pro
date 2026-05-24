@@ -17,7 +17,8 @@ const LibraryPane: React.FC = () => {
     modelPreviewAssetId,
     refreshFolders,
     refreshAssets,
-    isImporting
+    isImporting,
+    importProgress
   } = useApp()
 
   useEffect(() => {
@@ -29,7 +30,7 @@ const LibraryPane: React.FC = () => {
     return (
       <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-av-bg-primary">
         <FontPreviewPage assetId={fontPreviewAssetId} />
-        <StatusBar isImporting={isImporting} />
+        <StatusBar isImporting={isImporting} importProgress={importProgress} />
       </div>
     )
   }
@@ -38,7 +39,7 @@ const LibraryPane: React.FC = () => {
     return (
       <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-av-bg-primary">
         <ModelPreviewPage assetId={modelPreviewAssetId} />
-        <StatusBar isImporting={isImporting} />
+        <StatusBar isImporting={isImporting} importProgress={importProgress} />
       </div>
     )
   }
@@ -61,7 +62,7 @@ const LibraryPane: React.FC = () => {
           </div>
         )}
       </div>
-      <StatusBar isImporting={isImporting} />
+      <StatusBar isImporting={isImporting} importProgress={importProgress} />
     </div>
   )
 }

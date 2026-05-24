@@ -29,6 +29,7 @@ import {
   setCustomThumbnailFromFile,
   isCustomThumbnail
 } from '../../services/assetThumbnailOverride'
+import { notifyAllWindowsAssetsImported } from '../../services/importNotify'
 
 registerDuplicateImportPromptHandlers()
 
@@ -261,6 +262,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
           } catch (e) {
             console.warn('[Import] watch:', e)
           }
+          notifyAllWindowsAssetsImported()
         }
 
         progressData.status = 'done'
@@ -278,9 +280,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     }
 
     await flushDatabase()
-    for (const w of BrowserWindow.getAllWindows()) {
-      if (!w.isDestroyed()) w.webContents.send('assets:imported')
-    }
+    notifyAllWindowsAssetsImported()
     return results
   })
 
@@ -332,6 +332,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
           } catch (e) {
             console.warn('[Import] watch:', e)
           }
+          notifyAllWindowsAssetsImported()
         }
 
         win.webContents.send('import:progress', {
@@ -346,6 +347,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     }
 
     await flushDatabase()
+    notifyAllWindowsAssetsImported()
     return imported
   })
 

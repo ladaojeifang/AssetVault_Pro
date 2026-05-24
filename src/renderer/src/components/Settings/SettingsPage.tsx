@@ -1,6 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Modal } from '@arco-design/web-react'
 import { LibrarySettingsPanel } from './LibrarySettingsPanel'
+import { FormatIconOverridesSection } from './FormatIconOverridesSection'
+import {
+  loadMasonryColumnWidth,
+  saveMasonryColumnWidth,
+  MASONRY_COLUMN_WIDTH_DEFAULT
+} from '../../utils/masonryLayout'
+import { useAppTheme } from '../../stores/ThemeContext'
+import type { AppTheme } from '@/shared/appTheme'
+
+const GRID_SIZE_COLUMN_WIDTH: Record<string, number> = {
+  small: 120,
+  medium: MASONRY_COLUMN_WIDTH_DEFAULT,
+  large: 280
+}
 
 /**
  * Settings / Preferences Page
@@ -174,6 +188,8 @@ function GeneralSettings({
           <option value={512}>512px (HD)</option>
         </select>
       </SettingField>
+
+      <FormatIconOverridesSection />
     </div>
   )
 }
@@ -185,39 +201,39 @@ function AppearanceSettings({
   settings: Record<string, unknown>
   onUpdate: (key: string, value: unknown) => void
 }) {
+  const { theme, setTheme } = useAppTheme()
+
   return (
     <div className="space-y-6">
-      <h3 className="text-base font-semibold mb-4">Appearance</h3>
+      <h3 className="text-base font-semibold mb-4">外观</h3>
 
-      <SettingField label="Theme" description="UI color scheme">
+      <SettingField label="软件主题" description="切换界面配色（立即生效并自动保存）">
         <select
-          value={settings.theme as string}
-          onChange={(e) => onUpdate('theme', e.target.value)}
-          className="input-base w-auto"
+          value={theme}
+          onChange={(e) => {
+            const next = e.target.value as AppTheme
+            void setTheme(next)
+            onUpdate('theme', next)
+          }}
+          className="input-base w-auto min-w-[200px]"
         >
-          <option value="dark">Dark (Default)</option>
-          <option value="light">Light</option>
+          <option value="dark">深色（默认）</option>
+          <option value="light">浅色</option>
         </select>
       </SettingField>
 
-      <SettingField label="Grid Columns" description={`Number of columns in grid view. Currently: ${settings.gridColumns}`}>
-        <select
-          value={settings.gridColumns as number}
-          onChange={(e) => onUpdate('gridColumns', Number(e.target.value))}
-          className="input-base w-auto"
-        >
-          {[4, 6, 8, 10, 12].map((n) => (
-            <option key={n} value={n}>{n} columns</option>
-          ))}
-        </select>
-      </SettingField>
-
-      <SettingField label="Grid Item Size" description="Asset card size in grid view">
+      <SettingField
+        label="瀑布流缩略图"
+        description={`Ctrl/⌘+滚轮可微调。当前列宽约 ${loadMasonryColumnWidth()}px（列数随窗口宽度变化）`}
+      >
         <div className="flex gap-2">
           {(['small', 'medium', 'large'] as const).map((size) => (
             <button
               key={size}
-              onClick={() => onUpdate('gridSize', size)}
+              onClick={() => {
+                onUpdate('gridSize', size)
+                saveMasonryColumnWidth(GRID_SIZE_COLUMN_WIDTH[size] ?? MASONRY_COLUMN_WIDTH_DEFAULT)
+              }}
               className={`px-3 py-1.5 rounded-md text-xs capitalize transition-colors ${
                 settings.gridSize === size
                   ? 'bg-av-accent-blue text-white'

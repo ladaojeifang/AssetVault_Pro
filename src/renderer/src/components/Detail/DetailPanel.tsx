@@ -11,6 +11,7 @@ import { ColorPaletteStrip, parseAssetPaletteColors } from '../Common/ColorPalet
 import DetailContextPanel from './DetailContextPanel'
 import { ModelViewer } from '../Preview/ModelViewer'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import { FileTypePlaceholder } from '../Common/FileTypePlaceholder'
 
 const DetailPanel: React.FC = () => {
   const { selectedAssetIds, assets, tags, folderTree, clearSelection, refreshAssets, refreshFolders, setDetailPanelOpen, refreshTags, openFontPreview, openModelPreview } = useApp()
@@ -535,60 +536,14 @@ function DetailPreview({ asset }: { asset: any }) {
 
   return (
     <div className="w-full h-full flex items-center justify-center">
-      <FilePlaceholder fileType={asset.fileType} color={asset.dominantColor} />
+      <FileTypePlaceholder
+        fileType={asset.fileType}
+        extension={asset.extension}
+        color={asset.dominantColor}
+        size="lg"
+      />
     </div>
   )
-}
-
-// Reuse FilePlaceholder from AssetGrid
-// We'll need to extract this to a shared component or duplicate it here
-function FilePlaceholder({ fileType, color }: { fileType: string; color?: string | null }) {
-  const config: Record<string, JSX.Element> = {
-    image: (
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-av-text-muted">
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <circle cx="9" cy="9" r="2" />
-        <path d="M21 15l-3.086-3.086a2 2 0 00-2.828 0L6 21" />
-      </svg>
-    ),
-    video: (
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-av-text-muted">
-        <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" />
-      </svg>
-    ),
-    audio: (
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-av-text-muted">
-        <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
-      </svg>
-    ),
-    font: (
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-av-text-muted">
-        <polyline points="4 7 4 4 20 4 20 7" /><line x1="9" y1="20" x2="15" y2="20" /><line x1="12" y1="4" x2="12" y2="20" />
-      </svg>
-    ),
-    document: (
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-av-text-muted">
-        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" />
-      </svg>
-    ),
-    design: (
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-av-text-muted">
-        <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" />
-        <circle cx="12" cy="19" r="2" />
-      </svg>
-    ),
-    '3d': (
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-av-text-muted">
-        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-      </svg>
-    ),
-    code: (
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-av-text-muted">
-        <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
-      </svg>
-    )
-  }
-  return <div>{config[fileType] || config.document}</div>
 }
 
 // Info section helper components

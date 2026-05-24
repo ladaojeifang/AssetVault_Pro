@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../../stores/AppContext'
 import { findFolderInTree, getChildFolders } from '../../utils/folderTreeNav'
 import { FolderIconDisplay } from '../Common/FolderIconDisplay'
+import { FontFamilyContextView, FontTypeContextView } from './FontDetailContext'
 
 const FILE_TYPE_META: Record<string, { label: string; emoji: string; desc: string }> = {
   image: { label: 'Images', emoji: '🖼️', desc: '图片与照片类素材' },
@@ -304,10 +305,16 @@ function LibraryContextView({ onClose }: { onClose: () => void }) {
 }
 
 const DetailContextPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { currentFolderId, fileTypeFilter } = useApp()
+  const { currentFolderId, fileTypeFilter, selectedFontFamilyKey } = useApp()
 
   if (currentFolderId) {
     return <FolderContextView onClose={onClose} />
+  }
+  if (fileTypeFilter === 'font') {
+    if (selectedFontFamilyKey) {
+      return <FontFamilyContextView familyKey={selectedFontFamilyKey} onClose={onClose} />
+    }
+    return <FontTypeContextView onClose={onClose} />
   }
   if (fileTypeFilter) {
     return <TypeContextView onClose={onClose} />

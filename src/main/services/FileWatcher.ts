@@ -5,6 +5,7 @@ import { db, persistDatabase } from '../db'
 import { assets } from '../db/schema'
 import { eq } from 'drizzle-orm'
 import { importSingleAsset } from './importSingleAsset'
+import { notifyAllWindowsAssetsImported } from './importNotify'
 import { toCanonicalFilePath } from '../utils/pathUtils'
 import { resolveLibraryPath, removeItemPack } from './libraryBundle'
 
@@ -111,6 +112,7 @@ export class FileWatcher {
         console.log(`[FileWatcher] Auto-importing: ${basename(canonical)}`)
         await importSingleAsset(canonical)
         persistDatabase()
+        notifyAllWindowsAssetsImported()
       } catch (error) {
         console.error(`[FileWatcher] Error handling add for ${filePath}:`, error)
       }

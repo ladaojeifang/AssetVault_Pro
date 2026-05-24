@@ -16,7 +16,7 @@ import { syncAssetSidecarFromDb } from './assetSidecar'
 import { getEffectiveThumbSampleText } from './fontSettingsStore'
 import { parseFontFile } from './fontMetadata'
 import { FONT_THUMB_CANVAS_SIZE } from '../utils/fontPreviewRender'
-import { notifyAllWindowsAssetsImported } from './regenerateModelThumbnails'
+import { notifyAllWindowsAssetsImported } from './importNotify'
 
 type Database = NonNullable<typeof db>
 

@@ -4,8 +4,37 @@
 
 /* ============================================
    AssetVault Pro - Global Styles
-   Dark Theme Design System
+   Theme tokens: dark (default) + light
    ============================================ */
+
+/* Token values live in `src/shared/appTheme.ts` (THEME_TOKENS).
+   `applyAppTheme()` sets --av-* on <html> at runtime; :root below is FOUC fallback (dark). */
+:root {
+  --av-bg-primary: #0f1117;
+  --av-bg-secondary: #161822;
+  --av-bg-tertiary: #1e2030;
+  --av-bg-elevated: #252837;
+  --av-bg-hover: #2d3044;
+  --av-bg-active: #35384d;
+  --av-text-primary: #f1f5f9;
+  --av-text-secondary: #94a3b8;
+  --av-text-muted: #64748b;
+  --av-accent-blue: #3b82f6;
+  --av-accent-blue-hover: #2563eb;
+  --av-border: #151820;
+  --av-border-light: #232635;
+  --av-scrollbar-thumb: #2d3044;
+  --av-scrollbar-thumb-hover: #4d5068;
+  --av-selection-bg: rgba(59, 130, 246, 0.3);
+  --av-selection-text: #f1f5f9;
+  --av-shadow-modal: rgba(0, 0, 0, 0.45);
+  --av-arco-bg-1: #0f1117;
+  --av-arco-bg-2: #161822;
+  --av-arco-bg-3: #1e2030;
+  --av-arco-modal-bg: #161822;
+  --av-arco-input-bg: #1e2030;
+  --av-arco-message-bg: #1a1d2e;
+}
 
 @layer base {
   /* Reset & Base */
@@ -22,8 +51,8 @@
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 14px;
     line-height: 1.5;
-    color: #F1F5F9;
-    background-color: #0F1117;
+    color: var(--av-text-primary);
+    background-color: var(--av-bg-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -39,18 +68,18 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #3D4056;
+    background: var(--av-scrollbar-thumb);
     border-radius: 3px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #4D5068;
+    background: var(--av-scrollbar-thumb-hover);
   }
 
   /* Selection */
   ::selection {
-    background: rgba(59, 130, 246, 0.3);
-    color: #F1F5F9;
+    background: var(--av-selection-bg);
+    color: var(--av-selection-text);
   }
 }
 
@@ -149,46 +178,48 @@
    ============================================ */
 
 .arco-theme-dark,
+.arco-theme-light,
 body {
-  --color-bg-1: #0F1117 !important;
-  --color-bg-2: #161822 !important;
-  --color-bg-3: #1E2030 !important;
-  --color-border: #2D3044 !important;
-  --color-text-1: #F1F5F9 !important;
-  --color-text-2: #94A3B8 !important;
-  --color-text-3: #64748B !important;
-  --color-text-4: #475569 !important;
-  --color-primary-6: #3B82F6 !important;
+  --color-bg-1: var(--av-arco-bg-1) !important;
+  --color-bg-2: var(--av-arco-bg-2) !important;
+  --color-bg-3: var(--av-arco-bg-3) !important;
+  --color-border: var(--av-border) !important;
+  --color-text-1: var(--av-text-primary) !important;
+  --color-text-2: var(--av-text-secondary) !important;
+  --color-text-3: var(--av-text-muted) !important;
+  --color-text-4: var(--av-text-muted) !important;
+  --color-primary-6: var(--av-accent-blue) !important;
 }
 
 /* Arco component overrides */
 .arco-btn-primary {
-  background-color: #3B82F6 !important;
-  border-color: #3B82F6 !important;
+  background-color: var(--av-accent-blue) !important;
+  border-color: var(--av-accent-blue) !important;
 }
 .arco-btn-primary:hover {
-  background-color: #2563EB !important;
-  border-color: #2563EB !important;
+  background-color: var(--av-accent-blue-hover) !important;
+  border-color: var(--av-accent-blue-hover) !important;
 }
 
 .arco-input-wrapper,
 .arco-select-view-single {
-  background-color: #1E2030 !important;
-  border-color: #2D3044 !important;
+  background-color: var(--av-arco-input-bg) !important;
+  border-color: var(--av-border) !important;
+  color: var(--av-text-primary) !important;
 }
 .arco-input-wrapper:focus-within,
 .arco-select-view-single:focus,
 .arco-select-view-single:hover {
-  border-color: #3B82F6 !important;
+  border-color: var(--av-accent-blue) !important;
 }
 
 .arco-modal-wrapper .arco-modal {
-  background-color: #161822 !important;
-  border: 1px solid #2D3044 !important;
+  background-color: var(--av-arco-modal-bg) !important;
+  border: 1px solid var(--av-border) !important;
 }
 
 .arco-table {
-  --color-bg-container: #161822 !important;
+  --color-bg-container: var(--av-arco-bg-2) !important;
 }
 
 .arco-menu-dark {
@@ -197,36 +228,36 @@ body {
 
 /* Fallback if Arco Message is used elsewhere */
 .arco-message-wrapper .arco-message {
-  background: #1a1d2e !important;
-  border: 1px solid #2d3044 !important;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45) !important;
-  color: #f1f5f9 !important;
+  background: var(--av-arco-message-bg) !important;
+  border: 1px solid var(--av-border) !important;
+  box-shadow: 0 12px 40px var(--av-shadow-modal) !important;
+  color: var(--av-text-primary) !important;
 }
 .arco-message-wrapper .arco-message-content {
-  color: #f1f5f9 !important;
+  color: var(--av-text-primary) !important;
 }
 
-/* AI canvas (React Flow) dark theme */
+/* AI canvas (React Flow) */
 .ai-canvas-flow .react-flow {
-  background: #0f1117;
+  background: var(--av-bg-primary);
 }
 .ai-canvas-flow .react-flow__node {
   font-family: inherit;
 }
 .ai-canvas-flow .react-flow__controls button {
-  background: #252837;
-  border-color: #2d3044;
-  color: #94a3b8;
+  background: var(--av-bg-elevated);
+  border-color: var(--av-border);
+  color: var(--av-text-secondary);
 }
 .ai-canvas-flow .react-flow__controls button:hover {
-  background: #2d3044;
-  color: #f1f5f9;
+  background: var(--av-bg-hover);
+  color: var(--av-text-primary);
 }
 .ai-canvas-flow .react-flow__minimap {
-  background: #161822;
+  background: var(--av-bg-secondary);
 }
 .ai-canvas-flow .react-flow__edge-path {
-  stroke: #64748b;
+  stroke: var(--av-text-muted);
 }
 
 /* 资源库 + AI 画布并排 */
