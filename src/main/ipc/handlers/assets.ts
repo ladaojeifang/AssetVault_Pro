@@ -2,8 +2,8 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { existsSync, statSync, readdirSync, readFileSync } from 'fs'
 import { join, basename, extname, dirname } from 'path'
 import { db, flushDatabase, persistDatabase, getDatabase } from '../../db'
-import { assets, assetTags, assetFolders, assetsSearch } from '../../db/schema'
-import { eq, and, like, inArray, desc, asc, sql, count, type SQL } from 'drizzle-orm'
+import { assets, assetTags, assetFolders } from '../../db/schema'
+import { eq, and, desc, asc, sql, count, type SQL } from 'drizzle-orm'
 import type { AssetItem, QueryParams, QueryResult, ImportProgress } from '@/shared/types'
 import type { DuplicatePolicy, ImportAssetOptions } from '@/shared/importTypes'
 import { importSingleAsset, type ImportSingleAssetOptions } from '../../services/importSingleAsset'
@@ -15,6 +15,13 @@ import { ALL_SUPPORTED_IMPORT_EXTENSIONS } from '@/shared/supportedFormats'
 import { resolveLibraryPath, removeItemPack, itemThumbRelative } from '../../services/libraryBundle'
 import { syncAssetSidecarFromDb } from '../../services/assetSidecar'
 import { analyzeColorsFromFile } from '../../services/analyzeAssetColors'
+import { buildSearchCondition, tokenizeSearchQuery } from '../../services/assetSearch'
+import {
+  buildColorBucketCondition,
+  buildDatePresetCondition,
+  buildSizePresetCondition
+} from '../../services/assetQueryFilters'
+import { persistAssetColorAnalysis } from '../../services/persistAssetColors'
 import { bufferToImageDataUrl, shouldUseOriginalImageDimensions } from '../../utils/thumbnailSizing'
 import { renameAsset } from '../../services/renameAsset'
 import { copyAssetsToOtherLibrary } from '../../services/copyAssetsToOtherLibrary'
@@ -64,10 +71,6 @@ function createImportSession(win: BrowserWindow | undefined) {
   return { buildSingleImportOptions }
 }
 
-function escapeSqlLikePattern(raw: string): string {
-  return raw.replace(/%/g, ' ').replace(/_/g, ' ')
-}
-
 async function getAssetTags(database: ReturnType<typeof getDatabase>, assetId: string): Promise<string[]> {
   const results = await database
     .select({ tagId: assetTags.tagId })
@@ -109,19 +112,20 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
     const conditions: SQL[] = []
 
-    if (params.search?.trim()) {
-      const searchTerm = `%${escapeSqlLikePattern(params.search.trim())}%`
-      const searchResults = await database
-        .select({ assetId: assetsSearch.assetId })
-        .from(assetsSearch)
-        .where(like(assetsSearch.searchText, searchTerm))
-        .all()
+    const searchTokens = tokenizeSearchQuery(params.search ?? '')
+    const searchCond = buildSearchCondition(searchTokens)
+    if (searchCond) conditions.push(searchCond)
 
-      if (searchResults.length > 0) {
-        conditions.push(inArray(assets.id, searchResults.map((r) => r.assetId)))
-      } else {
-        return { items: [], total: 0, page: 1, pageSize, totalPages: 0 }
-      }
+    if (params.colorBucket) {
+      conditions.push(buildColorBucketCondition(params.colorBucket))
+    }
+
+    if (params.sizePreset) {
+      conditions.push(buildSizePresetCondition(params.sizePreset))
+    }
+
+    if (params.datePreset) {
+      conditions.push(buildDatePresetCondition(params.datePreset))
     }
 
     if (params.folderId) {
@@ -445,19 +449,12 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     let updated = 0
     for (const id of ids) {
       const asset = await database.select().from(assets).where(eq(assets.id, id)).get()
-      if (!asset || (asset.fileType !== 'image' && asset.fileType !== 'video')) continue
+      if (!asset) continue
       const absFile = resolveLibraryPath(asset.filePath)
-      const result = await analyzeColorsFromFile(absFile, asset.fileType)
+      const absThumb = asset.thumbnailPath ? resolveLibraryPath(asset.thumbnailPath) : null
+      const result = await analyzeColorsFromFile(absFile, asset.fileType, absThumb ?? undefined)
       if (!result) continue
-      await database
-        .update(assets)
-        .set({
-          dominantColor: result.dominantColor,
-          colors: result.colorsJson,
-          updatedAt: new Date()
-        })
-        .where(eq(assets.id, id))
-      await syncAssetSidecarFromDb(database, id)
+      await persistAssetColorAnalysis(database, id, result)
       updated++
     }
     if (updated > 0) persistDatabase()
@@ -475,19 +472,11 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     if (asset.fileType !== 'image' && asset.fileType !== 'video') return null
 
     const absFile = resolveLibraryPath(asset.filePath)
-    const result = await analyzeColorsFromFile(absFile, asset.fileType)
+    const absThumb = asset.thumbnailPath ? resolveLibraryPath(asset.thumbnailPath) : null
+    const result = await analyzeColorsFromFile(absFile, asset.fileType, absThumb ?? undefined)
     if (!result) return null
 
-    await database
-      .update(assets)
-      .set({
-        dominantColor: result.dominantColor,
-        colors: result.colorsJson,
-        updatedAt: new Date()
-      })
-      .where(eq(assets.id, id))
-    persistDatabase()
-    await syncAssetSidecarFromDb(database, id)
+    await persistAssetColorAnalysis(database, id, result)
 
     return { dominantColor: result.dominantColor, colors: result.colors }
   })

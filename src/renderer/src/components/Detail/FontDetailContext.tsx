@@ -150,7 +150,10 @@ function FontFamilyList({
 export function FontTypeContextView({ onClose }: { onClose: () => void }) {
   const {
     totalAssets,
-    searchQuery,
+    debouncedSearch,
+    colorBucketFilter,
+    sizePresetFilter,
+    datePresetFilter,
     tagFilters,
     selectedFontFamilyKey,
     setSelectedFontFamilyKey,
@@ -171,7 +174,10 @@ export function FontTypeContextView({ onClose }: { onClose: () => void }) {
   const extMap = useMemo(() => extensionCounts(groups), [groups])
 
   const filters: string[] = []
-  if (searchQuery.trim()) filters.push(`搜索「${searchQuery.trim()}」`)
+  if (debouncedSearch.trim()) filters.push(`搜索「${debouncedSearch.trim()}」`)
+  if (colorBucketFilter) filters.push(`颜色 ${colorBucketFilter}`)
+  if (sizePresetFilter) filters.push(`尺寸 ${sizePresetFilter}`)
+  if (datePresetFilter) filters.push(`日期 ${datePresetFilter}`)
   if (tagFilters.length > 0) filters.push(`${tagFilters.length} 个标签`)
 
   const sampleLines = (fontSettings?.thumbSampleText ?? 'VibeShotClub\nAIGC创作').split('\n')

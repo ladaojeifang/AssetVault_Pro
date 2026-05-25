@@ -168,7 +168,15 @@ function FolderContextView({ onClose }: { onClose: () => void }) {
 }
 
 function TypeContextView({ onClose }: { onClose: () => void }) {
-  const { fileTypeFilter, totalAssets, searchQuery, tagFilters } = useApp()
+  const {
+    fileTypeFilter,
+    totalAssets,
+    debouncedSearch,
+    tagFilters,
+    colorBucketFilter,
+    sizePresetFilter,
+    datePresetFilter
+  } = useApp()
   const meta = fileTypeFilter ? FILE_TYPE_META[fileTypeFilter] : null
 
   if (!meta || !fileTypeFilter) {
@@ -176,7 +184,10 @@ function TypeContextView({ onClose }: { onClose: () => void }) {
   }
 
   const filters: string[] = []
-  if (searchQuery.trim()) filters.push(`搜索「${searchQuery.trim()}」`)
+  if (debouncedSearch.trim()) filters.push(`搜索「${debouncedSearch.trim()}」`)
+  if (colorBucketFilter) filters.push(`颜色 ${colorBucketFilter}`)
+  if (sizePresetFilter) filters.push(`尺寸 ${sizePresetFilter}`)
+  if (datePresetFilter) filters.push(`日期 ${datePresetFilter}`)
   if (tagFilters.length > 0) filters.push(`${tagFilters.length} 个标签筛选`)
 
   return (

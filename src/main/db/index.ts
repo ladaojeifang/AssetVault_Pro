@@ -6,6 +6,7 @@ import { randomBytes } from 'node:crypto'
 import { app } from 'electron'
 import * as schema from './schema'
 import { createInitialSchemaOnSqlite } from './sqliteSchema'
+import { backfillColorBuckets } from '../services/backfillColorBuckets'
 
 let db: ReturnType<typeof drizzle> | null = null
 let SQLjsDb: initSqlJs.Database | null = null
@@ -198,6 +199,7 @@ export async function initDatabase(dbPath: string): Promise<void> {
 
   // Run schema creation (idempotent — all CREATE IF NOT EXISTS)
   createInitialSchemaOnSqlite(SQLjsDb)
+  await backfillColorBuckets()
 
   // Save initial state to disk if this is a fresh DB
   if (isFreshDb) {

@@ -89,6 +89,12 @@ export function createInitialSchemaOnSqlite(sqlite: initSqlJs.Database): void {
   }
 
   try {
+    sqlite.run('ALTER TABLE assets ADD COLUMN color_bucket TEXT')
+  } catch {
+    /* column already exists */
+  }
+
+  try {
     sqlite.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_import_source ON assets(import_source)')
   } catch {
     /* ignore */
@@ -150,6 +156,8 @@ export function createInitialSchemaOnSqlite(sqlite: initSqlJs.Database): void {
   sqlite.run(`CREATE INDEX IF NOT EXISTS idx_assets_file_type ON assets(file_type);`)
   sqlite.run(`CREATE INDEX IF NOT EXISTS idx_assets_imported_at ON assets(imported_at DESC);`)
   sqlite.run(`CREATE INDEX IF NOT EXISTS idx_assets_dominant_color ON assets(dominant_color);`)
+  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_assets_color_bucket ON assets(color_bucket);`)
+  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_assets_file_size ON assets(file_size);`)
   sqlite.run(`CREATE INDEX IF NOT EXISTS idx_folders_parent_id ON folders(parent_id);`)
   sqlite.run(`CREATE INDEX IF NOT EXISTS idx_asset_tags_tag_id ON asset_tags(tag_id);`)
   sqlite.run(`CREATE INDEX IF NOT EXISTS idx_asset_tags_asset_id ON asset_tags(asset_id);`)

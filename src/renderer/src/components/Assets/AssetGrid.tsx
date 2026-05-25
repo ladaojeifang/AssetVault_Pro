@@ -33,7 +33,10 @@ const AssetGrid: React.FC = () => {
     loadMoreAssets,
     tagFilters,
     fileTypeFilter,
-    searchQuery,
+    debouncedSearch,
+    colorBucketFilter,
+    sizePresetFilter,
+    datePresetFilter,
     currentFolderId,
     refreshAssets,
     refreshFolders,
@@ -47,7 +50,7 @@ const AssetGrid: React.FC = () => {
   /** Index in current `assets` for Shift+click range selection */
   const anchorIndexRef = useRef<number | null>(null)
 
-  const selectionFilterKey = `${tagFilters.join(',')}|${currentFolderId ?? ''}|${searchQuery}|${fileTypeFilter ?? ''}`
+  const selectionFilterKey = `${tagFilters.join(',')}|${currentFolderId ?? ''}|${debouncedSearch}|${fileTypeFilter ?? ''}|${colorBucketFilter ?? ''}|${sizePresetFilter ?? ''}|${datePresetFilter ?? ''}`
   useEffect(() => {
     anchorIndexRef.current = null
   }, [selectionFilterKey])
@@ -58,7 +61,12 @@ const AssetGrid: React.FC = () => {
   )
 
   const showFolderHierarchy =
-    !String(searchQuery || '').trim() && tagFilters.length === 0 && !fileTypeFilter
+    !String(debouncedSearch || '').trim() &&
+    tagFilters.length === 0 &&
+    !fileTypeFilter &&
+    !colorBucketFilter &&
+    !sizePresetFilter &&
+    !datePresetFilter
   const showSubfolderStrip = showFolderHierarchy && childFolders.length > 0
 
   const currentFolderNode = useMemo(

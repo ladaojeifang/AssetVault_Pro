@@ -11,6 +11,7 @@ import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
 import { isCustomThumbnail } from './customThumbnail'
 import { waitForModelSnapshotBridge } from './modelThumbnailRenderer'
 import { notifyAllWindowsAssetsImported } from './importNotify'
+import { tryAutoColorFromThumbnail } from './persistAssetColors'
 
 export { notifyAllWindowsAssetsImported }
 
@@ -87,6 +88,8 @@ export async function schedule3dThumbnailAfterImport(
 
     await syncAssetSidecarFromDb(database, assetId)
     persistDatabase()
+    const absThumb = resolveLibraryPath(itemThumbRelative(assetId))
+    void tryAutoColorFromThumbnail(database, assetId, absThumb)
     notifyAllWindowsAssetsImported()
   } catch (error) {
     console.warn('[Import] 3D thumbnail DB update failed:', error)

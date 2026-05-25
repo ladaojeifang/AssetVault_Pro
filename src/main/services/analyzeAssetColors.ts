@@ -10,11 +10,10 @@ export type AssetColorAnalysis = {
 
 export async function analyzeColorsFromFile(
   absPath: string,
-  fileType: string
+  fileType: string,
+  absThumbnailPath?: string
 ): Promise<AssetColorAnalysis | null> {
-  if (!existsSync(absPath)) return null
-
-  if (fileType === 'image') {
+  if (fileType === 'image' && existsSync(absPath)) {
     const buffer = readFileSync(absPath)
     const { dominantColor, colors } = await extractPaletteFromImageBuffer(buffer)
     return { dominantColor, colors, colorsJson: serializePaletteColors(colors) }
@@ -22,9 +21,20 @@ export async function analyzeColorsFromFile(
 
   if (fileType === 'video') {
     const frame = await extractVideoFramePngBestEffort(absPath)
-    if (!frame) return null
-    const { dominantColor, colors } = await extractPaletteFromImageBuffer(frame)
-    return { dominantColor, colors, colorsJson: serializePaletteColors(colors) }
+    if (frame) {
+      const { dominantColor, colors } = await extractPaletteFromImageBuffer(frame)
+      return { dominantColor, colors, colorsJson: serializePaletteColors(colors) }
+    }
+  }
+
+  if (absThumbnailPath && existsSync(absThumbnailPath)) {
+    try {
+      const buffer = readFileSync(absThumbnailPath)
+      const { dominantColor, colors } = await extractPaletteFromImageBuffer(buffer)
+      return { dominantColor, colors, colorsJson: serializePaletteColors(colors) }
+    } catch {
+      /* fall through */
+    }
   }
 
   return null

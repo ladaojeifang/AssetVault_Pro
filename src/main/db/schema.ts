@@ -48,6 +48,8 @@ export const assets = sqliteTable('assets', {
 
   // Color data (for images)
   dominantColor: text('dominant_color'), // hex #RRGGBB
+  /** red|orange|yellow|green|cyan|blue|purple|pink|neutral — for filter bar */
+  colorBucket: text('color_bucket'),
   colors: text('colors'), // JSON array of top colors
 
   // Duration (for video/audio)

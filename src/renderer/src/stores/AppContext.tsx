@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
 import type { AssetItem, FolderItem, TagItem, ViewMode, SortField, QueryParams, QueryResult, ImportProgress } from '@/shared/types'
+import type { ColorBucket } from '@/shared/colorBucket'
+import type { DatePreset, SizePreset } from '@/shared/assetFilters'
+import { SEARCH_DEBOUNCE_MS } from '@/shared/assetFilters'
 
 const ASSET_CHUNK_SIZE = 80
 
@@ -20,9 +23,15 @@ interface AppState {
   tags: TagItem[]
 
   // Filter/Sort state
+  /** Live search box text */
   searchQuery: string
+  /** Applied to API after debounce */
+  debouncedSearch: string
   fileTypeFilter: string | null
   tagFilters: string[]
+  colorBucketFilter: ColorBucket | null
+  sizePresetFilter: SizePreset | null
+  datePresetFilter: DatePreset | null
   sortField: SortField
   sortOrder: 'asc' | 'desc'
 
@@ -49,6 +58,10 @@ interface AppActions {
   clearSelection: () => void
   setCurrentFolder: (id: string | null) => void
   setSearchQuery: (query: string) => void
+  setColorBucketFilter: (bucket: ColorBucket | null) => void
+  setSizePresetFilter: (preset: SizePreset | null) => void
+  setDatePresetFilter: (preset: DatePreset | null) => void
+  clearAssetFilters: () => void
   setFileTypeFilter: (type: string | null) => void
   setSelectedFontFamilyKey: (key: string | null) => void
   setTagFilters: (tags: string[]) => void
@@ -81,8 +94,12 @@ const defaultState: AppState = {
   hasMoreAssets: false,
   tags: [],
   searchQuery: '',
+  debouncedSearch: '',
   fileTypeFilter: null,
   tagFilters: [],
+  colorBucketFilter: null,
+  sizePresetFilter: null,
+  datePresetFilter: null,
   sortField: 'importedAt',
   sortOrder: 'desc',
   isLoading: false,
@@ -105,10 +122,13 @@ function buildAssetQuery(
   return {
     offset,
     pageSize: ASSET_CHUNK_SIZE,
-    search: 'search' in p ? p.search || undefined : snapshot.searchQuery || undefined,
+    search: 'search' in p ? p.search || undefined : snapshot.debouncedSearch || undefined,
     folderId: 'folderId' in p ? p.folderId || undefined : snapshot.currentFolderId || undefined,
     fileType: 'fileType' in p ? p.fileType || undefined : (snapshot.fileTypeFilter as QueryParams['fileType']) || undefined,
     tags: 'tags' in p ? p.tags : snapshot.tagFilters.length > 0 ? snapshot.tagFilters : undefined,
+    colorBucket: 'colorBucket' in p ? p.colorBucket : snapshot.colorBucketFilter || undefined,
+    sizePreset: 'sizePreset' in p ? p.sizePreset : snapshot.sizePresetFilter || undefined,
+    datePreset: 'datePreset' in p ? p.datePreset : snapshot.datePresetFilter || undefined,
     sortBy: p.sortBy ?? snapshot.sortField,
     sortOrder: p.sortOrder ?? snapshot.sortOrder
   }
@@ -121,6 +141,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const listGenerationRef = useRef(0)
   const importRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchDebounceGenRef = useRef(0)
+  const skipDebouncedSearchFetchRef = useRef(true)
 
   const loadTagList = useCallback(async () => {
     try {
@@ -211,8 +234,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       detailPanelOpen: false,
       currentFolderId: null,
       searchQuery: '',
+      debouncedSearch: '',
       fileTypeFilter: null,
       tagFilters: [],
+      colorBucketFilter: null,
+      sizePresetFilter: null,
+      datePresetFilter: null,
       assets: [],
       totalAssets: 0,
       hasMoreAssets: false,
@@ -276,6 +303,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [scheduleImportUiRefresh])
 
   useEffect(() => {
+    if (searchDebounceTimerRef.current) clearTimeout(searchDebounceTimerRef.current)
+    const gen = ++searchDebounceGenRef.current
+    searchDebounceTimerRef.current = setTimeout(() => {
+      searchDebounceTimerRef.current = null
+      if (searchDebounceGenRef.current !== gen) return
+      const q = stateRef.current.searchQuery
+      setState((prev) => (prev.debouncedSearch === q ? prev : { ...prev, debouncedSearch: q }))
+    }, SEARCH_DEBOUNCE_MS)
+    return () => {
+      if (searchDebounceTimerRef.current) clearTimeout(searchDebounceTimerRef.current)
+    }
+  }, [state.searchQuery])
+
+  useEffect(() => {
+    if (skipDebouncedSearchFetchRef.current) {
+      skipDebouncedSearchFetchRef.current = false
+      return
+    }
+    void fetchAssets({ search: state.debouncedSearch || undefined })
+  }, [state.debouncedSearch, fetchAssets])
+
+  useEffect(() => {
     const unsub = window.assetVaultAPI.onImportProgress((data) => {
       setState((prev) => ({
         ...prev,
@@ -325,7 +374,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     setSearchQuery: (query) => {
       setState((prev) => ({ ...prev, searchQuery: query }))
-      void fetchAssets({ search: query || undefined })
+    },
+    setColorBucketFilter: (bucket) => {
+      setState((prev) => ({ ...prev, colorBucketFilter: bucket }))
+      void fetchAssets({ colorBucket: bucket || undefined })
+    },
+    setSizePresetFilter: (preset) => {
+      setState((prev) => ({ ...prev, sizePresetFilter: preset }))
+      void fetchAssets({ sizePreset: preset || undefined })
+    },
+    setDatePresetFilter: (preset) => {
+      setState((prev) => ({ ...prev, datePresetFilter: preset }))
+      void fetchAssets({ datePreset: preset || undefined })
+    },
+    clearAssetFilters: () => {
+      setState((prev) => ({
+        ...prev,
+        colorBucketFilter: null,
+        sizePresetFilter: null,
+        datePresetFilter: null
+      }))
+      void fetchAssets({ colorBucket: undefined, sizePreset: undefined, datePreset: undefined })
     },
     setFileTypeFilter: (type) => {
       setState((prev) => ({

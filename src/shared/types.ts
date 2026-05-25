@@ -1,5 +1,8 @@
 // Shared types between main, preload, and renderer
 
+import type { ColorBucket } from './colorBucket'
+import type { DatePreset, SizePreset } from './assetFilters'
+
 export type FileType = 'image' | 'video' | 'audio' | 'font' | 'design' | 'document' | '3d' | 'code' | 'other'
 
 export interface FolderItem {
@@ -37,6 +40,8 @@ export interface AssetItem {
   width?: number | null
   height?: number | null
   dominantColor?: string | null
+  /** Hue family for filter bar (computed from dominantColor). */
+  colorBucket?: string | null
   colors?: string | null
   duration?: number | null
   thumbnailPath?: string | null
@@ -75,6 +80,9 @@ export interface QueryParams {
   folderId?: string
   fileType?: FileType
   tags?: string[]
+  colorBucket?: ColorBucket
+  sizePreset?: SizePreset
+  datePreset?: DatePreset
   sortBy?: 'importedAt' | 'filename' | 'fileSize' | 'dominantColor' | 'viewCount' | 'random'
   sortOrder?: 'asc' | 'desc'
 }

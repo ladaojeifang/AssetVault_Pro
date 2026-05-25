@@ -19,6 +19,7 @@ import {
 } from './fontSettingsStore'
 import { shouldUseOriginalImageDimensions } from '../utils/thumbnailSizing'
 import { extractPaletteFromImageBuffer, serializePaletteColors } from '../utils/colorPalette'
+import { classifyColorBucket } from '@/shared/colorBucket'
 import { extractVideoFramePngBestEffort } from '../utils/videoFrame'
 import {
   getLibraryRoot,
@@ -160,6 +161,7 @@ export async function importSingleAsset(
   let width: number | undefined
   let height: number | undefined
   let dominantColor: string | undefined
+  let colorBucket: string | undefined
   let colors: string | undefined
   let duration: number | undefined
   let hasThumbnail = false
@@ -188,6 +190,7 @@ export async function importSingleAsset(
 
       const palette = await extractPaletteFromImageBuffer(fileBuffer)
       dominantColor = palette.dominantColor
+      colorBucket = classifyColorBucket(palette.dominantColor) ?? undefined
       colors = serializePaletteColors(palette.colors)
 
       try {
@@ -243,6 +246,7 @@ export async function importSingleAsset(
         if (frame) {
           const palette = await extractPaletteFromImageBuffer(frame)
           dominantColor = palette.dominantColor
+          colorBucket = classifyColorBucket(palette.dominantColor) ?? undefined
           colors = serializePaletteColors(palette.colors)
         }
       } catch (colorErr) {
@@ -307,6 +311,7 @@ export async function importSingleAsset(
     width,
     height,
     dominantColor,
+    colorBucket,
     colors,
     duration,
     thumbnailPath,
