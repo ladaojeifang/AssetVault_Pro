@@ -247,6 +247,19 @@ function MasonryAssetTile({
             />
           )}
 
+          {asset.storageMode === 'referenced' && (
+            <div
+              className={`absolute top-2 right-2 text-[9px] font-medium px-1.5 py-0.5 rounded z-10 ${
+                asset.sourceMissing
+                  ? 'bg-red-900/80 text-red-100'
+                  : 'bg-black/55 text-amber-200'
+              }`}
+              title={asset.sourceMissing ? '源文件缺失' : '仅索引引用'}
+            >
+              {asset.sourceMissing ? '缺失' : '引用'}
+            </div>
+          )}
+
           {selected && (
             <div className="absolute top-2 left-2 w-5 h-5 rounded bg-av-accent-blue flex items-center justify-center z-10">
               <svg width="10" height="10" viewBox="0 0 10 10" fill="white">

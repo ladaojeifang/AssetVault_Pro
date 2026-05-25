@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react'
 import Sidebar from '../Sidebar/Sidebar'
 import Toolbar from '../Toolbar/Toolbar'
-import AssetFilterBar from '../Toolbar/AssetFilterBar'
 import AssetGrid from '../Assets/AssetGrid'
 import DetailPanel from '../Detail/DetailPanel'
 import FontPreviewPage from '../FontPreview/FontPreviewPage'
@@ -48,7 +47,6 @@ const LibraryPane: React.FC = () => {
   return (
     <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-av-bg-primary">
       <Toolbar />
-      <AssetFilterBar />
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {sidebarOpen && (
           <div className="w-[192px] min-w-[160px] border-r border-av-border flex-shrink-0 av-sidebar-zoom">

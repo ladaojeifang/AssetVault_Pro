@@ -34,6 +34,10 @@ export const assets = sqliteTable('assets', {
   fileType: text('file_type').notNull(), // image|video|audio|font|design|document|3d|code|other
   folderId: text('folder_id').references(() => folders.id, { onDelete: 'cascade' }),
   filePath: text('file_path').notNull().unique(),
+  /** local = file under items/{id}/; referenced = absolute path to external file (catalog libraries). */
+  storageMode: text('storage_mode').notNull().default('local'),
+  localizationState: text('localization_state').notNull().default('idle'),
+  sourceMissingAt: integer('source_missing_at', { mode: 'timestamp' }),
   /** Canonical absolute path of the file at import time; dedupes re-import of same source. */
   importSource: text('import_source'),
   fileSize: integer('file_size').notNull(), // bytes

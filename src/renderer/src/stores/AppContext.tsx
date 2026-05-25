@@ -31,6 +31,8 @@ interface AppState {
   tagFilters: string[]
   colorBucketFilter: ColorBucket | null
   sizePresetFilter: SizePreset | null
+  fileSizeMinMb: number | null
+  fileSizeMaxMb: number | null
   datePresetFilter: DatePreset | null
   sortField: SortField
   sortOrder: 'asc' | 'desc'
@@ -60,6 +62,7 @@ interface AppActions {
   setSearchQuery: (query: string) => void
   setColorBucketFilter: (bucket: ColorBucket | null) => void
   setSizePresetFilter: (preset: SizePreset | null) => void
+  setFileSizeMbFilter: (minMb: number | null, maxMb: number | null) => void
   setDatePresetFilter: (preset: DatePreset | null) => void
   clearAssetFilters: () => void
   setFileTypeFilter: (type: string | null) => void
@@ -99,6 +102,8 @@ const defaultState: AppState = {
   tagFilters: [],
   colorBucketFilter: null,
   sizePresetFilter: null,
+  fileSizeMinMb: null,
+  fileSizeMaxMb: null,
   datePresetFilter: null,
   sortField: 'importedAt',
   sortOrder: 'desc',
@@ -128,6 +133,18 @@ function buildAssetQuery(
     tags: 'tags' in p ? p.tags : snapshot.tagFilters.length > 0 ? snapshot.tagFilters : undefined,
     colorBucket: 'colorBucket' in p ? p.colorBucket : snapshot.colorBucketFilter || undefined,
     sizePreset: 'sizePreset' in p ? p.sizePreset : snapshot.sizePresetFilter || undefined,
+    minFileSizeMb:
+      'minFileSizeMb' in p
+        ? p.minFileSizeMb
+        : !snapshot.sizePresetFilter && snapshot.fileSizeMinMb != null
+          ? snapshot.fileSizeMinMb
+          : undefined,
+    maxFileSizeMb:
+      'maxFileSizeMb' in p
+        ? p.maxFileSizeMb
+        : !snapshot.sizePresetFilter && snapshot.fileSizeMaxMb != null
+          ? snapshot.fileSizeMaxMb
+          : undefined,
     datePreset: 'datePreset' in p ? p.datePreset : snapshot.datePresetFilter || undefined,
     sortBy: p.sortBy ?? snapshot.sortField,
     sortOrder: p.sortOrder ?? snapshot.sortOrder
@@ -239,6 +256,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       tagFilters: [],
       colorBucketFilter: null,
       sizePresetFilter: null,
+      fileSizeMinMb: null,
+      fileSizeMaxMb: null,
       datePresetFilter: null,
       assets: [],
       totalAssets: 0,
@@ -380,21 +399,67 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       void fetchAssets({ colorBucket: bucket || undefined })
     },
     setSizePresetFilter: (preset) => {
-      setState((prev) => ({ ...prev, sizePresetFilter: preset }))
-      void fetchAssets({ sizePreset: preset || undefined })
+      setState((prev) => ({
+        ...prev,
+        sizePresetFilter: preset,
+        fileSizeMinMb: preset ? null : prev.fileSizeMinMb,
+        fileSizeMaxMb: preset ? null : prev.fileSizeMaxMb
+      }))
+      void fetchAssets({
+        sizePreset: preset || undefined,
+        minFileSizeMb: undefined,
+        maxFileSizeMb: undefined
+      })
+    },
+    setFileSizeMbFilter: (minMb, maxMb) => {
+      const useMb = minMb != null || maxMb != null
+      setState((prev) => ({
+        ...prev,
+        fileSizeMinMb: minMb,
+        fileSizeMaxMb: maxMb,
+        sizePresetFilter: useMb ? null : prev.sizePresetFilter
+      }))
+      const overrides: Partial<QueryParams> = {
+        minFileSizeMb: minMb ?? undefined,
+        maxFileSizeMb: maxMb ?? undefined
+      }
+      if (useMb) overrides.sizePreset = undefined
+      void fetchAssets(overrides)
     },
     setDatePresetFilter: (preset) => {
       setState((prev) => ({ ...prev, datePresetFilter: preset }))
       void fetchAssets({ datePreset: preset || undefined })
     },
     clearAssetFilters: () => {
+      if (searchDebounceTimerRef.current) {
+        clearTimeout(searchDebounceTimerRef.current)
+        searchDebounceTimerRef.current = null
+      }
+      skipDebouncedSearchFetchRef.current = true
+      const folderId = stateRef.current.currentFolderId || undefined
       setState((prev) => ({
         ...prev,
+        searchQuery: '',
+        debouncedSearch: '',
+        tagFilters: [],
+        fileTypeFilter: null,
         colorBucketFilter: null,
         sizePresetFilter: null,
+        fileSizeMinMb: null,
+        fileSizeMaxMb: null,
         datePresetFilter: null
       }))
-      void fetchAssets({ colorBucket: undefined, sizePreset: undefined, datePreset: undefined })
+      void fetchAssets({
+        search: undefined,
+        tags: undefined,
+        fileType: undefined,
+        colorBucket: undefined,
+        sizePreset: undefined,
+        minFileSizeMb: undefined,
+        maxFileSizeMb: undefined,
+        datePreset: undefined,
+        folderId
+      })
     },
     setFileTypeFilter: (type) => {
       setState((prev) => ({

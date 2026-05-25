@@ -142,7 +142,15 @@ const api = {
       ipcRenderer.invoke('assets:copy-to-library', assetIds, targetLibraryRoot) as Promise<{
         copied: number
         skipped: number
-      }>
+      }>,
+    localize: (assetIds: string[]) =>
+      ipcRenderer.invoke('assets:localize', assetIds) as Promise<
+        import('../../shared/libraryTypes').LocalizeAssetsResult
+      >,
+    relink: (assetId: string, newPath: string) =>
+      ipcRenderer.invoke('assets:relink', assetId, newPath) as Promise<
+        { ok: true } | { ok: false; error: string }
+      >
   },
 
   library: {
@@ -151,18 +159,33 @@ const api = {
         libraryRoot: string
         manifestPath: string
         dbPath: string
+        libraryMode: import('../../shared/libraryTypes').LibraryMode
+        localization: import('../../shared/libraryTypes').LibraryLocalizationManifest | null
+        stats: import('../../shared/libraryTypes').LibraryModeStats
       }>,
     getState: () =>
       ipcRenderer.invoke('library:get-state') as Promise<{
         activeLibraryRoot: string
         recentLibraries: string[]
         libraryDisplayName: string
+        libraryMode: import('../../shared/libraryTypes').LibraryMode
         manifestPath: string
         dbPath: string
       }>,
+    getModeStats: () =>
+      ipcRenderer.invoke('library:get-mode-stats') as Promise<
+        import('../../shared/libraryTypes').LibraryModeStats
+      >,
     switchRoot: (targetRoot: string) => ipcRenderer.invoke('library:switch', targetRoot),
     pickAndSwitch: () => ipcRenderer.invoke('library:pick-and-switch'),
-    createAndSwitch: () => ipcRenderer.invoke('library:create-and-switch'),
+    createAndSwitch: (libraryMode?: import('../../shared/libraryTypes').LibraryMode) =>
+      ipcRenderer.invoke('library:create-and-switch', libraryMode ?? 'archive'),
+    upgradeToArchive: (options?: { preferHardlink?: boolean }) =>
+      ipcRenderer.invoke('library:upgrade-to-archive', options) as Promise<
+        { ok: true } | { ok: false; error: string }
+      >,
+    verifySources: () =>
+      ipcRenderer.invoke('library:verify-sources') as Promise<{ checked: number; missing: number }>,
     removeFromRecent: (path: string) => ipcRenderer.invoke('library:remove-from-recent', path),
     getStorageStats: () =>
       ipcRenderer.invoke('library:get-storage-stats') as Promise<{
@@ -174,6 +197,12 @@ const api = {
       const handler = () => callback()
       ipcRenderer.on('library:switched', handler)
       return () => ipcRenderer.removeListener('library:switched', handler)
+    },
+    onUpgradeProgress: (callback: (data: import('../../shared/libraryTypes').UpgradeLibraryProgress) => void) => {
+      const handler = (_: unknown, data: import('../../shared/libraryTypes').UpgradeLibraryProgress) =>
+        callback(data)
+      ipcRenderer.on('library:upgrade-progress', handler)
+      return () => ipcRenderer.removeListener('library:upgrade-progress', handler)
     }
   },
 

@@ -2,6 +2,7 @@
 
 import type { ColorBucket } from './colorBucket'
 import type { DatePreset, SizePreset } from './assetFilters'
+import type { LocalizationState, StorageMode } from './libraryTypes'
 
 export type FileType = 'image' | 'video' | 'audio' | 'font' | 'design' | 'document' | '3d' | 'code' | 'other'
 
@@ -30,6 +31,11 @@ export interface AssetItem {
   fileType: FileType
   folderId: string | null
   filePath: string
+  storageMode?: StorageMode
+  localizationState?: LocalizationState
+  sourceMissingAt?: Date | null
+  /** True when referenced asset file is not on disk */
+  sourceMissing?: boolean
   /** Absolute path for shell / file:// URLs; set by main when using portable library. */
   resolvedFilePath?: string
   resolvedThumbnailPath?: string | null
@@ -82,8 +88,11 @@ export interface QueryParams {
   tags?: string[]
   colorBucket?: ColorBucket
   sizePreset?: SizePreset
+  /** Min file size in MB (mutually exclusive with sizePreset in UI). */
+  minFileSizeMb?: number
+  maxFileSizeMb?: number
   datePreset?: DatePreset
-  sortBy?: 'importedAt' | 'filename' | 'fileSize' | 'dominantColor' | 'viewCount' | 'random'
+  sortBy?: 'importedAt' | 'filename' | 'fileSize' | 'fileType' | 'extension' | 'dominantColor' | 'viewCount' | 'random'
   sortOrder?: 'asc' | 'desc'
 }
 
@@ -103,7 +112,15 @@ export interface ImportProgress {
 }
 
 export type ViewMode = 'grid' | 'list'
-export type SortField = 'importedAt' | 'filename' | 'fileSize' | 'dominantColor' | 'viewCount' | 'random'
+export type SortField =
+  | 'importedAt'
+  | 'filename'
+  | 'fileSize'
+  | 'fileType'
+  | 'extension'
+  | 'dominantColor'
+  | 'viewCount'
+  | 'random'
 
 // Window API augmentation for TypeScript
 declare global {

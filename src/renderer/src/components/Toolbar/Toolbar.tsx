@@ -179,6 +179,9 @@ const Toolbar: React.FC = () => {
         <option value="filename-desc">Name Z-A</option>
         <option value="fileSize-desc">Largest</option>
         <option value="fileSize-asc">Smallest</option>
+        <option value="fileType-asc">Type A-Z</option>
+        <option value="fileType-desc">Type Z-A</option>
+        <option value="extension-asc">Ext A-Z</option>
         <option value="viewCount-desc">Most Viewed</option>
         <option value="random-asc">Random</option>
       </select>

@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import { join, normalize } from 'path'
 import { existsSync, statSync, mkdirSync, readdirSync } from 'fs'
+import type { LibraryMode } from '@/shared/libraryTypes'
 import { flushDatabase, closeDatabase, initDatabase } from '../db'
 import { getThumbnailService } from './ThumbnailService'
 import { runLegacyPathsMigrationIfNeeded } from './libraryMigration'
@@ -8,6 +9,7 @@ import {
   LIBRARY_DB_NAME,
   ensureLibraryDirectories,
   ensureManifest,
+  loadLibraryModeFromManifest,
   setLibraryRootForSession,
   getLibraryRoot,
   writeLibraryUserState,
@@ -76,6 +78,7 @@ async function switchActiveLibraryOnce(newRootRaw: string): Promise<{ ok: true }
     await initDatabase(dbPath)
     await runLegacyPathsMigrationIfNeeded()
     await flushDatabase()
+    loadLibraryModeFromManifest(root)
 
     writeLibraryUserState(userData, buildStateAfterSwitch(userData, root))
     broadcastLibrarySwitched(root)
@@ -110,8 +113,8 @@ export function assertEmptyDirectoryForNewLibrary(dir: string): string {
   return root
 }
 
-export function prepareNewLibrarySkeleton(root: string): void {
+export function prepareNewLibrarySkeleton(root: string, libraryMode: LibraryMode = 'archive'): void {
   mkdirSync(root, { recursive: true })
   ensureLibraryDirectories(root)
-  ensureManifest(root)
+  ensureManifest(root, { libraryMode })
 }

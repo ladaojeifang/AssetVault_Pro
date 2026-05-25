@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { formatFileSizeMbFilterLabel } from '@/shared/assetFilters'
 import type { FontAppSettings } from '@/shared/fontSettings'
 import type { FontFamilyGroup } from '@/shared/fontTypes'
 import { useApp } from '../../stores/AppContext'
@@ -153,6 +154,8 @@ export function FontTypeContextView({ onClose }: { onClose: () => void }) {
     debouncedSearch,
     colorBucketFilter,
     sizePresetFilter,
+    fileSizeMinMb,
+    fileSizeMaxMb,
     datePresetFilter,
     tagFilters,
     selectedFontFamilyKey,
@@ -177,6 +180,8 @@ export function FontTypeContextView({ onClose }: { onClose: () => void }) {
   if (debouncedSearch.trim()) filters.push(`搜索「${debouncedSearch.trim()}」`)
   if (colorBucketFilter) filters.push(`颜色 ${colorBucketFilter}`)
   if (sizePresetFilter) filters.push(`尺寸 ${sizePresetFilter}`)
+  const mbLabel = formatFileSizeMbFilterLabel(fileSizeMinMb, fileSizeMaxMb)
+  if (mbLabel) filters.push(`体积 ${mbLabel}`)
   if (datePresetFilter) filters.push(`日期 ${datePresetFilter}`)
   if (tagFilters.length > 0) filters.push(`${tagFilters.length} 个标签`)
 

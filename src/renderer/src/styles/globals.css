@@ -1424,3 +1424,179 @@ body {
   justify-content: flex-end;
   padding-top: 4px;
 }
+
+/* —— 列表视图表头 —— */
+.av-list-header {
+  background: color-mix(in srgb, var(--av-bg-secondary, #1a1d24) 88%, transparent);
+}
+
+.av-list-header__section-btn {
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.av-list-header__section-btn:hover {
+  background: color-mix(in srgb, var(--av-bg-hover, #252830) 40%, transparent);
+}
+
+.av-list-header__grid {
+  align-items: stretch;
+}
+
+.av-list-header__cell {
+  position: relative;
+  min-width: 0;
+  padding: 0 10px 0 0;
+}
+
+.av-list-header__cell:first-child {
+  padding-left: 0;
+}
+
+.av-list-header__cell:last-child {
+  padding-right: 0;
+}
+
+.av-list-col-resize::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: transparent;
+  border-radius: 1px;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.av-list-header__cell:hover .av-list-col-resize::after,
+.av-list-col-resize:active::after {
+  background: color-mix(in srgb, var(--av-accent-blue, #3b82f6) 55%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--av-accent-blue, #3b82f6) 25%, transparent);
+}
+
+.av-list-filter,
+.av-list-header select.av-list-filter {
+  width: 100%;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--av-text-secondary, #94a3b8);
+  background: color-mix(in srgb, var(--av-bg-elevated, #22262e) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--av-border, #2e3440) 55%, transparent);
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.av-list-filter:hover,
+.av-list-header select.av-list-filter:hover {
+  border-color: color-mix(in srgb, var(--av-border, #2e3440) 90%, var(--av-text-muted, #64748b));
+}
+
+.av-list-filter:focus,
+.av-list-header select.av-list-filter:focus {
+  border-color: color-mix(in srgb, var(--av-accent-blue, #3b82f6) 65%, transparent);
+  background: var(--av-bg-elevated, #22262e);
+}
+
+.av-list-filter-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--av-text-secondary, #94a3b8);
+  background: color-mix(in srgb, var(--av-bg-elevated, #22262e) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--av-border, #2e3440) 55%, transparent);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.av-list-filter-input:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--av-border, #2e3440) 90%, var(--av-text-muted, #64748b));
+}
+
+.av-list-filter-input:focus:not(:disabled) {
+  border-color: color-mix(in srgb, var(--av-accent-blue, #3b82f6) 65%, transparent);
+}
+
+.av-list-filter-input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.av-list-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--av-text-muted, #64748b);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.av-list-sort-btn:hover {
+  color: var(--av-text-primary, #e2e8f0);
+}
+
+.av-list-sort-btn[data-active='true'] {
+  color: var(--av-accent-blue, #3b82f6);
+}
+
+.av-list-filter--preset {
+  width: 48px;
+  max-width: 48px;
+  min-width: 48px;
+  padding-left: 4px;
+  padding-right: 14px;
+  flex-shrink: 0;
+}
+
+.av-list-filter-input--narrow {
+  width: 30px;
+  max-width: 34px;
+  min-width: 26px;
+  flex: 0 1 30px;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.av-list-color-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.av-list-color-row .av-list-color-swatch {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--av-border, #2e3440) 80%, transparent);
+  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.av-list-color-swatch:hover {
+  transform: scale(1.08);
+  border-color: var(--av-text-muted, #64748b);
+}
+
+.av-list-color-swatch[data-active='true'] {
+  border-color: var(--av-accent-blue, #3b82f6);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--av-accent-blue, #3b82f6) 35%, transparent);
+  transform: scale(1.1);
+}

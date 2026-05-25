@@ -1,5 +1,5 @@
-import { statSync, readFileSync, mkdirSync, copyFileSync, rmSync, existsSync, readdirSync } from 'fs'
-import { basename, dirname, extname, join, sep } from 'path'
+import { statSync, readFileSync, mkdirSync, rmSync, existsSync } from 'fs'
+import { basename, extname, join } from 'path'
 import { toCanonicalFilePath, isSqliteUniqueConstraintError } from '../utils/pathUtils'
 import { v4 as uuidv4 } from 'uuid'
 import mime from 'mime-types'
@@ -21,12 +21,15 @@ import { shouldUseOriginalImageDimensions } from '../utils/thumbnailSizing'
 import { extractPaletteFromImageBuffer, serializePaletteColors } from '../utils/colorPalette'
 import { classifyColorBucket } from '@/shared/colorBucket'
 import { extractVideoFramePngBestEffort } from '../utils/videoFrame'
+import { getLibraryMode } from './libraryManifest'
 import {
   getLibraryRoot,
   itemPackFileRelative,
   itemThumbRelative,
   sanitizeStorageFileName
 } from './libraryBundle'
+import { copyOrHardlinkIntoLibrary } from './fileCopyIntoLibrary'
+import { copyObjCompanionMtlForImport, posixRelToFsAbs } from './importSingleAssetHelpers'
 import { syncAssetSidecarFromDb, writeAssetSidecarMeta } from './assetSidecar'
 import { parseFontFile } from './fontMetadata'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
@@ -40,42 +43,6 @@ export interface ImportSingleAssetOptions extends ImportAssetOptions {
 function normalizeImportOptions(options?: string | ImportSingleAssetOptions): ImportSingleAssetOptions {
   if (typeof options === 'string') return { targetFolderId: options }
   return options ?? {}
-}
-
-function posixRelToFsAbs(libraryRoot: string, rel: string): string {
-  return join(libraryRoot, rel.split('/').join(sep))
-}
-
-/** Same basename as OBJ in the source folder, e.g. `chair.obj` → `chair.mtl`. */
-function findCompanionMtlBesideObj(objPath: string): string | null {
-  const dir = dirname(objPath)
-  const base = basename(objPath, extname(objPath))
-  const exact = join(dir, `${base}.mtl`)
-  if (existsSync(exact)) return exact
-
-  try {
-    const want = `${base}.mtl`.toLowerCase()
-    for (const name of readdirSync(dir)) {
-      if (name.toLowerCase() === want) return join(dir, name)
-    }
-  } catch {
-    /* ignore */
-  }
-  return null
-}
-
-function copyObjCompanionMtl(sourceObjPath: string, itemDirAbs: string): void {
-  const mtlSource = findCompanionMtlBesideObj(sourceObjPath)
-  if (!mtlSource) return
-
-  const mtlName = sanitizeStorageFileName(basename(mtlSource))
-  const mtlDest = join(itemDirAbs, mtlName)
-  try {
-    copyFileSync(mtlSource, mtlDest)
-    console.log(`[Import] Copied companion MTL: ${mtlName}`)
-  } catch (e) {
-    console.warn(`[Import] Failed to copy companion MTL ${basename(mtlSource)}:`, e)
-  }
 }
 
 /**
@@ -147,13 +114,27 @@ export async function importSingleAsset(
   const id = uuidv4()
 
   const libraryRoot = getLibraryRoot()
-  const relOriginal = itemPackFileRelative(id, storageFileName)
-  const destAbs = posixRelToFsAbs(libraryRoot, relOriginal)
+  const catalogMode = getLibraryMode() === 'catalog'
   const itemDirAbs = join(libraryRoot, 'items', id)
   mkdirSync(itemDirAbs, { recursive: true })
-  copyFileSync(filePathCanonical, destAbs)
-  if (extNoDot === 'obj') {
-    copyObjCompanionMtl(filePathCanonical, itemDirAbs)
+
+  let storedFilePath: string
+  let destAbs: string
+  let storageMode: 'local' | 'referenced'
+
+  if (catalogMode) {
+    storedFilePath = filePathCanonical
+    destAbs = filePathCanonical
+    storageMode = 'referenced'
+  } else {
+    const relOriginal = itemPackFileRelative(id, storageFileName)
+    storedFilePath = relOriginal
+    destAbs = posixRelToFsAbs(libraryRoot, relOriginal)
+    copyOrHardlinkIntoLibrary(filePathCanonical, destAbs, true)
+    if (extNoDot === 'obj') {
+      copyObjCompanionMtlForImport(filePathCanonical, itemDirAbs)
+    }
+    storageMode = 'local'
   }
 
   const hashComputedAt = new Date()
@@ -303,7 +284,9 @@ export async function importSingleAsset(
     mimeType,
     fileType,
     folderId: null,
-    filePath: relOriginal,
+    filePath: storedFilePath,
+    storageMode,
+    localizationState: 'idle',
     importSource: filePathCanonical,
     fileSize: stat.size,
     contentHash,

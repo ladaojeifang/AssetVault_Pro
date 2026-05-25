@@ -1,20 +1,30 @@
 import React from 'react'
 import { useApp } from '../../stores/AppContext'
 import { COLOR_BUCKET_OPTIONS } from '@/shared/colorBucket'
-import { DATE_PRESET_OPTIONS, SIZE_PRESET_OPTIONS } from '@/shared/assetFilters'
+import { DATE_PRESET_OPTIONS, hasActiveAssetFilters } from '@/shared/assetFilters'
+import { FileSizeFilterControl } from '../Assets/FileSizeFilterControl'
 
 const AssetFilterBar: React.FC = () => {
   const {
     colorBucketFilter,
     sizePresetFilter,
+    fileSizeMinMb,
+    fileSizeMaxMb,
     datePresetFilter,
     setColorBucketFilter,
     setSizePresetFilter,
+    setFileSizeMbFilter,
     setDatePresetFilter,
     clearAssetFilters
   } = useApp()
 
-  const hasFilters = !!(colorBucketFilter || sizePresetFilter || datePresetFilter)
+  const hasFilters = hasActiveAssetFilters({
+    colorBucket: colorBucketFilter,
+    sizePreset: sizePresetFilter,
+    fileSizeMinMb,
+    fileSizeMaxMb,
+    datePreset: datePresetFilter
+  })
 
   return (
     <div className="flex items-center gap-2 px-4 py-1.5 border-b border-av-border bg-av-bg-secondary shrink-0 flex-wrap">
@@ -44,19 +54,15 @@ const AssetFilterBar: React.FC = () => {
 
       <div className="w-px h-5 bg-av-border shrink-0" />
 
-      <select
-        value={sizePresetFilter ?? ''}
-        onChange={(e) => setSizePresetFilter((e.target.value || null) as typeof sizePresetFilter)}
-        className="bg-av-bg-elevated text-av-text-secondary border border-av-border rounded-md px-2 py-0.5 text-[11px] outline-none cursor-pointer focus:border-av-accent-blue"
-        title="尺寸"
-      >
-        <option value="">尺寸</option>
-        {SIZE_PRESET_OPTIONS.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      <FileSizeFilterControl
+        sizePreset={sizePresetFilter}
+        minMb={fileSizeMinMb}
+        maxMb={fileSizeMaxMb}
+        onPresetChange={setSizePresetFilter}
+        onMbChange={setFileSizeMbFilter}
+        selectClass="bg-av-bg-elevated text-av-text-secondary border border-av-border rounded-md px-2 py-0.5 text-[11px] outline-none cursor-pointer focus:border-av-accent-blue min-w-[72px]"
+        inputClass="w-14 bg-av-bg-elevated text-av-text-secondary border border-av-border rounded-md px-1.5 py-0.5 text-[11px] outline-none focus:border-av-accent-blue tabular-nums"
+      />
 
       <select
         value={datePresetFilter ?? ''}

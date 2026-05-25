@@ -9,7 +9,8 @@ import {
   renameSync,
   unlinkSync
 } from 'fs'
-import { v4 as uuidv4 } from 'uuid'
+import type { LibraryMode } from '@/shared/libraryTypes'
+import { loadLibraryModeFromManifest, writeLibraryManifest } from './libraryManifest'
 
 const ACTIVE_LIBRARY_JSON = 'active-library.json'
 export const LIBRARY_DB_NAME = 'library.sqlite'
@@ -179,20 +180,20 @@ export function ensureLibraryDirectories(root: string): void {
   mkdirSync(join(root, ITEMS_DIR), { recursive: true })
 }
 
-export function ensureManifest(root: string): void {
+export function ensureManifest(root: string, options?: { libraryMode?: LibraryMode; displayName?: string }): void {
   const mf = join(root, MANIFEST_NAME)
-  if (existsSync(mf)) return
-  const now = new Date().toISOString()
-  const manifest = {
-    formatVersion: '1.0',
-    appId: 'com.assetvault.library',
-    libraryId: uuidv4(),
-    displayName: 'AssetVault Library',
-    createdAt: now,
-    updatedAt: now
+  if (existsSync(mf)) {
+    loadLibraryModeFromManifest(root)
+    return
   }
-  writeFileSync(mf, JSON.stringify(manifest, null, 2), 'utf-8')
+  writeLibraryManifest(root, {
+    formatVersion: '1.1',
+    displayName: options?.displayName ?? 'AssetVault Library',
+    libraryMode: options?.libraryMode ?? 'archive'
+  })
 }
+
+export { getLibraryMode, loadLibraryModeFromManifest, readLibraryManifestFile, writeLibraryManifest } from './libraryManifest'
 
 /**
  * Resolve a DB-stored path to an absolute path on disk.
@@ -301,6 +302,7 @@ export function prepareOnStartup(userData: string): { libraryRoot: string; dbPat
   libraryRootResolved = root
   ensureLibraryDirectories(root)
   ensureManifest(root)
+  loadLibraryModeFromManifest(root)
 
   return { libraryRoot: root, dbPath: join(root, LIBRARY_DB_NAME) }
 }

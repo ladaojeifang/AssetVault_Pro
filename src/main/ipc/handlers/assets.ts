@@ -3,7 +3,7 @@ import { existsSync, statSync, readdirSync, readFileSync } from 'fs'
 import { join, basename, extname, dirname } from 'path'
 import { db, flushDatabase, persistDatabase, getDatabase } from '../../db'
 import { assets, assetTags, assetFolders } from '../../db/schema'
-import { eq, and, desc, asc, sql, count, type SQL } from 'drizzle-orm'
+import { eq, and, inArray, desc, asc, sql, count, type SQL } from 'drizzle-orm'
 import type { AssetItem, QueryParams, QueryResult, ImportProgress } from '@/shared/types'
 import type { DuplicatePolicy, ImportAssetOptions } from '@/shared/importTypes'
 import { importSingleAsset, type ImportSingleAssetOptions } from '../../services/importSingleAsset'
@@ -13,12 +13,14 @@ import { isModelThumbnailSkipped, clearModelThumbnailSkip } from '../../services
 import { waitForModelSnapshotBridge } from '../../services/modelThumbnailRenderer'
 import { ALL_SUPPORTED_IMPORT_EXTENSIONS } from '@/shared/supportedFormats'
 import { resolveLibraryPath, removeItemPack, itemThumbRelative } from '../../services/libraryBundle'
+import { resolveAssetContentPath, isAssetSourceMissing } from '../../services/assetPathResolver'
 import { syncAssetSidecarFromDb } from '../../services/assetSidecar'
 import { analyzeColorsFromFile } from '../../services/analyzeAssetColors'
 import { buildSearchCondition, tokenizeSearchQuery } from '../../services/assetSearch'
 import {
   buildColorBucketCondition,
   buildDatePresetCondition,
+  buildFileSizeMbCondition,
   buildSizePresetCondition
 } from '../../services/assetQueryFilters'
 import { persistAssetColorAnalysis } from '../../services/persistAssetColors'
@@ -89,13 +91,22 @@ async function getAssetFolderIds(database: ReturnType<typeof getDatabase>, asset
   return results.map((r) => r.folderId)
 }
 
-function attachResolvedPaths<T extends { filePath: string; thumbnailPath?: string | null }>(
-  row: T
-): T & { resolvedFilePath: string; resolvedThumbnailPath: string | null } {
+function attachResolvedPaths<
+  T extends {
+    filePath: string
+    thumbnailPath?: string | null
+    storageMode?: string | null
+  }
+>(row: T): T & {
+  resolvedFilePath: string
+  resolvedThumbnailPath: string | null
+  sourceMissing: boolean
+} {
   return {
     ...row,
-    resolvedFilePath: resolveLibraryPath(row.filePath),
-    resolvedThumbnailPath: row.thumbnailPath ? resolveLibraryPath(row.thumbnailPath) : null
+    resolvedFilePath: resolveAssetContentPath(row),
+    resolvedThumbnailPath: row.thumbnailPath ? resolveLibraryPath(row.thumbnailPath) : null,
+    sourceMissing: isAssetSourceMissing(row)
   }
 }
 
@@ -122,6 +133,9 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
     if (params.sizePreset) {
       conditions.push(buildSizePresetCondition(params.sizePreset))
+    } else {
+      const sizeMbCond = buildFileSizeMbCondition(params.minFileSizeMb, params.maxFileSizeMb)
+      if (sizeMbCond) conditions.push(sizeMbCond)
     }
 
     if (params.datePreset) {
@@ -160,6 +174,12 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
         break
       case 'fileSize':
         orderBy = params.sortOrder === 'asc' ? asc(assets.fileSize) : desc(assets.fileSize)
+        break
+      case 'fileType':
+        orderBy = params.sortOrder === 'asc' ? asc(assets.fileType) : desc(assets.fileType)
+        break
+      case 'extension':
+        orderBy = params.sortOrder === 'asc' ? asc(assets.extension) : desc(assets.extension)
         break
       case 'viewCount':
         orderBy = desc(assets.viewCount)
@@ -450,7 +470,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     for (const id of ids) {
       const asset = await database.select().from(assets).where(eq(assets.id, id)).get()
       if (!asset) continue
-      const absFile = resolveLibraryPath(asset.filePath)
+      const absFile = resolveAssetContentPath(asset)
       const absThumb = asset.thumbnailPath ? resolveLibraryPath(asset.thumbnailPath) : null
       const result = await analyzeColorsFromFile(absFile, asset.fileType, absThumb ?? undefined)
       if (!result) continue
@@ -471,7 +491,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     if (!asset) return null
     if (asset.fileType !== 'image' && asset.fileType !== 'video') return null
 
-    const absFile = resolveLibraryPath(asset.filePath)
+    const absFile = resolveAssetContentPath(asset)
     const absThumb = asset.thumbnailPath ? resolveLibraryPath(asset.thumbnailPath) : null
     const result = await analyzeColorsFromFile(absFile, asset.fileType, absThumb ?? undefined)
     if (!result) return null
@@ -481,12 +501,27 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     return { dominantColor: result.dominantColor, colors: result.colors }
   })
 
+  ipc.handle('assets:localize', async (_event, assetIds: string[]) => {
+    const { localizeAssets } = await import('../../services/localizeAsset')
+    const ids = Array.isArray(assetIds) ? assetIds.filter((x): x is string => typeof x === 'string') : []
+    return localizeAssets(ids, { preferHardlink: true })
+  })
+
+  ipc.handle('assets:relink', async (_event, assetId: string, newPath: string) => {
+    const { relinkAssetSource } = await import('../../services/libraryUpgrade')
+    if (typeof assetId !== 'string' || typeof newPath !== 'string') {
+      return { ok: false as const, error: '参数无效' }
+    }
+    return relinkAssetSource(assetId, newPath)
+  })
+
   ipc.handle('assets:get-thumbnail', async (_event, id: string) => {
     const database = db!
     const asset = await database
       .select({
         id: assets.id,
         filePath: assets.filePath,
+        storageMode: assets.storageMode,
         fileType: assets.fileType,
         extension: assets.extension,
         mimeType: assets.mimeType,
@@ -512,7 +547,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       }
     }
 
-    const absFile = asset.filePath ? resolveLibraryPath(asset.filePath) : ''
+    const absFile = asset.filePath ? resolveAssetContentPath(asset) : ''
 
     if (isCustomThumbnail(asset.id)) {
       const fromCustom = readWebpDataUrl(itemThumbRelative(asset.id))

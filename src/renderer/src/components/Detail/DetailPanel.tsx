@@ -243,6 +243,19 @@ const DetailPanel: React.FC = () => {
             value={new Date(asset.importedAt).toLocaleString()}
           />
           <InfoRow label="Views" value={String(asset.viewCount)} />
+          <InfoRow
+            label="存储"
+            value={
+              asset.storageMode === 'referenced'
+                ? asset.sourceMissing
+                  ? '引用（源缺失）'
+                  : '仅引用'
+                : '库内副本'
+            }
+          />
+          {asset.storageMode === 'referenced' && (
+            <InfoRow label="源路径" value={asset.resolvedFilePath ?? asset.filePath} variant="block" />
+          )}
         </InfoSection>
 
         {asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension) && (
@@ -452,6 +465,44 @@ const DetailPanel: React.FC = () => {
 
       {/* Footer actions */}
       <div className="px-4 py-3 border-t border-av-border space-y-2">
+        {asset.storageMode === 'referenced' && (
+          <>
+            <button
+              type="button"
+              disabled={asset.sourceMissing}
+              className="btn-primary w-full justify-center text-xs disabled:opacity-50"
+              onClick={async () => {
+                const r = await window.assetVaultAPI.assets.localize([asset.id])
+                if (r.localized > 0) {
+                  notify.success('已本地化到资料库')
+                  await refreshAssets()
+                } else if (r.errors[0]) {
+                  notify.error(r.errors[0].reason)
+                }
+              }}
+            >
+              本地化到资料库
+            </button>
+            {asset.sourceMissing && (
+              <button
+                type="button"
+                className="btn-secondary w-full justify-center text-xs"
+                onClick={async () => {
+                  const p = await window.assetVaultAPI.fs.selectDialog({ multi: false })
+                  const path = (p as string[])[0]
+                  if (!path) return
+                  const res = await window.assetVaultAPI.assets.relink(asset.id, path)
+                  if (res.ok) {
+                    notify.success('已重新链接')
+                    await refreshAssets()
+                  } else notify.error(res.error)
+                }}
+              >
+                重新链接源文件…
+              </button>
+            )}
+          </>
+        )}
         <button
           onClick={() =>
             window.assetVaultAPI.fs.openInExplorer(asset.resolvedFilePath ?? asset.filePath)

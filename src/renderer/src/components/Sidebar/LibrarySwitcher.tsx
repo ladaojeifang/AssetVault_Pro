@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import type { LibraryMode } from '@/shared/libraryTypes'
 import { useToast } from '../Common/Toast'
+import { CreateLibraryModal } from './CreateLibraryModal'
 
 type LibraryState = {
   activeLibraryRoot: string
   recentLibraries: string[]
   libraryDisplayName: string
+  libraryMode: LibraryMode
   manifestPath: string
   dbPath: string
+}
+
+const MODE_SHORT: Record<LibraryMode, string> = {
+  archive: '完整',
+  catalog: '索引'
 }
 
 function folderBasename(p: string): string {
@@ -28,6 +36,7 @@ export function LibrarySwitcherBar(): React.ReactElement {
   const showToast = useToast()
   const [state, setState] = useState<LibraryState | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -124,10 +133,10 @@ export function LibrarySwitcherBar(): React.ReactElement {
     }
   }
 
-  const handleCreate = async () => {
+  const handleCreateWithMode = async (mode: LibraryMode) => {
     setBusy(true)
     try {
-      const res = (await window.assetVaultAPI.library.createAndSwitch()) as
+      const res = (await window.assetVaultAPI.library.createAndSwitch(mode)) as
         | { ok: true }
         | { ok: false; error: string }
       if (!res.ok) {
@@ -137,7 +146,12 @@ export function LibrarySwitcherBar(): React.ReactElement {
         return
       }
       setMenuOpen(false)
-      showToast({ type: 'success', title: '已切换到新资料库' })
+      setCreateOpen(false)
+      showToast({
+        type: 'success',
+        title: '已切换到新资料库',
+        description: mode === 'catalog' ? '索引库（不拷贝原文件）' : '完整库'
+      })
     } catch (e) {
       showToast({
         type: 'error',
@@ -147,6 +161,11 @@ export function LibrarySwitcherBar(): React.ReactElement {
     } finally {
       setBusy(false)
     }
+  }
+
+  const openCreateModal = () => {
+    setMenuOpen(false)
+    setCreateOpen(true)
   }
 
   if (!state) {
@@ -180,7 +199,17 @@ export function LibrarySwitcherBar(): React.ReactElement {
               <path d="M8 7h8M8 11h5" strokeLinecap="round" />
             </svg>
           </span>
-          <span className="truncate flex-1 text-left font-medium text-av-text-primary">{title}</span>
+          <span className="truncate flex-1 text-left font-medium text-av-text-primary min-w-0">{title}</span>
+          <span
+            className={`shrink-0 text-[9px] font-medium px-1 py-0.5 rounded border ${
+              state.libraryMode === 'catalog'
+                ? 'bg-amber-950/50 text-amber-300 border-amber-800/50'
+                : 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40'
+            }`}
+            title={state.libraryMode === 'catalog' ? '索引库' : '完整库'}
+          >
+            {MODE_SHORT[state.libraryMode === 'catalog' ? 'catalog' : 'archive']}
+          </span>
           <svg
             width="12"
             height="12"
@@ -197,8 +226,8 @@ export function LibrarySwitcherBar(): React.ReactElement {
         <button
           type="button"
           disabled={busy}
-          onClick={() => void handleCreate()}
-          title="新建空资料库…"
+          onClick={openCreateModal}
+          title="新建资料库…"
           className="shrink-0 w-9 rounded-md border border-av-border/60 bg-av-bg-primary/50 text-av-text-secondary hover:text-av-accent-blue hover:bg-av-bg-hover hover:border-av-accent-blue/40 transition-colors flex items-center justify-center text-lg leading-none font-light disabled:opacity-50"
         >
           +
@@ -248,13 +277,20 @@ export function LibrarySwitcherBar(): React.ReactElement {
             type="button"
             role="menuitem"
             disabled={busy}
-            onClick={() => void handleCreate()}
+            onClick={openCreateModal}
             className="w-full text-left px-3 py-2 text-xs text-av-text-secondary hover:bg-av-bg-hover hover:text-av-text-primary"
           >
-            新建空资料库…
+            新建资料库…
           </button>
         </div>
       )}
+
+      <CreateLibraryModal
+        visible={createOpen}
+        busy={busy}
+        onClose={() => setCreateOpen(false)}
+        onConfirm={(mode) => void handleCreateWithMode(mode)}
+      />
     </div>
   )
 }

@@ -95,6 +95,23 @@ export function createInitialSchemaOnSqlite(sqlite: initSqlJs.Database): void {
   }
 
   try {
+    sqlite.run(`ALTER TABLE assets ADD COLUMN storage_mode TEXT NOT NULL DEFAULT 'local'`)
+  } catch {
+    /* column already exists */
+  }
+  try {
+    sqlite.run(`ALTER TABLE assets ADD COLUMN localization_state TEXT NOT NULL DEFAULT 'idle'`)
+  } catch {
+    /* column already exists */
+  }
+  try {
+    sqlite.run('ALTER TABLE assets ADD COLUMN source_missing_at INTEGER')
+  } catch {
+    /* column already exists */
+  }
+  sqlite.run(`UPDATE assets SET storage_mode = 'local' WHERE storage_mode IS NULL OR trim(storage_mode) = ''`)
+
+  try {
     sqlite.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_import_source ON assets(import_source)')
   } catch {
     /* ignore */

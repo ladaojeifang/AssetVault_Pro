@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { formatFileSizeMbFilterLabel } from '@/shared/assetFilters'
 import { useApp } from '../../stores/AppContext'
 import { findFolderInTree, getChildFolders } from '../../utils/folderTreeNav'
 import { FolderIconDisplay } from '../Common/FolderIconDisplay'
@@ -175,6 +176,8 @@ function TypeContextView({ onClose }: { onClose: () => void }) {
     tagFilters,
     colorBucketFilter,
     sizePresetFilter,
+    fileSizeMinMb,
+    fileSizeMaxMb,
     datePresetFilter
   } = useApp()
   const meta = fileTypeFilter ? FILE_TYPE_META[fileTypeFilter] : null
@@ -187,6 +190,8 @@ function TypeContextView({ onClose }: { onClose: () => void }) {
   if (debouncedSearch.trim()) filters.push(`搜索「${debouncedSearch.trim()}」`)
   if (colorBucketFilter) filters.push(`颜色 ${colorBucketFilter}`)
   if (sizePresetFilter) filters.push(`尺寸 ${sizePresetFilter}`)
+  const mbLabel = formatFileSizeMbFilterLabel(fileSizeMinMb, fileSizeMaxMb)
+  if (mbLabel) filters.push(`体积 ${mbLabel}`)
   if (datePresetFilter) filters.push(`日期 ${datePresetFilter}`)
   if (tagFilters.length > 0) filters.push(`${tagFilters.length} 个标签筛选`)
 

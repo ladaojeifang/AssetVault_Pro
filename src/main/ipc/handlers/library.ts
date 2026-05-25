@@ -11,6 +11,13 @@ import {
   readLibraryUserState,
   removeFromRecentList
 } from '../../services/libraryBundle'
+import type { LibraryMode } from '@/shared/libraryTypes'
+import { getLibraryMode, readLibraryManifestFile } from '../../services/libraryManifest'
+import {
+  getLibraryModeStats,
+  upgradeCatalogLibraryToArchive,
+  verifyReferencedSources
+} from '../../services/libraryUpgrade'
 import {
   switchActiveLibrary,
   assertEmptyDirectoryForNewLibrary,
@@ -48,10 +55,12 @@ export function handleLibraryOperations(ipc: typeof ipcMain): void {
       seen.add(k)
       dedup.push(r)
     }
+    const manifest = readLibraryManifestFile(active)
     return {
       activeLibraryRoot: active,
       recentLibraries: dedup,
       libraryDisplayName: readLibraryDisplayName(active),
+      libraryMode: manifest?.libraryMode ?? getLibraryMode(),
       manifestPath: join(active, 'manifest.json'),
       dbPath: join(active, LIBRARY_DB_NAME)
     }
@@ -84,11 +93,16 @@ export function handleLibraryOperations(ipc: typeof ipcMain): void {
     return switchActiveLibrary(p)
   })
 
-  ipc.handle('library:create-and-switch', async (event) => {
+  ipc.handle('library:create-and-switch', async (event, libraryModeRaw: unknown) => {
     const parent = dialogParent(event)
+    const libraryMode: LibraryMode = libraryModeRaw === 'catalog' ? 'catalog' : 'archive'
+    const title =
+      libraryMode === 'catalog'
+        ? '选择空文件夹以创建索引资料库（不拷贝原文件）'
+        : '选择空文件夹以创建完整资料库'
     const r = await dialog.showOpenDialog(parent, {
       properties: ['openDirectory', 'createDirectory'],
-      title: '选择空文件夹以创建新资料库'
+      title
     })
     if (r.canceled || !r.filePaths[0]) {
       return { ok: false as const, error: 'cancelled' }
@@ -96,7 +110,7 @@ export function handleLibraryOperations(ipc: typeof ipcMain): void {
     const p = r.filePaths[0]
     try {
       const root = assertEmptyDirectoryForNewLibrary(p)
-      prepareNewLibrarySkeleton(root)
+      prepareNewLibrarySkeleton(root, libraryMode)
       return await switchActiveLibrary(root)
     } catch (e) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) }
@@ -118,12 +132,26 @@ export function handleLibraryOperations(ipc: typeof ipcMain): void {
 
   ipc.handle('library:get-info', async () => {
     const root = getLibraryRoot()
+    const manifest = readLibraryManifestFile(root)
+    const stats = await getLibraryModeStats()
     return {
       libraryRoot: root,
       manifestPath: join(root, 'manifest.json'),
-      dbPath: join(root, LIBRARY_DB_NAME)
+      dbPath: join(root, LIBRARY_DB_NAME),
+      libraryMode: manifest?.libraryMode ?? getLibraryMode(),
+      localization: manifest?.localization ?? null,
+      stats
     }
   })
+
+  ipc.handle('library:get-mode-stats', async () => getLibraryModeStats())
+
+  ipc.handle('library:upgrade-to-archive', async (event, options?: { preferHardlink?: boolean }) => {
+    const win = dialogParent(event)
+    return upgradeCatalogLibraryToArchive(win, options)
+  })
+
+  ipc.handle('library:verify-sources', async () => verifyReferencedSources())
 
   /** DB row count vs `items/` subfolders — diagnose orphan packs or empty UI. */
   ipc.handle('library:get-storage-stats', async () => {

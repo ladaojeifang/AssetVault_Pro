@@ -3,6 +3,7 @@ import { existsSync } from 'fs'
 import { db, persistDatabase } from '../db'
 import { assets } from '../db/schema'
 import { resolveLibraryPath, itemThumbRelative } from './libraryBundle'
+import { resolveAssetContentPath } from './assetPathResolver'
 import { getThumbnailService } from './ThumbnailService'
 import { isModelThumbnailSkipped, markModelThumbnailSkipped, clearModelThumbnailSkip } from './modelThumbnailSkip'
 import { syncAssetSidecarFromDb } from './assetSidecar'
@@ -115,7 +116,7 @@ export async function processPending3dThumbnails(database: Database): Promise<vo
       continue
     }
 
-    const absFile = row.filePath ? resolveLibraryPath(row.filePath) : ''
+    const absFile = row.filePath ? resolveAssetContentPath(row) : ''
     if (!absFile || !existsSync(absFile)) continue
 
     void schedule3dThumbnailAfterImport(database, row.id, absFile, row.extension)
@@ -140,7 +141,7 @@ export async function regenerateModelThumbnails(
     const row = rows[i]
     onProgress?.({ current: i + 1, total, assetId: row.id, status: 'processing' })
 
-    const absFile = row.filePath ? resolveLibraryPath(row.filePath) : ''
+    const absFile = row.filePath ? resolveAssetContentPath(row) : ''
     if (!absFile || !existsSync(absFile)) {
       errors++
       failures.push({ assetId: row.id, filename: row.filename, reason: '模型文件不存在' })

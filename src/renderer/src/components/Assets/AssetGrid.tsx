@@ -13,7 +13,13 @@ import { addDraggedAssetsToFolder } from '../../utils/addAssetsToFolder'
 import { notify } from '../Common/notify'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
 import MasonryGrid from './MasonryGrid'
+import { ListViewColumnHeader } from './ListViewColumnHeader'
+import { AssetListNoResults } from './AssetListNoResults'
+import { useListColumnWidths } from '../../hooks/useListColumnWidths'
+import { useListTableLayout } from '../../hooks/useListTableLayout'
 import { FileTypePlaceholder } from '../Common/FileTypePlaceholder'
+import { hasActiveAssetListQuery } from '@/shared/assetFilters'
+import type { SortField } from '@/shared/types'
 
 const AssetGrid: React.FC = () => {
   const {
@@ -36,21 +42,67 @@ const AssetGrid: React.FC = () => {
     debouncedSearch,
     colorBucketFilter,
     sizePresetFilter,
+    fileSizeMinMb,
+    fileSizeMaxMb,
     datePresetFilter,
     currentFolderId,
     refreshAssets,
     refreshFolders,
     folderTree,
-    setCurrentFolder
+    setCurrentFolder,
+    sortField,
+    sortOrder,
+    setSorting,
+    setFileTypeFilter,
+    setSizePresetFilter,
+    setFileSizeMbFilter,
+    setDatePresetFilter,
+    setColorBucketFilter,
+    clearAssetFilters
   } = useApp()
 
+  const handleListSort = useCallback(
+    (field: SortField) => {
+      if (field === sortField) {
+        setSorting(field, sortOrder === 'asc' ? 'desc' : 'asc')
+      } else {
+        const defaultAsc = field === 'filename' || field === 'fileType' || field === 'extension'
+        setSorting(field, defaultAsc ? 'asc' : 'desc')
+      }
+    },
+    [sortField, sortOrder, setSorting]
+  )
+
   const containerRef = useRef<HTMLDivElement>(null)
+  const listPaneRef = useRef<HTMLDivElement>(null)
+  const listHeaderScrollRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
+
+  const {
+    widths: listColumnWidths,
+    onResizePointerDown: onListColumnResize,
+    resetColumnWidth: onListColumnReset
+  } = useListColumnWidths()
+
+  const {
+    stretched: listTableStretched,
+    gridTemplateColumns: listGridTemplateColumns,
+    minTableWidth: listTableMinWidthPx,
+    headerGridClass: listHeaderGridClass,
+    rowGridClass: listRowGridClass
+  } = useListTableLayout(listPaneRef, listColumnWidths, viewMode === 'list')
+
+  const syncListHeaderScroll = useCallback(() => {
+    if (listTableStretched) return
+    const header = listHeaderScrollRef.current
+    const body = containerRef.current
+    if (header && body) header.scrollLeft = body.scrollLeft
+  }, [listTableStretched])
   const dragStartRef = useRef<string | null>(null)
   /** Index in current `assets` for Shift+click range selection */
   const anchorIndexRef = useRef<number | null>(null)
 
-  const selectionFilterKey = `${tagFilters.join(',')}|${currentFolderId ?? ''}|${debouncedSearch}|${fileTypeFilter ?? ''}|${colorBucketFilter ?? ''}|${sizePresetFilter ?? ''}|${datePresetFilter ?? ''}`
+  const selectionFilterKey = `${tagFilters.join(',')}|${currentFolderId ?? ''}|${debouncedSearch}|${fileTypeFilter ?? ''}|${colorBucketFilter ?? ''}|${sizePresetFilter ?? ''}|${fileSizeMinMb ?? ''}|${fileSizeMaxMb ?? ''}|${datePresetFilter ?? ''}`
   useEffect(() => {
     anchorIndexRef.current = null
   }, [selectionFilterKey])
@@ -66,8 +118,21 @@ const AssetGrid: React.FC = () => {
     !fileTypeFilter &&
     !colorBucketFilter &&
     !sizePresetFilter &&
+    fileSizeMinMb == null &&
+    fileSizeMaxMb == null &&
     !datePresetFilter
   const showSubfolderStrip = showFolderHierarchy && childFolders.length > 0
+
+  const hasActiveQuery = hasActiveAssetListQuery({
+    debouncedSearch,
+    tagFilters,
+    fileTypeFilter,
+    colorBucketFilter,
+    sizePresetFilter,
+    fileSizeMinMb,
+    fileSizeMaxMb,
+    datePresetFilter
+  })
 
   const currentFolderNode = useMemo(
     () => (currentFolderId ? findFolderInTree(folderTree, currentFolderId) : null),
@@ -128,7 +193,7 @@ const AssetGrid: React.FC = () => {
   const listVirtualizer = useVirtualizer<Element, Element>({
     count: assets.length,
     getScrollElement: () => containerRef.current,
-    estimateSize: () => 56,
+    estimateSize: () => 60,
     overscan: 10
   })
 
@@ -452,45 +517,19 @@ const AssetGrid: React.FC = () => {
 
   const listAreaEmpty = !isLoading && assets.length === 0
 
-  if (listAreaEmpty && !showSubfolderStrip) {
-    return (
-      <EmptyState />
-    )
-  }
-
   const parentNavLabel = !currentFolderNode
     ? '全部资产'
     : currentFolderNode.parentId == null || currentFolderNode.parentId === undefined
       ? '全部资产'
       : findFolderInTree(folderTree, currentFolderNode.parentId)?.name ?? '上级'
 
+  if (listAreaEmpty && !hasActiveQuery && !showSubfolderStrip) {
+    return <EmptyState />
+  }
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Filter bar / Info bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-av-border/50 shrink-0">
-        <span className="text-xs text-av-text-muted">
-          {totalAssets.toLocaleString()} assets
-          {assets.length < totalAssets && (
-            <span className="text-av-text-secondary"> · {assets.length.toLocaleString()} in view</span>
-          )}
-          {selectedAssetIds.size > 0 && ` · ${selectedAssetIds.size} selected`}
-          {assets.length > 1 && (
-            <span className="text-av-text-muted/80 hidden sm:inline">
-              {' '}
-              · Ctrl/⌘+滚轮缩放 · Ctrl/⌘+单击多选 · Shift+单击范围 · 拖到上方子文件夹加入目录
-            </span>
-          )}
-          {viewMode === 'grid' && assets.length > 0 && (
-            <span className="text-av-text-muted/80 hidden md:inline"> · 瀑布流</span>
-          )}
-        </span>
-        {isLoadingMore && <span className="text-xs text-av-accent-blue">Loading more…</span>}
-        {isLoading && assets.length > 0 && (
-          <span className="text-xs text-av-text-muted">Updating…</span>
-        )}
-      </div>
-
-      {currentFolderId && showFolderHierarchy && (
+      {currentFolderId && (showFolderHierarchy || hasActiveQuery) && (
         <div className="px-4 py-2 border-b border-av-border/40 shrink-0">
           <button
             type="button"
@@ -502,19 +541,57 @@ const AssetGrid: React.FC = () => {
         </div>
       )}
 
+      <div ref={listPaneRef} className="flex flex-col flex-1 min-h-0 min-w-0">
+      {viewMode === 'list' && (
+        <div
+          ref={listHeaderScrollRef}
+          className="shrink-0 w-full overflow-x-hidden overflow-y-hidden border-b border-av-border/40 z-10"
+        >
+          <ListViewColumnHeader
+            gridTemplateColumns={listGridTemplateColumns}
+            headerGridClass={listHeaderGridClass}
+            layoutStretched={listTableStretched}
+            tableMinWidth={listTableStretched ? undefined : listTableMinWidthPx}
+            onResizeColumn={onListColumnResize}
+            onResetColumn={onListColumnReset}
+            totalAssets={totalAssets}
+            showSectionTitle={showFolderHierarchy}
+            contentOpen={!showFolderHierarchy || contentOpen}
+            onToggleContent={showFolderHierarchy ? () => setContentOpen((o) => !o) : undefined}
+            sortField={sortField}
+            sortOrder={sortOrder}
+            onSort={handleListSort}
+            fileTypeFilter={fileTypeFilter}
+            onFileTypeFilter={(t) => setFileTypeFilter(t)}
+            sizePresetFilter={sizePresetFilter}
+            onSizePreset={setSizePresetFilter}
+            fileSizeMinMb={fileSizeMinMb}
+            fileSizeMaxMb={fileSizeMaxMb}
+            onFileSizeMb={setFileSizeMbFilter}
+            datePresetFilter={datePresetFilter}
+            onDatePreset={setDatePresetFilter}
+            colorBucketFilter={colorBucketFilter}
+            onColorBucket={setColorBucketFilter}
+          />
+        </div>
+      )}
+
       {/* Grid/List + folder hierarchy */}
       <div
         ref={containerRef}
         tabIndex={0}
-        className={`flex-1 overflow-auto outline-none flex flex-col ${
-          viewMode === 'grid' ? 'p-4 gap-3' : 'px-4 py-2'
+        onScroll={viewMode === 'list' && !listTableStretched ? syncListHeaderScroll : undefined}
+        className={`flex-1 overflow-auto outline-none flex flex-col min-w-0 ${
+          viewMode === 'grid' ? 'p-4 gap-3' : 'min-h-0'
         }`}
         style={{
           contain: 'strict'
         }}
       >
         {showFolderHierarchy && showSubfolderStrip && (
-          <div className="shrink-0 border-b border-av-border/40 pb-3">
+          <div
+            className={`shrink-0 border-b border-av-border/40 pb-3 ${viewMode === 'list' ? 'px-4 pt-2' : ''}`}
+          >
             <button
               type="button"
               className="flex items-center gap-2 w-full text-left text-sm font-medium text-av-text-secondary hover:text-av-text-primary mb-2"
@@ -556,7 +633,7 @@ const AssetGrid: React.FC = () => {
           </div>
         )}
 
-        {showFolderHierarchy && (
+        {showFolderHierarchy && viewMode === 'grid' && (
           <div className="shrink-0 border-b border-av-border/30 pb-2">
             <button
               type="button"
@@ -575,8 +652,19 @@ const AssetGrid: React.FC = () => {
           </div>
         )}
 
-        {(!showFolderHierarchy || contentOpen) && (
-          <>
+        {(!showFolderHierarchy || contentOpen || viewMode === 'list') && (
+          <div
+            className={
+              viewMode === 'list'
+                ? `flex flex-col flex-1 min-h-0 py-2 ${listTableStretched ? 'w-full' : ''}`
+                : undefined
+            }
+            style={
+              viewMode === 'list' && !listTableStretched
+                ? { minWidth: listTableMinWidthPx }
+                : undefined
+            }
+          >
             {assets.length > 0 ? (
               viewMode === 'grid' ? (
                 <MasonryGrid
@@ -594,6 +682,8 @@ const AssetGrid: React.FC = () => {
                 <ListContent
                   assets={assets}
                   virtualizer={listVirtualizer}
+                  gridTemplateColumns={listGridTemplateColumns}
+                  rowGridClass={listRowGridClass}
                   selectedIds={selectedAssetIds}
                   onAssetClick={handleAssetClick}
                   onAssetDoubleClick={handleAssetDoubleClick}
@@ -601,13 +691,32 @@ const AssetGrid: React.FC = () => {
                   onAssetContextMenu={handleAssetContextMenu}
                 />
               )
+            ) : hasActiveQuery ? (
+              <AssetListNoResults
+                onClearFilters={() => clearAssetFilters()}
+                onBackToParent={
+                  currentFolderId
+                    ? () => void setCurrentFolder(currentFolderNode?.parentId ?? null)
+                    : undefined
+                }
+                parentLabel={currentFolderId ? parentNavLabel : undefined}
+              />
             ) : showFolderHierarchy ? (
-              <div className="py-10 text-center text-sm text-av-text-muted">此位置暂无素材文件</div>
+              <div
+                className={
+                  viewMode === 'list'
+                    ? 'flex flex-1 items-center justify-center text-sm text-av-text-muted'
+                    : 'py-10 text-center text-sm text-av-text-muted'
+                }
+              >
+                此位置暂无素材文件
+              </div>
             ) : null}
-          </>
+          </div>
         )}
 
         {hasMoreAssets && <div ref={sentinelRef} className="h-8 w-full shrink-0" aria-hidden />}
+      </div>
       </div>
 
       <AssetContextMenu
@@ -638,6 +747,8 @@ const AssetGrid: React.FC = () => {
 function ListContent({
   assets,
   virtualizer,
+  gridTemplateColumns,
+  rowGridClass,
   selectedIds,
   onAssetClick,
   onAssetDoubleClick,
@@ -646,6 +757,8 @@ function ListContent({
 }: {
   assets: any[]
   virtualizer: Virtualizer<Element, Element>
+  gridTemplateColumns: string
+  rowGridClass: string
   selectedIds: Set<string>
   onAssetClick: (id: string, e: React.MouseEvent) => void
   onAssetDoubleClick: (id: string) => void
@@ -656,7 +769,7 @@ function ListContent({
   onAssetContextMenu: (e: React.MouseEvent, asset: AssetItem) => void
 }) {
   return (
-    <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+    <div className="relative w-full min-w-0" style={{ height: `${virtualizer.getTotalSize()}px` }}>
       {virtualizer.getVirtualItems().map((virtualRow) => {
         const asset = assets[virtualRow.index]
         if (!asset) return null
@@ -676,6 +789,8 @@ function ListContent({
           >
             <AssetListItem
               asset={asset}
+              gridTemplateColumns={gridTemplateColumns}
+              rowGridClass={rowGridClass}
               selected={selectedIds.has(asset.id)}
               onClick={(e) => onAssetClick(asset.id, e)}
               onDoubleClick={() => onAssetDoubleClick(asset.id)}
@@ -837,6 +952,8 @@ function FolderBrowseCard({
 // Asset list item for list view
 function AssetListItem({
   asset,
+  gridTemplateColumns,
+  rowGridClass,
   selected,
   onClick,
   onDoubleClick,
@@ -844,6 +961,8 @@ function AssetListItem({
   onContextMenu
 }: {
   asset: any
+  gridTemplateColumns: string
+  rowGridClass: string
   selected: boolean
   onClick: (e: React.MouseEvent) => void
   onDoubleClick: () => void
@@ -852,6 +971,8 @@ function AssetListItem({
 }) {
   const can3dPreview = asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)
 
+  const ext = (asset.extension || '').replace(/^\./, '').toLowerCase() || '—'
+
   return (
     <div
       draggable
@@ -859,11 +980,11 @@ function AssetListItem({
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
-      className={`flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors ${
+      className={`${rowGridClass} py-2 cursor-pointer transition-colors ${
         selected ? 'bg-av-accent-blue/10' : 'hover:bg-av-bg-hover'
       }`}
+      style={{ gridTemplateColumns }}
     >
-      {/* Mini thumbnail */}
       <div className="w-10 h-10 rounded bg-av-bg-tertiary shrink-0 flex items-center justify-center overflow-hidden">
         {asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === 'font' || can3dPreview || asset.hasThumbnail ? (
           <div className="w-full h-full [&_img]:w-full [&_img]:h-full">
@@ -885,25 +1006,50 @@ function AssetListItem({
         )}
       </div>
 
-      {/* File info */}
-      <div className="flex-1 min-w-0">
-        <p className={`text-sm truncate ${selected ? 'text-av-accent-blue' : 'text-av-text-primary'}`}>
-          {asset.filename}
-        </p>
-        <p className="text-xs text-av-text-muted">
-          {formatFileSize(asset.fileSize)} · {asset.fileType} ·{' '}
-          {new Date(asset.importedAt).toLocaleDateString()}
-        </p>
-      </div>
+      <p
+        className={`text-sm truncate min-w-0 ${selected ? 'text-av-accent-blue' : 'text-av-text-primary'}`}
+        title={asset.filename}
+      >
+        {asset.filename}
+        {asset.storageMode === 'referenced' && (
+          <span
+            className={`ml-1.5 text-[9px] font-medium px-1 py-0.5 rounded ${
+              asset.sourceMissing ? 'bg-red-900/60 text-red-200' : 'bg-amber-900/50 text-amber-200'
+            }`}
+          >
+            {asset.sourceMissing ? '缺失' : '引用'}
+          </span>
+        )}
+      </p>
 
-      {/* Selection indicator */}
-      {selected && (
-        <div className="w-4 h-4 rounded-full bg-av-accent-blue flex items-center justify-center shrink-0">
-          <svg width="8" height="8" viewBox="0 0 10 10" fill="white">
-            <path d="M2 5l2 2 4-4" stroke="white" strokeWidth="1.5" fill="none" />
-          </svg>
-        </div>
-      )}
+      <span className="text-xs text-av-text-muted tabular-nums truncate text-left">
+        {formatFileSize(asset.fileSize)}
+      </span>
+      <span className="text-xs text-av-text-muted truncate capitalize text-left">{asset.fileType}</span>
+      <span className="text-xs text-av-text-muted font-mono truncate text-left" title={ext}>
+        .{ext}
+      </span>
+      <span className="text-xs text-av-text-muted tabular-nums truncate text-left">
+        {new Date(asset.importedAt).toLocaleDateString()}
+      </span>
+
+      <div className="flex justify-end w-full">
+        {selected ? (
+          <div className="w-4 h-4 rounded-full bg-av-accent-blue flex items-center justify-center shrink-0">
+            <svg width="8" height="8" viewBox="0 0 10 10" fill="white">
+              <path d="M2 5l2 2 4-4" stroke="white" strokeWidth="1.5" fill="none" />
+            </svg>
+          </div>
+        ) : asset.dominantColor ? (
+          <span
+            className="w-4 h-4 rounded border border-av-border/60 shrink-0"
+            style={{ backgroundColor: asset.dominantColor }}
+            title={asset.dominantColor}
+          />
+        ) : (
+          <span className="w-4 h-4 shrink-0" />
+        )}
+      </div>
     </div>
   )
 }

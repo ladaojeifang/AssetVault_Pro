@@ -63,6 +63,24 @@ export function buildSizePresetCondition(preset: SizePreset): SQL {
   }
 }
 
+export function buildFileSizeMbCondition(
+  minMb?: number | null,
+  maxMb?: number | null
+): SQL | null {
+  const parts: SQL[] = []
+  if (minMb != null && minMb >= 0) {
+    const minBytes = Math.floor(minMb * 1024 * 1024)
+    parts.push(sql`${assets.fileSize} >= ${minBytes}`)
+  }
+  if (maxMb != null && maxMb >= 0) {
+    const maxBytes = Math.floor(maxMb * 1024 * 1024)
+    parts.push(sql`${assets.fileSize} <= ${maxBytes}`)
+  }
+  if (parts.length === 0) return null
+  if (parts.length === 1) return parts[0]!
+  return sql`(${sql.join(parts, sql` AND `)})`
+}
+
 export function buildDatePresetCondition(preset: DatePreset): SQL {
   const cutoff = datePresetCutoff(preset)
   return sql`${assets.importedAt} >= ${cutoff}`

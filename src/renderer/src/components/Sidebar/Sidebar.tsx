@@ -705,6 +705,7 @@ const Sidebar: React.FC = () => {
         <TypeFilterItem type="document" label="Docs" emoji="📄" />
         <TypeFilterItem type="3d" label="3D" emoji="📦" />
         <TypeFilterItem type="code" label="Code" emoji="💻" />
+        <TypeFilterItem type="other" label="Other" emoji="📎" />
       </SidebarSection>
 
       <FolderContextMenu
