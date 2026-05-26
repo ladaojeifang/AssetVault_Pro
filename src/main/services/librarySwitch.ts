@@ -93,7 +93,9 @@ async function switchActiveLibraryOnce(newRootRaw: string): Promise<{ ok: true }
         setLibraryRootForSession(previousRoot)
         getThumbnailService().setLibraryRoot(previousRoot)
         await initDatabase(join(previousRoot, LIBRARY_DB_NAME))
+        await runLegacyPathsMigrationIfNeeded()
         await flushDatabase()
+        loadLibraryModeFromManifest(previousRoot)
       } catch (rollbackErr) {
         console.error('[Library] Rollback failed:', rollbackErr)
       }

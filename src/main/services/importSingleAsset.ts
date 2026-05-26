@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid'
 import mime from 'mime-types'
 import { Transformer, ResizeFit } from '@napi-rs/image'
 import ExifReader from 'exifreader'
-import { db, persistDatabase } from '../db'
+import { getDatabase, persistDatabase } from '../db'
 import { assets, assetFolders } from '../db/schema'
 import { eq, and } from 'drizzle-orm'
 import type { DuplicateImportAnswer, DuplicateImportPromptPayload, DuplicatePolicy, ImportAssetOptions } from '@/shared/importTypes'
@@ -52,7 +52,7 @@ export async function importSingleAsset(
   filePath: string,
   options?: string | ImportSingleAssetOptions
 ): Promise<string | null> {
-  const database = db!
+  const database = getDatabase()
   const opts = normalizeImportOptions(options)
   const targetFolderId = opts.targetFolderId
 
@@ -158,11 +158,11 @@ export async function importSingleAsset(
       height = imgInfo.height
 
       if (!shouldUseOriginalImageDimensions(width, height)) {
-        const thumb = await getThumbnailService().generate(destAbs, id, {
-          width: 256,
-          height: 256,
-          quality: 80
-        })
+        const thumb = await getThumbnailService().generate(
+          destAbs,
+          id,
+          getThumbnailService().getGenerationDefaults()
+        )
         if (thumb && !thumb.usedOriginal) {
           thumbnailPath = itemThumbRelative(id)
           hasThumbnail = true
@@ -213,11 +213,11 @@ export async function importSingleAsset(
     metadataObj.duration = duration ?? null
     try {
       // Always extract a poster frame; generateVideo skips resize when frame long edge < 256
-      const thumb = await getThumbnailService().generateVideo(destAbs, id, {
-        width: 256,
-        height: 256,
-        quality: 80
-      })
+      const thumb = await getThumbnailService().generateVideo(
+        destAbs,
+        id,
+        getThumbnailService().getGenerationDefaults()
+      )
       if (thumb) {
         thumbnailPath = itemThumbRelative(id)
         hasThumbnail = true

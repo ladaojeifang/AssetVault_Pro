@@ -2,15 +2,15 @@ import { ipcMain } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import { existsSync, copyFileSync, mkdirSync, readFileSync, statSync, unlinkSync } from 'fs'
 import { join, sep, extname } from 'path'
-import { db, persistDatabase, getDatabase } from '../../db'
+import { persistDatabase, getDatabase } from '../../db'
 import { folders, assetFolders, assets } from '../../db/schema'
 import { eq, asc, countDistinct, and, inArray, or, desc } from 'drizzle-orm'
 import type { Folder } from '../../db/schema'
 import type { FolderItem } from '@/shared/types'
 import { getLibraryRoot } from '../../services/libraryBundle'
 import { toCanonicalFilePath } from '../../utils/pathUtils'
-
-const MAX_FOLDER_LEVEL = 4
+import { assertPlainObject, assertString, assertStringArray } from '../ipcGuards'
+import { MAX_FOLDER_LEVEL } from '@/shared/folderLimits'
 const FOLDER_ICONS_PREFIX = 'folder-icons/'
 
 function isFolderIconStoredPath(icon: string): boolean {
@@ -46,12 +46,12 @@ function mimeForIconExt(ext: string): string {
 
 export function handleFolderOperations(ipc: typeof ipcMain): void {
   ipc.handle('folders:list', async () => {
-    const database = db!
+    const database = getDatabase()
     return database.select().from(folders).orderBy(asc(folders.name)).all()
   })
 
   ipc.handle('folders:get-tree', async () => {
-    const database = db!
+    const database = getDatabase()
     const allFolders = await database.select().from(folders).orderBy(asc(folders.name)).all()
     const countRows = await database
       .select({
@@ -69,7 +69,9 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('folders:set-cover', async (_event, folderId: string, assetId: string) => {
-    const database = db!
+    const database = getDatabase()
+    assertString('folderId', folderId)
+    assertString('assetId', assetId)
     const asset = await database.select().from(assets).where(eq(assets.id, assetId)).get()
     if (!asset) throw new Error('资产不存在')
     if (asset.fileType !== 'image' && !asset.hasThumbnail) {
@@ -91,7 +93,8 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
 
   /** For each folder id, pick cover: manual cover_asset_id, else recent image/thumb. */
   ipc.handle('folders:get-cover-asset-ids', async (_event, folderIds: string[]) => {
-    const database = db!
+    const database = getDatabase()
+    assertStringArray('folderIds', folderIds)
     if (!folderIds.length) return {}
     const map: Record<string, string> = {}
 
@@ -133,6 +136,7 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('folders:import-icon-from-file', async (_event, sourcePath: string) => {
+    assertString('sourcePath', sourcePath)
     const src = toCanonicalFilePath(sourcePath)
     if (!existsSync(src)) throw new Error('File not found')
     const st = statSync(src)
@@ -154,12 +158,14 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('folders:delete-stored-icon', async (_event, relativePath: string) => {
+    assertString('relativePath', relativePath)
     if (!relativePath || !isFolderIconStoredPath(relativePath)) return false
     tryRemoveFolderIconFile(relativePath)
     return true
   })
 
   ipc.handle('folders:get-icon-data-url', async (_event, relativePath: string) => {
+    assertString('relativePath', relativePath)
     if (!relativePath || !isFolderIconStoredPath(relativePath)) return null
     const root = getLibraryRoot()
     const abs = join(root, relativePath.split('/').join(sep))
@@ -177,8 +183,11 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
       _event,
       data: { name: string; parentId?: string; color?: string; icon?: string | null }
     ) => {
-      const database = db!
+      const database = getDatabase()
       const id = uuidv4()
+      assertPlainObject('data', data)
+      assertString('data.name', (data as any).name)
+      if ((data as any).parentId != null) assertString('data.parentId', (data as any).parentId)
       const parentData = data.parentId
         ? await database.select().from(folders).where(eq(folders.id, data.parentId!)).get()
         : null
@@ -226,7 +235,10 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
       id: string,
       data: { name?: string; parentId?: string; color?: string; icon?: string | null }
     ) => {
-      const database = db!
+      const database = getDatabase()
+      assertString('id', id)
+      assertPlainObject('data', data)
+      if ((data as any).parentId != null) assertString('data.parentId', (data as any).parentId)
 
       if (data.color !== undefined || data.icon !== undefined) {
         if (data.icon !== undefined) {
@@ -281,7 +293,8 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
   )
 
   ipc.handle('folders:delete', async (_event, id: string) => {
-    const database = db!
+    const database = getDatabase()
+    assertString('id', id)
     const row = await database.select().from(folders).where(eq(folders.id, id)).get()
     if (row?.icon && typeof row.icon === 'string' && isFolderIconStoredPath(row.icon)) {
       tryRemoveFolderIconFile(row.icon)
@@ -292,7 +305,9 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('folders:move', async (_event, id: string, newParentId: string) => {
-    const database = db!
+    const database = getDatabase()
+    assertString('id', id)
+    assertString('newParentId', newParentId)
     const [folder, newParent] = await Promise.all([
       database.select().from(folders).where(eq(folders.id, id)).get(),
       database.select().from(folders).where(eq(folders.id, newParentId)).get()

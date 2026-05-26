@@ -9,6 +9,10 @@ import {
 } from '../../utils/masonryLayout'
 import { useAppTheme } from '../../stores/ThemeContext'
 import type { AppTheme } from '@/shared/appTheme'
+import {
+  DEFAULT_APP_PREFERENCES,
+  type AppPreferences
+} from '@/shared/appPreferences'
 
 const GRID_SIZE_COLUMN_WIDTH: Record<string, number> = {
   small: 120,
@@ -25,29 +29,41 @@ interface SettingsProps {
   onClose: () => void
 }
 
+function inferGridSizeFromColumnWidth(px: number): 'small' | 'medium' | 'large' {
+  if (px <= 140) return 'small'
+  if (px >= 260) return 'large'
+  return 'medium'
+}
+
 const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
   const [activeTab, setActiveTab] = useState('general')
-  const [settings, setSettings] = useState({
-    // General
-    defaultImportPath: '',
-    autoWatchFolders: true,
-    thumbnailQuality: 80,
-    thumbnailSize: 256,
-    maxCacheSizeMB: 2048,
+  const [prefs, setPrefs] = useState<AppPreferences>({ ...DEFAULT_APP_PREFERENCES })
+  const [gridSize, setGridSize] = useState<'small' | 'medium' | 'large'>('medium')
+  const [saving, setSaving] = useState(false)
 
-    // Appearance
-    theme: 'dark',
-    gridColumns: 8,
-    gridSize: 'medium' as 'small' | 'medium' | 'large',
+  useEffect(() => {
+    if (!visible) return
+    void window.assetVaultAPI.settings.getAppPreferences().then((p) => {
+      setPrefs(p)
+    })
+    setGridSize(inferGridSizeFromColumnWidth(loadMasonryColumnWidth()))
+  }, [visible])
 
-    // Shortcuts
-    customHotkeys: {} as Record<string, string>,
+  const updatePref = useCallback(<K extends keyof AppPreferences>(key: K, value: AppPreferences[K]) => {
+    setPrefs((prev) => ({ ...prev, [key]: value }))
+  }, [])
 
-    // Advanced
-    enableFileWatcher: true,
-    ftsMinLength: 2,
-    debounceMs: 300
-  })
+  const handleSave = useCallback(async () => {
+    setSaving(true)
+    try {
+      await window.assetVaultAPI.settings.setAppPreferences(prefs)
+      saveMasonryColumnWidth(GRID_SIZE_COLUMN_WIDTH[gridSize] ?? MASONRY_COLUMN_WIDTH_DEFAULT)
+    } catch (e) {
+      console.error('[Settings] save failed:', e)
+    } finally {
+      setSaving(false)
+    }
+  }, [prefs, gridSize])
 
   const tabs = [
     { id: 'general', label: 'General', icon: '⚙️' },
@@ -92,11 +108,19 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
 
         {/* Content area */}
         <div className="flex-1 p-6 overflow-y-auto">
-          {activeTab === 'general' && <GeneralSettings settings={settings} onUpdate={(k, v) => updateSetting(k as any, v)} />}
+          {activeTab === 'general' && <GeneralSettings prefs={prefs} onUpdate={updatePref} />}
           {activeTab === 'library' && <LibrarySettingsPanel />}
-          {activeTab === 'appearance' && <AppearanceSettings settings={settings} onUpdate={(k, v) => updateSetting(k as any, v)} />}
+          {activeTab === 'appearance' && (
+            <AppearanceSettings
+              gridSize={gridSize}
+              onGridSizeChange={(size) => {
+                setGridSize(size)
+                saveMasonryColumnWidth(GRID_SIZE_COLUMN_WIDTH[size] ?? MASONRY_COLUMN_WIDTH_DEFAULT)
+              }}
+            />
+          )}
           {activeTab === 'shortcuts' && <ShortcutSettings />}
-          {activeTab === 'advanced' && <AdvancedSettings settings={settings} onUpdate={(k, v) => updateSetting(k as any, v)} />}
+          {activeTab === 'advanced' && <AdvancedSettings prefs={prefs} onUpdate={updatePref} />}
         </div>
       </div>
 
@@ -106,13 +130,13 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
           Cancel
         </button>
         <button
+          disabled={saving}
           onClick={() => {
-            saveSettings()
-            onClose()
+            void handleSave().then(() => onClose())
           }}
           className="btn-primary"
         >
-          Save Changes
+          {saving ? 'Saving…' : 'Save Changes'}
         </button>
       </div>
     </Modal>
@@ -120,11 +144,11 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
 }
 
 function GeneralSettings({
-  settings,
+  prefs,
   onUpdate
 }: {
-  settings: Record<string, unknown>
-  onUpdate: (key: string, value: unknown) => void
+  prefs: AppPreferences
+  onUpdate: <K extends keyof AppPreferences>(key: K, value: AppPreferences[K]) => void
 }) {
   return (
     <div className="space-y-6">
@@ -136,7 +160,7 @@ function GeneralSettings({
       >
         <input
           type="text"
-          value={(settings.defaultImportPath as string) || ''}
+          value={prefs.defaultImportPath}
           onChange={(e) => onUpdate('defaultImportPath', e.target.value)}
           placeholder="Leave empty for system default"
           className="input-base"
@@ -150,7 +174,7 @@ function GeneralSettings({
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
-            checked={settings.autoWatchFolders as boolean}
+            checked={prefs.autoWatchFolders}
             onChange={(e) => onUpdate('autoWatchFolders', e.target.checked)}
             className="w-4 h-4 rounded bg-av-bg-elevated border-av-border"
           />
@@ -160,14 +184,14 @@ function GeneralSettings({
 
       <SettingField
         label="Thumbnail Quality"
-        description={`JPEG/WebP quality (1-100). Current: ${settings.thumbnailQuality}%`}
+        description={`JPEG/WebP quality (1-100). Current: ${prefs.thumbnailQuality}%`}
       >
         <input
           type="range"
           min={10}
           max={100}
           step={5}
-          value={settings.thumbnailQuality as number}
+          value={prefs.thumbnailQuality}
           onChange={(e) => onUpdate('thumbnailQuality', Number(e.target.value))}
           className="w-full h-1.5 bg-av-bg-elevated rounded-lg appearance-none cursor-pointer accent-av-accent-blue"
         />
@@ -175,11 +199,11 @@ function GeneralSettings({
 
       <SettingField
         label="Thumbnail Size"
-        description={`Max dimension in pixels. Current: ${settings.thumbnailSize}px`}
+        description={`Max dimension in pixels. Applies to newly generated thumbnails. Current: ${prefs.thumbnailMaxEdge}px`}
       >
         <select
-          value={settings.thumbnailSize as number}
-          onChange={(e) => onUpdate('thumbnailSize', Number(e.target.value))}
+          value={prefs.thumbnailMaxEdge}
+          onChange={(e) => onUpdate('thumbnailMaxEdge', Number(e.target.value))}
           className="input-base w-auto"
         >
           <option value={128}>128px (Small)</option>
@@ -195,11 +219,11 @@ function GeneralSettings({
 }
 
 function AppearanceSettings({
-  settings,
-  onUpdate
+  gridSize,
+  onGridSizeChange
 }: {
-  settings: Record<string, unknown>
-  onUpdate: (key: string, value: unknown) => void
+  gridSize: 'small' | 'medium' | 'large'
+  onGridSizeChange: (size: 'small' | 'medium' | 'large') => void
 }) {
   const { theme, setTheme } = useAppTheme()
 
@@ -213,7 +237,6 @@ function AppearanceSettings({
           onChange={(e) => {
             const next = e.target.value as AppTheme
             void setTheme(next)
-            onUpdate('theme', next)
           }}
           className="input-base w-auto min-w-[200px]"
         >
@@ -230,12 +253,9 @@ function AppearanceSettings({
           {(['small', 'medium', 'large'] as const).map((size) => (
             <button
               key={size}
-              onClick={() => {
-                onUpdate('gridSize', size)
-                saveMasonryColumnWidth(GRID_SIZE_COLUMN_WIDTH[size] ?? MASONRY_COLUMN_WIDTH_DEFAULT)
-              }}
+              onClick={() => onGridSizeChange(size)}
               className={`px-3 py-1.5 rounded-md text-xs capitalize transition-colors ${
-                settings.gridSize === size
+                gridSize === size
                   ? 'bg-av-accent-blue text-white'
                   : 'bg-av-bg-elevated text-av-text-secondary hover:text-av-text-primary'
               }`}
@@ -379,11 +399,11 @@ function LibraryStorageStatsCard(): React.ReactElement {
 }
 
 function AdvancedSettings({
-  settings,
+  prefs,
   onUpdate
 }: {
-  settings: Record<string, unknown>
-  onUpdate: (key: string, value: unknown) => void
+  prefs: AppPreferences
+  onUpdate: <K extends keyof AppPreferences>(key: K, value: AppPreferences[K]) => void
 }) {
   return (
     <div className="space-y-6">
@@ -398,45 +418,30 @@ function AdvancedSettings({
       </div>
 
       <SettingField
-        label="Enable File Watcher"
-        description="Auto-sync file changes from watched folders"
-      >
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={settings.enableFileWatcher as boolean}
-            onChange={(e) => onUpdate('enableFileWatcher', e.target.checked)}
-            className="w-4 h-4 rounded bg-av-bg-elevated border-av-border"
-          />
-          <span className="text-sm text-av-text-secondary">Enable</span>
-        </label>
-      </SettingField>
-
-      <SettingField
         label="Search Debounce"
-        description={`Delay before search executes (ms). Current: ${settings.debounceMs}ms`}
+        description={`Delay before search executes (ms). Save to apply. Current: ${prefs.searchDebounceMs}ms`}
       >
         <input
           type="range"
           min={100}
           max={800}
           step={50}
-          value={settings.debounceMs as number}
-          onChange={(e) => onUpdate('debounceMs', Number(e.target.value))}
+          value={prefs.searchDebounceMs}
+          onChange={(e) => onUpdate('searchDebounceMs', Number(e.target.value))}
           className="w-full h-1.5 bg-av-bg-elevated rounded-lg appearance-none cursor-pointer accent-av-accent-blue"
         />
       </SettingField>
 
       <SettingField
         label="Max Cache Size"
-        description={`Maximum disk cache for thumbnails (MB). Current: ${settings.maxCacheSizeMB}MB`}
+        description={`In-memory thumbnail LRU cap (applies on save). Current: ${prefs.maxCacheSizeMB}MB`}
       >
         <input
           type="number"
           min={256}
           max={10240}
           step={256}
-          value={settings.maxCacheSizeMB as number}
+          value={prefs.maxCacheSizeMB}
           onChange={(e) => onUpdate('maxCacheSizeMB', Number(e.target.value))}
           className="input-base w-32"
         />
@@ -462,15 +467,6 @@ function SettingField({
       {children}
     </div>
   )
-}
-
-async function updateSetting(_key: string, _value: unknown): Promise<void> {
-  // Settings would be persisted via IPC or local storage
-}
-
-function saveSettings(): void {
-  // Persist all settings
-  console.log('[Settings] Saving preferences...')
 }
 
 export default SettingsPage

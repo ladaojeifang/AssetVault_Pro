@@ -1,15 +1,24 @@
 import { existsSync, readFileSync, statSync } from 'fs'
 import { join } from 'path'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { DuplicateImportPromptPayload } from '@/shared/importTypes'
 import { CONTENT_HASH_ALGO } from '@/shared/importTypes'
-import { db, persistDatabase } from '../db'
+import { getDatabase, persistDatabase } from '../db'
 import { assets, assetFolders, folders } from '../db/schema'
 import { computeFileSha256 } from '../utils/contentHash'
 import { resolveLibraryPath, getLibraryRoot } from './libraryBundle'
 import { syncAssetSidecarFromDb } from './assetSidecar'
 
-type Database = NonNullable<typeof db>
+type Database = ReturnType<typeof getDatabase>
+
+/** Max same-size rows to scan when hash is not indexed yet (avoids SHA-256 storms). */
+const CONTENT_HASH_CANDIDATE_LIMIT = 32
+
+let contentHashScanCancelRequested = false
+
+export function cancelContentHashScan(): void {
+  contentHashScanCancelRequested = true
+}
 
 function readSidecarContentHash(assetId: string): string | null {
   const metaPath = join(getLibraryRoot(), 'items', assetId, 'meta.json')
@@ -63,9 +72,25 @@ export async function findAssetIdByContentHash(
   fileSize: number,
   contentHash: string
 ): Promise<string | null> {
-  const candidates = await database.select().from(assets).where(eq(assets.fileSize, fileSize)).all()
+  const exact = await database
+    .select({ id: assets.id })
+    .from(assets)
+    .where(and(eq(assets.fileSize, fileSize), eq(assets.contentHash, contentHash)))
+    .get()
+  if (exact) return exact.id
+
+  const candidates = await database
+    .select()
+    .from(assets)
+    .where(eq(assets.fileSize, fileSize))
+    .limit(CONTENT_HASH_CANDIDATE_LIMIT)
+    .all()
+
+  const pendingHashWrites: Array<{ id: string; hash: string }> = []
 
   for (const candidate of candidates) {
+    if (candidate.contentHash && candidate.contentHash !== contentHash) continue
+
     let hash = candidate.contentHash
     if (!hash) {
       hash = readSidecarContentHash(candidate.id)
@@ -74,15 +99,29 @@ export async function findAssetIdByContentHash(
         if (!existsSync(abs)) continue
         hash = await computeFileSha256(abs)
       }
-      await database
-        .update(assets)
-        .set({ contentHash: hash, contentHashComputedAt: new Date(), updatedAt: new Date() })
-        .where(eq(assets.id, candidate.id))
-      persistDatabase()
-      await syncAssetSidecarFromDb(database, candidate.id)
+      pendingHashWrites.push({ id: candidate.id, hash })
     }
-    if (hash === contentHash) return candidate.id
+    if (hash === contentHash) {
+      for (const { id, hash: h } of pendingHashWrites) {
+        await database
+          .update(assets)
+          .set({ contentHash: h, contentHashComputedAt: new Date(), updatedAt: new Date() })
+          .where(eq(assets.id, id))
+        await syncAssetSidecarFromDb(database, id)
+      }
+      if (pendingHashWrites.length > 0) persistDatabase()
+      return candidate.id
+    }
   }
+
+  for (const { id, hash } of pendingHashWrites) {
+    await database
+      .update(assets)
+      .set({ contentHash: hash, contentHashComputedAt: new Date(), updatedAt: new Date() })
+      .where(eq(assets.id, id))
+    await syncAssetSidecarFromDb(database, id)
+  }
+  if (pendingHashWrites.length > 0) persistDatabase()
 
   return null
 }
@@ -129,8 +168,9 @@ export async function buildDuplicatePromptPayload(
 
 export async function scanLibraryContentHashes(
   onProgress?: (data: { current: number; total: number; assetId: string; status: 'processing' | 'done' | 'skipped' | 'error' }) => void
-): Promise<{ scanned: number; updated: number; skipped: number; errors: number }> {
-  const database = db!
+): Promise<{ scanned: number; updated: number; skipped: number; errors: number; cancelled?: boolean }> {
+  contentHashScanCancelRequested = false
+  const database = getDatabase()
   const rows = await database
     .select({
       id: assets.id,
@@ -148,6 +188,15 @@ export async function scanLibraryContentHashes(
   const total = rows.length
 
   for (let i = 0; i < rows.length; i++) {
+    if (contentHashScanCancelRequested) {
+      if (updated > 0) persistDatabase()
+      return { scanned: i, updated, skipped, errors, cancelled: true }
+    }
+
+    if (i > 0 && i % 20 === 0) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+
     const row = rows[i]
     onProgress?.({ current: i + 1, total, assetId: row.id, status: 'processing' })
 
@@ -195,6 +244,7 @@ export async function scanLibraryContentHashes(
         .where(eq(assets.id, row.id))
       await syncAssetSidecarFromDb(database, row.id)
       updated++
+      if (updated % 50 === 0) persistDatabase()
       onProgress?.({ current: i + 1, total, assetId: row.id, status: 'done' })
     } catch {
       errors++
@@ -204,5 +254,5 @@ export async function scanLibraryContentHashes(
 
   if (updated > 0) persistDatabase()
 
-  return { scanned: total, updated, skipped, errors }
+  return { scanned: total, updated, skipped, errors, cancelled: contentHashScanCancelRequested }
 }

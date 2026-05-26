@@ -5,6 +5,8 @@ import {
   type FormatIconOverridesSettings
 } from '@/shared/formatIconOverrides'
 import { readAppAppearanceSettings, writeAppTheme } from '../../services/appSettingsStore'
+import { readAppPreferences, writeAppPreferences } from '../../services/appPreferencesStore'
+import { normalizeAppPreferences } from '@/shared/appPreferences'
 import {
   importFormatIconImage,
   pruneOrphanFormatIconImages,
@@ -30,6 +32,12 @@ function notifyAppAppearanceChanged(): void {
 }
 
 export function handleSettingsOperations(ipc: typeof ipcMain): void {
+  ipc.handle('settings:get-app-preferences', async () => readAppPreferences())
+
+  ipc.handle('settings:set-app-preferences', async (_event, raw: unknown) => {
+    return writeAppPreferences(normalizeAppPreferences(raw))
+  })
+
   ipc.handle('settings:get-app-appearance', async () => readAppAppearanceSettings())
 
   ipc.handle('settings:set-app-theme', async (_event, theme: unknown) => {

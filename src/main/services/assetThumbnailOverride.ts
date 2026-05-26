@@ -91,18 +91,11 @@ export async function refreshAssetThumbnail(
   let gen = null
   const ext = row.extension
 
+  const thumbOpts = thumbService.getGenerationDefaults()
   if (row.fileType === 'image') {
-    gen = await thumbService.generate(absFile, assetId, {
-      width: 256,
-      height: 256,
-      quality: 80
-    })
+    gen = await thumbService.generate(absFile, assetId, thumbOpts)
   } else if (row.fileType === 'video') {
-    gen = await thumbService.generateVideo(absFile, assetId, {
-      width: 256,
-      height: 256,
-      quality: 80
-    })
+    gen = await thumbService.generateVideo(absFile, assetId, thumbOpts)
   } else if (row.fileType === 'font') {
     const parsed = parseFontFile(absFile, getEffectiveThumbSampleText(), 0)
     gen = await thumbService.generateFont(absFile, assetId, {
@@ -115,9 +108,7 @@ export async function refreshAssetThumbnail(
     })
   } else if (row.fileType === '3d' && isModel3dPreviewExtension(ext)) {
     gen = await thumbService.generateModel(absFile, assetId, ext, {
-      width: 256,
-      height: 256,
-      quality: 80,
+      ...thumbOpts,
       force: true
     })
   }

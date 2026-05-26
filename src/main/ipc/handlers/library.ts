@@ -23,6 +23,7 @@ import {
   assertEmptyDirectoryForNewLibrary,
   prepareNewLibrarySkeleton
 } from '../../services/librarySwitch'
+import { assertOptionalPlainObject, assertOptionalBoolean } from '../ipcGuards'
 
 function dialogParent(event: Electron.IpcMainInvokeEvent): BrowserWindow | undefined {
   return BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow() ?? undefined
@@ -148,6 +149,8 @@ export function handleLibraryOperations(ipc: typeof ipcMain): void {
 
   ipc.handle('library:upgrade-to-archive', async (event, options?: { preferHardlink?: boolean }) => {
     const win = dialogParent(event)
+    assertOptionalPlainObject('options', options)
+    assertOptionalBoolean('options.preferHardlink', (options as any)?.preferHardlink)
     return upgradeCatalogLibraryToArchive(win, options)
   })
 

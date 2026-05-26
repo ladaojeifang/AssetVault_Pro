@@ -1,13 +1,15 @@
 import chokidar from 'chokidar'
 import { basename } from 'path'
 import { statSync, existsSync } from 'fs'
-import { db, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import { eq } from 'drizzle-orm'
 import { importSingleAsset } from './importSingleAsset'
 import { notifyAllWindowsAssetsImported } from './importNotify'
 import { toCanonicalFilePath } from '../utils/pathUtils'
-import { resolveLibraryPath, removeItemPack } from './libraryBundle'
+import { removeItemPack } from './libraryBundle'
+import { findAssetIdByCanonicalPath } from './assetLookup'
+import { persistDatabase } from '../db'
 
 /**
  * File Watcher Service using Chokidar
@@ -92,19 +94,10 @@ export class FileWatcher {
         if (!stat.isFile()) return
 
         const canonical = toCanonicalFilePath(filePath)
-        const database = db!
-        const rows = await database
-          .select({ id: assets.id, filePath: assets.filePath, importSource: assets.importSource })
-          .from(assets)
-          .all()
+        const database = getDatabase()
+        const existingId = await findAssetIdByCanonicalPath(database, canonical)
 
-        const existing = rows.find(
-          (r) =>
-            (r.importSource && r.importSource === canonical) ||
-            resolveLibraryPath(r.filePath) === canonical
-        )
-
-        if (existing) {
+        if (existingId) {
           console.log(`[FileWatcher] File already exists in DB: ${basename(canonical)}`)
           return
         }
@@ -122,20 +115,11 @@ export class FileWatcher {
   private handleFileChange(filePath: string): void {
     this.debounce(`change:${filePath}`, async () => {
       try {
-        const database = db!
+        const database = getDatabase()
         const canonical = toCanonicalFilePath(filePath)
+        const assetId = await findAssetIdByCanonicalPath(database, canonical)
 
-        const rows = await database
-          .select({ id: assets.id, filePath: assets.filePath, importSource: assets.importSource })
-          .from(assets)
-          .all()
-        const hit = rows.find(
-          (r) =>
-            (r.importSource && r.importSource === canonical) ||
-            resolveLibraryPath(r.filePath) === canonical
-        )
-
-        if (hit && existsSync(canonical)) {
+        if (assetId && existsSync(canonical)) {
           const stat = statSync(canonical)
           await database
             .update(assets)
@@ -144,7 +128,7 @@ export class FileWatcher {
               fileModifiedAt: stat.mtime,
               updatedAt: new Date()
             })
-            .where(eq(assets.id, hit.id))
+            .where(eq(assets.id, assetId))
           persistDatabase()
         }
       } catch (error) {
@@ -156,22 +140,13 @@ export class FileWatcher {
   private handleFileDelete(filePath: string): void {
     this.debounce(`delete:${filePath}`, async () => {
       try {
-        const database = db!
+        const database = getDatabase()
         const canonical = toCanonicalFilePath(filePath)
+        const assetId = await findAssetIdByCanonicalPath(database, canonical)
 
-        const rows = await database
-          .select({ id: assets.id, filePath: assets.filePath, importSource: assets.importSource })
-          .from(assets)
-          .all()
-        const hit = rows.find(
-          (r) =>
-            (r.importSource && r.importSource === canonical) ||
-            resolveLibraryPath(r.filePath) === canonical
-        )
-
-        if (hit) {
-          removeItemPack(hit.id)
-          await database.delete(assets).where(eq(assets.id, hit.id))
+        if (assetId) {
+          removeItemPack(assetId)
+          await database.delete(assets).where(eq(assets.id, assetId))
           console.log(`[FileWatcher] Removed deleted file from DB: ${basename(canonical)}`)
           persistDatabase()
         }

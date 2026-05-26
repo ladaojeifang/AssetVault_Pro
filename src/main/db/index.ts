@@ -16,8 +16,10 @@ let activeDbFilePath: string | null = null
 /** True after mutations until a successful saveDatabase(). */
 let dbDirty = false
 
-/** Dev-only: electron-vite often kills the process on Windows without graceful quit, so debounced persist may never run. */
-let devAutosaveInterval: ReturnType<typeof setInterval> | null = null
+/** Periodic flush when debounced persist has not run yet (dev: 2s, production: 30s). */
+let periodicAutosaveInterval: ReturnType<typeof setInterval> | null = null
+const DEV_AUTOSAVE_MS = 2000
+const PROD_AUTOSAVE_MS = 30_000
 
 export function getDatabase() {
   if (!db) {
@@ -85,13 +87,11 @@ export async function flushDatabase(): Promise<void> {
   await saveDatabase()
 }
 
-/**
- * Stop the dev-only periodic autosave timer (optional; process exit also clears it).
- */
+/** Stop periodic autosave timer (app quit / DB close). */
 export function stopDevAutosave(): void {
-  if (devAutosaveInterval) {
-    clearInterval(devAutosaveInterval)
-    devAutosaveInterval = null
+  if (periodicAutosaveInterval) {
+    clearInterval(periodicAutosaveInterval)
+    periodicAutosaveInterval = null
   }
 }
 
@@ -187,7 +187,7 @@ export async function initDatabase(dbPath: string): Promise<void> {
     console.log('[DB] Created new database (first run or empty DB file)')
   }
 
-  // Performance pragmas (sql.js supports these)
+  // In-memory pragmas only — persistence is full DB export(), not SQLite WAL files on disk.
   SQLjsDb.run('PRAGMA journal_mode = WAL;')
   SQLjsDb.run('PRAGMA synchronous = NORMAL;')
   SQLjsDb.run('PRAGMA cache_size = -64000;') // 64MB
@@ -206,16 +206,16 @@ export async function initDatabase(dbPath: string): Promise<void> {
     await saveDatabase()
   }
 
-  // electron-vite rebuilds kill the main process on Windows without running app quit hooks;
-  // periodic flush limits data loss to ~this interval when dev workflow kills the process.
-  if (!app.isPackaged) {
-    if (devAutosaveInterval) clearInterval(devAutosaveInterval)
-    devAutosaveInterval = setInterval(() => {
-      if (!dbDirty || !SQLjsDb) return
-      void flushDatabase().catch((e) => console.error('[DB] dev autosave failed:', e))
-    }, 2000)
-    console.log('[DB] Dev autosave every 2s when there are pending changes (survives abrupt process kill)')
-  }
+  // sql.js persists via full export(); periodic flush limits loss if the process is killed abruptly.
+  if (periodicAutosaveInterval) clearInterval(periodicAutosaveInterval)
+  const autosaveMs = app.isPackaged ? PROD_AUTOSAVE_MS : DEV_AUTOSAVE_MS
+  periodicAutosaveInterval = setInterval(() => {
+    if (!dbDirty || !SQLjsDb) return
+    void flushDatabase().catch((e) => console.error('[DB] periodic autosave failed:', e))
+  }, autosaveMs)
+  console.log(
+    `[DB] Periodic autosave every ${autosaveMs / 1000}s when there are pending changes`
+  )
 
   console.log('[DB] Database initialized successfully')
 }

@@ -257,6 +257,19 @@ const api = {
   },
 
   settings: {
+    getAppPreferences: () =>
+      ipcRenderer.invoke('settings:get-app-preferences') as Promise<
+        import('../../shared/appPreferences').AppPreferences
+      >,
+    setAppPreferences: (prefs: import('../../shared/appPreferences').AppPreferences) =>
+      ipcRenderer.invoke('settings:set-app-preferences', prefs) as Promise<
+        import('../../shared/appPreferences').AppPreferences
+      >,
+    onAppPreferencesChanged: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('settings:app-preferences-changed', handler)
+      return () => ipcRenderer.removeListener('settings:app-preferences-changed', handler)
+    },
     getAppAppearance: () =>
       ipcRenderer.invoke('settings:get-app-appearance') as Promise<
         import('../../shared/appTheme').AppAppearanceSettings

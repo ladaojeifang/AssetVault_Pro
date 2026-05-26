@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow, dialog, shell } from 'electron'
 import { copyFileSync, existsSync, mkdirSync } from 'fs'
 import { basename, join } from 'path'
 import { eq } from 'drizzle-orm'
-import { db, persistDatabase } from '../../db'
+import { getDatabase, persistDatabase } from '../../db'
 import { assets } from '../../db/schema'
 import type { FontFamilyGroup, FontPreviewRenderRequest, ParsedFontMetadata } from '@/shared/fontTypes'
 import { resolveLibraryPath, getLibraryRoot } from '../../services/libraryBundle'
@@ -18,6 +18,7 @@ import {
 } from '../../services/fontSettingsStore'
 import { renderFontPreviewPngWithOptions } from '../../utils/fontPreviewRender'
 import type { FontAppSettings } from '@/shared/fontSettings'
+import { assertFiniteNumber, assertPlainObject, assertString } from '../ipcGuards'
 
 function parseFontMetaFromRow(metadata: string | null | undefined): ParsedFontMetadata | null {
   if (!metadata) return null
@@ -48,6 +49,7 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
   ipc.handle('fonts:get-settings', async () => readFontAppSettings())
 
   ipc.handle('fonts:set-settings', async (_event, settings: FontAppSettings) => {
+    assertPlainObject('settings', settings)
     return writeFontAppSettings(settings)
   })
 
@@ -57,7 +59,8 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
   }))
 
   ipc.handle('fonts:list-faces', async (_event, assetId: string) => {
-    const database = db!
+    const database = getDatabase()
+    assertString('assetId', assetId)
     const row = await database.select().from(assets).where(eq(assets.id, assetId)).get()
     if (!row || row.fileType !== 'font') return []
     const abs = resolveLibraryPath(row.filePath)
@@ -65,6 +68,8 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('fonts:render-preview', async (_event, req: FontPreviewRenderRequest) => {
+    assertPlainObject('req', req)
+    assertString('req.filePath', (req as any).filePath)
     try {
       const abs = resolveLibraryPath(req.filePath)
       if (!existsSync(abs)) return { ok: false as const, error: '字体文件不存在' }
@@ -82,7 +87,9 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
   ipc.handle(
     'fonts:update-face-index',
     async (_event, assetId: string, ttcIndex: number, reparse = true) => {
-      const database = db!
+      const database = getDatabase()
+      assertString('assetId', assetId)
+      assertFiniteNumber('ttcIndex', ttcIndex)
       const row = await database.select().from(assets).where(eq(assets.id, assetId)).get()
       if (!row || row.fileType !== 'font') return { ok: false as const, error: '不是字体资产' }
       const abs = resolveLibraryPath(row.filePath)
@@ -119,7 +126,7 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
   )
 
   ipc.handle('fonts:list-family-groups', async () => {
-    const database = db!
+    const database = getDatabase()
     const rows = await database.select().from(assets).where(eq(assets.fileType, 'font')).all()
     const map = new Map<string, FontFamilyGroup>()
 
@@ -145,7 +152,8 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('fonts:install-to-system', async (_event, assetId: string) => {
-    const database = db!
+    const database = getDatabase()
+    assertString('assetId', assetId)
     const row = await database.select().from(assets).where(eq(assets.id, assetId)).get()
     if (!row || row.fileType !== 'font') return { ok: false as const, error: '不是字体资产' }
     const abs = resolveLibraryPath(row.filePath)
@@ -154,7 +162,8 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('fonts:export-copy', async (event, assetId: string) => {
-    const database = db!
+    const database = getDatabase()
+    assertString('assetId', assetId)
     const row = await database.select().from(assets).where(eq(assets.id, assetId)).get()
     if (!row || row.fileType !== 'font') return { ok: false as const, error: '不是字体资产' }
     const abs = resolveLibraryPath(row.filePath)
@@ -175,6 +184,7 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('fonts:open-preview-window', async (_event, assetId: string) => {
+    assertString('assetId', assetId)
     const wins = BrowserWindow.getAllWindows()
     const main = wins.find((w) => !w.isDestroyed() && w.webContents.getURL().includes('index.html'))
     main?.webContents.send('fonts:open-preview', { assetId })
@@ -186,6 +196,7 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('fonts:open-item-folder', async (_event, assetId: string) => {
+    assertString('assetId', assetId)
     const dir = join(getLibraryRoot(), 'items', assetId)
     if (!existsSync(dir)) return { ok: false as const, error: '目录不存在' }
     const err = await shell.openPath(dir)

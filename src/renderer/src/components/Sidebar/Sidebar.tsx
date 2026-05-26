@@ -11,9 +11,7 @@ import {
   type FolderContextMenuState
 } from './FolderContextMenu'
 import { addDraggedAssetsToFolder } from '../../utils/addAssetsToFolder'
-
-/** Parent folder at this level cannot have children (must match `MAX_FOLDER_LEVEL` in main `folders.ts`). */
-const FOLDER_MAX_PARENT_LEVEL_FOR_CHILD = 4
+import { MAX_FOLDER_PARENT_LEVEL_FOR_CHILD } from '@/shared/folderLimits'
 
 function collectSubtreeFolderIds(folder: FolderItem): string[] {
   const ids = [folder.id]
@@ -105,7 +103,7 @@ const Sidebar: React.FC = () => {
   }, [currentFolderId])
 
   const openCreateSubfolderModal = useCallback((parent: FolderItem) => {
-    if (parent.level >= FOLDER_MAX_PARENT_LEVEL_FOR_CHILD) {
+    if (parent.level >= MAX_FOLDER_PARENT_LEVEL_FOR_CHILD) {
       notify.warning('文件夹层级已达上限，无法继续添加子文件夹')
       return
     }
@@ -712,7 +710,7 @@ const Sidebar: React.FC = () => {
         state={folderContextMenu}
         onClose={() => setFolderContextMenu(null)}
         onAction={handleFolderContextAction}
-        maxParentLevel={FOLDER_MAX_PARENT_LEVEL_FOR_CHILD}
+        maxParentLevel={MAX_FOLDER_PARENT_LEVEL_FOR_CHILD}
       />
     </div>
   )

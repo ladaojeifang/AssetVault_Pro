@@ -1,5 +1,76 @@
 import type initSqlJs from 'sql.js'
 
+const SCHEMA_META_KEY = 'schema_version'
+
+/**
+ * Monotonic library DB schema revision. Bump when adding a new branch in
+ * `runLibrarySchemaMigrations` — do not edit old steps in place.
+ */
+export const CURRENT_LIBRARY_SCHEMA_VERSION = 2
+
+function execSelectInt(sqlite: initSqlJs.Database, sql: string): number | null {
+  try {
+    const rows = sqlite.exec(sql)
+    const v = rows[0]?.values?.[0]?.[0]
+    if (typeof v === 'number' && Number.isFinite(v)) return v
+    if (v != null && !Number.isNaN(Number(v))) return Number(v)
+  } catch {
+    /* no table or empty */
+  }
+  return null
+}
+
+/** Current persisted schema version, or 0 if meta table / row missing. */
+export function getLibrarySchemaVersion(sqlite: initSqlJs.Database): number {
+  const v = execSelectInt(
+    sqlite,
+    `SELECT value FROM _av_schema_meta WHERE key = '${SCHEMA_META_KEY}' LIMIT 1`
+  )
+  return v != null && v >= 0 ? Math.floor(v) : 0
+}
+
+export function setLibrarySchemaVersion(sqlite: initSqlJs.Database, version: number): void {
+  const v = Math.max(0, Math.floor(version))
+  sqlite.run(
+    `INSERT OR REPLACE INTO _av_schema_meta (key, value) VALUES ('${SCHEMA_META_KEY}', ${v})`
+  )
+}
+
+/**
+ * Run forward-only migrations after `CREATE TABLE` / best-effort ALTERs above.
+ * New columns: add `if (v < N) { …; set(N) }` — never change past N in place.
+ */
+export function runLibrarySchemaMigrations(sqlite: initSqlJs.Database): void {
+  sqlite.run(`
+    CREATE TABLE IF NOT EXISTS _av_schema_meta (
+      key TEXT PRIMARY KEY NOT NULL,
+      value INTEGER NOT NULL
+    )
+  `)
+
+  let v = getLibrarySchemaVersion(sqlite)
+
+  if (v < 1) {
+    // v1 marker only: column DDL for storage_mode / localization / source_missing
+    // still runs via try/catch ALTER in createInitialSchemaOnSqlite (legacy path).
+    v = 1
+    setLibrarySchemaVersion(sqlite, v)
+  }
+
+  if (v < 2) {
+    // v2 marker only: no ALTER here yet. Next real migration → add `if (v < 3) { … }`.
+    v = 2
+    setLibrarySchemaVersion(sqlite, v)
+  }
+
+  const stamped = getLibrarySchemaVersion(sqlite)
+  if (stamped !== CURRENT_LIBRARY_SCHEMA_VERSION) {
+    console.warn(
+      `[DB] schema meta version=${stamped} but CURRENT_LIBRARY_SCHEMA_VERSION=${CURRENT_LIBRARY_SCHEMA_VERSION} — add a migration branch or fix the constant`
+    )
+  }
+}
+
 /** Idempotent schema setup for a raw sql.js database (new library or migration). */
 export function createInitialSchemaOnSqlite(sqlite: initSqlJs.Database): void {
   sqlite.run(`
@@ -208,6 +279,32 @@ export function createInitialSchemaOnSqlite(sqlite: initSqlJs.Database): void {
       UPDATE tags SET usage_count = MAX(0, usage_count - 1) WHERE id = old.tag_id;
     END;
   `)
+
+  sqlite.run(`
+    CREATE TRIGGER IF NOT EXISTS tr_asset_tags_search_insert AFTER INSERT ON asset_tags BEGIN
+      DELETE FROM assets_search WHERE asset_id = new.asset_id;
+      INSERT INTO assets_search(asset_id, search_text)
+      SELECT new.asset_id,
+        a.filename || ' ' || a.original_name ||
+        COALESCE((SELECT ' ' || GROUP_CONCAT(t.name) FROM tags t
+          JOIN asset_tags at ON t.id = at.tag_id WHERE at.asset_id = new.asset_id), '')
+      FROM assets a WHERE a.id = new.asset_id;
+    END;
+  `)
+
+  sqlite.run(`
+    CREATE TRIGGER IF NOT EXISTS tr_asset_tags_search_delete AFTER DELETE ON asset_tags BEGIN
+      DELETE FROM assets_search WHERE asset_id = old.asset_id;
+      INSERT INTO assets_search(asset_id, search_text)
+      SELECT old.asset_id,
+        a.filename || ' ' || a.original_name ||
+        COALESCE((SELECT ' ' || GROUP_CONCAT(t.name) FROM tags t
+          JOIN asset_tags at ON t.id = at.tag_id WHERE at.asset_id = old.asset_id), '')
+      FROM assets a WHERE a.id = old.asset_id;
+    END;
+  `)
+
+  runLibrarySchemaMigrations(sqlite)
 
   console.log('[DB] Schema created/verified successfully')
 }

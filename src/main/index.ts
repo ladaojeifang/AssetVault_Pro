@@ -3,6 +3,7 @@ import { join } from 'path'
 import { mkdirSync } from 'fs'
 import { initDatabase, flushDatabase, stopDevAutosave, getDatabase } from './db'
 import { prepareOnStartup } from './services/libraryBundle'
+import { readAppPreferences, applyAppPreferencesToRuntime } from './services/appPreferencesStore'
 import { getThumbnailService } from './services/ThumbnailService'
 import { runLegacyPathsMigrationIfNeeded } from './services/libraryMigration'
 import { repairOrphanItemPacks } from './services/repairOrphanItemPacks'
@@ -173,6 +174,8 @@ if (gotSingleInstanceLock) {
     const userData = app.getPath('userData')
     const { libraryRoot, dbPath } = prepareOnStartup(userData)
     getThumbnailService().setLibraryRoot(libraryRoot)
+    readAppPreferences()
+    applyAppPreferencesToRuntime()
 
     await initDatabase(dbPath)
     await runLegacyPathsMigrationIfNeeded()

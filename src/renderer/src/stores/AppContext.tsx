@@ -3,6 +3,7 @@ import type { AssetItem, FolderItem, TagItem, ViewMode, SortField, QueryParams, 
 import type { ColorBucket } from '@/shared/colorBucket'
 import type { DatePreset, SizePreset } from '@/shared/assetFilters'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/assetFilters'
+import { DEFAULT_APP_PREFERENCES } from '@/shared/appPreferences'
 
 const ASSET_CHUNK_SIZE = 80
 
@@ -161,6 +162,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const searchDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchDebounceGenRef = useRef(0)
   const skipDebouncedSearchFetchRef = useRef(true)
+  const [searchDebounceMs, setSearchDebounceMs] = useState(DEFAULT_APP_PREFERENCES.searchDebounceMs)
+
+  useEffect(() => {
+    void window.assetVaultAPI.settings.getAppPreferences().then((p) => {
+      setSearchDebounceMs(p.searchDebounceMs)
+    })
+    const unsub = window.assetVaultAPI.settings.onAppPreferencesChanged(() => {
+      void window.assetVaultAPI.settings.getAppPreferences().then((p) => {
+        setSearchDebounceMs(p.searchDebounceMs)
+      })
+    })
+    return unsub
+  }, [])
 
   const loadTagList = useCallback(async () => {
     try {
@@ -329,11 +343,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (searchDebounceGenRef.current !== gen) return
       const q = stateRef.current.searchQuery
       setState((prev) => (prev.debouncedSearch === q ? prev : { ...prev, debouncedSearch: q }))
-    }, SEARCH_DEBOUNCE_MS)
+    }, searchDebounceMs)
     return () => {
       if (searchDebounceTimerRef.current) clearTimeout(searchDebounceTimerRef.current)
     }
-  }, [state.searchQuery])
+  }, [state.searchQuery, searchDebounceMs])
 
   useEffect(() => {
     if (skipDebouncedSearchFetchRef.current) {

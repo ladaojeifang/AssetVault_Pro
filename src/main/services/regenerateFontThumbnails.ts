@@ -1,6 +1,6 @@
 import { existsSync } from 'fs'
 import { eq } from 'drizzle-orm'
-import { db, persistDatabase } from '../db'
+import { getDatabase, persistDatabase } from '../db'
 import { assets } from '../db/schema'
 import type { FontRegenerateFailure, FontRegenerateResult } from '@/shared/fontTypes'
 import { resolveLibraryPath, itemThumbRelative } from './libraryBundle'
@@ -27,7 +27,7 @@ export async function regenerateFontThumbnails(
   onProgress?: (data: { current: number; total: number; assetId: string; status: 'processing' | 'done' | 'error' }) => void,
   options?: { forceAll?: boolean }
 ): Promise<FontRegenerateResult> {
-  const database = db!
+  const database = getDatabase()
   const rows = await database.select().from(assets).where(eq(assets.fileType, 'font')).all()
   const forceAll = options?.forceAll !== false
   const targetVersion = getEffectiveThumbSampleVersion()

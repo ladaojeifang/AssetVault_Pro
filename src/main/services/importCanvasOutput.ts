@@ -3,7 +3,7 @@ import { join } from 'path'
 import { app } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import { eq } from 'drizzle-orm'
-import { db, persistDatabase } from '../db'
+import { getDatabase, persistDatabase } from '../db'
 import { assets } from '../db/schema'
 import { importSingleAsset } from './importSingleAsset'
 import { syncAssetSidecarFromDb } from './assetSidecar'
@@ -36,7 +36,7 @@ function parseExistingMetadata(raw: string | null | undefined): Record<string, u
 export async function importCanvasOutputFromPng(
   options: ImportCanvasOutputOptions
 ): Promise<ImportCanvasOutputResult | null> {
-  const database = db!
+  const database = getDatabase()
   const buffer = Buffer.from(options.pngBase64, 'base64')
   if (buffer.length < 32) {
     console.warn('[aiCanvas] import output: empty PNG buffer')

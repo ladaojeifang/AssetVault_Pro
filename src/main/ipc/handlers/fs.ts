@@ -10,6 +10,7 @@ import { resolveLibraryPath, isLibraryReady, getLibraryRoot } from '../../servic
 import { getDatabase } from '../../db'
 import { assets } from '../../db/schema'
 import { copyFilesToSystemClipboard } from '../../utils/clipboardFiles'
+import { assertPlainObject, assertString, assertStringArray } from '../ipcGuards'
 
 function toShellPath(stored: string): string {
   if (!isLibraryReady()) return stored
@@ -31,6 +32,7 @@ export function handleFsOperations(ipc: typeof ipcMain): void {
         filters?: Array<{ name: string; extensions: string[] }>
       }
     ) => {
+      if (options != null) assertPlainObject('options', options)
       const result = await dialog.showOpenDialog({
         properties: options?.multi ? ['openFile', 'multiSelections'] : ['openFile'],
         filters: options?.filters || [
@@ -55,6 +57,7 @@ export function handleFsOperations(ipc: typeof ipcMain): void {
 
   // Open file in system default application
   ipc.handle('fs:open-in-explorer', async (_event, filePath: string) => {
+    assertString('filePath', filePath)
     const abs = toShellPath(filePath)
     const result = await shell.openPath(abs)
     if (result) {
@@ -64,6 +67,7 @@ export function handleFsOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('fs:path-to-file-url', async (_event, filePath: string) => {
+    assertString('filePath', filePath)
     try {
       const abs = toShellPath(filePath)
       return pathToFileURL(abs).href
@@ -74,12 +78,14 @@ export function handleFsOperations(ipc: typeof ipcMain): void {
 
   /** Read library file bytes for renderer 3D loaders (file:// XHR is blocked in sandbox). */
   ipc.handle('fs:read-file-bytes', async (_event, filePath: string) => {
+    assertString('filePath', filePath)
     const abs = toShellPath(filePath)
     const buf = await readFile(abs)
     return Uint8Array.from(buf)
   })
 
   ipc.handle('fs:path-kind', async (_event, filePath: string) => {
+    assertString('filePath', filePath)
     try {
       const abs = toShellPath(filePath)
       if (!existsSync(abs)) return 'missing' as const
@@ -90,11 +96,13 @@ export function handleFsOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('fs:write-text-to-clipboard', async (_event, text: string) => {
+    assertString('text', text)
     clipboard.writeText(text ?? '')
     return true
   })
 
   ipc.handle('fs:open-asset-item-directory', async (_event, assetId: string) => {
+    assertString('assetId', assetId)
     const dir = join(getLibraryRoot(), 'items', assetId)
     if (!existsSync(dir)) throw new Error('资产目录不存在')
     const result = await shell.openPath(dir)
@@ -103,6 +111,7 @@ export function handleFsOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('fs:copy-files-to-clipboard', async (_event, assetIds: string[]) => {
+    assertStringArray('assetIds', assetIds)
     const database = getDatabase()
     const rows = await database
       .select({ filePath: assets.filePath })
@@ -122,6 +131,7 @@ export function handleFsOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('fs:copy-paths-to-clipboard', async (_event, assetIds: string[]) => {
+    assertStringArray('assetIds', assetIds)
     const database = getDatabase()
     const rows = await database
       .select({ filePath: assets.filePath })

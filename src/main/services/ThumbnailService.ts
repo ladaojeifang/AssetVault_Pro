@@ -7,7 +7,6 @@ import { extractVideoFramePngBestEffort } from '../utils/videoFrame'
 import { renderModelToPngBuffer } from './modelThumbnailRenderer'
 import { renderFontPreviewPng, FONT_THUMB_CANVAS_SIZE } from '../utils/fontPreviewRender'
 import { FONT_THUMB_SAMPLE_TEXT } from '@/shared/fontTypes'
-import { getThumbnailService } from './ThumbnailService'
 import {
   isModelThumbnailSkipped,
   markModelThumbnailSkipped,
@@ -40,6 +39,8 @@ export class ThumbnailService {
   private libraryRoot: string | null = null
   private maxMemorySize: number // MB
   private maxDiskSize: number // MB
+  private generationMaxEdge = THUMBNAIL_MAX_EDGE
+  private generationQuality = 80
 
   constructor(options?: { maxMemoryMB?: number; maxDiskMB?: number }) {
     this.maxMemorySize = options?.maxMemoryMB ?? 256 // 256MB memory cache
@@ -67,6 +68,29 @@ export class ThumbnailService {
     console.log(`[ThumbnailService] Library root: ${this.libraryRoot ?? '(legacy userData thumbs only)'}`)
   }
 
+  setGenerationDefaults(opts: { maxEdge: number; quality: number }): void {
+    this.generationMaxEdge = Math.min(512, Math.max(128, Math.floor(opts.maxEdge)))
+    this.generationQuality = Math.min(100, Math.max(10, Math.floor(opts.quality)))
+  }
+
+  getGenerationDefaults(): { width: number; height: number; quality: number } {
+    return {
+      width: this.generationMaxEdge,
+      height: this.generationMaxEdge,
+      quality: this.generationQuality
+    }
+  }
+
+  /** Resize in-memory LRU cap (clears cache when limit changes). */
+  setMemoryCacheLimitMB(mb: number): void {
+    const next = Math.min(10240, Math.max(256, Math.floor(mb)))
+    if (next === this.maxMemorySize) return
+    this.maxMemorySize = next
+    this.lruCache.clear()
+    this.lruCache.maxSize = next * 1024 * 1024
+    console.log(`[ThumbnailService] Memory cache limit: ${next}MB`)
+  }
+
   private thumbDiskPath(assetId: string): string {
     if (this.libraryRoot) {
       const dir = join(this.libraryRoot, 'items', assetId)
@@ -84,8 +108,8 @@ export class ThumbnailService {
     assetId: string,
     options: { width?: number; height?: number; quality?: number } = {}
   ): Promise<ThumbnailGenerateResult | null> {
-    const maxEdge = options.width ?? THUMBNAIL_MAX_EDGE
-    const { height = maxEdge, quality = 80 } = options
+    const maxEdge = options.width ?? this.generationMaxEdge
+    const { height = maxEdge, quality = options.quality ?? this.generationQuality } = options
 
     try {
       if (isCustomThumbnail(assetId)) {
@@ -136,8 +160,8 @@ export class ThumbnailService {
     ext: string,
     options: { width?: number; height?: number; quality?: number; force?: boolean } = {}
   ): Promise<ThumbnailGenerateResult | null> {
-    const maxEdge = options.width ?? THUMBNAIL_MAX_EDGE
-    const { height = maxEdge, quality = 80, force = false } = options
+    const maxEdge = options.width ?? this.generationMaxEdge
+    const { height = maxEdge, quality = options.quality ?? this.generationQuality, force = false } = options
     const outputPath = this.thumbDiskPath(assetId)
 
     if (!parseModel3dFormat(ext)) {
@@ -232,8 +256,8 @@ export class ThumbnailService {
     assetId: string,
     options: { width?: number; height?: number; quality?: number } = {}
   ): Promise<ThumbnailGenerateResult | null> {
-    const maxEdge = options.width ?? THUMBNAIL_MAX_EDGE
-    const { height = maxEdge, quality = 80 } = options
+    const maxEdge = options.width ?? this.generationMaxEdge
+    const { height = maxEdge, quality = options.quality ?? this.generationQuality } = options
     const outputPath = this.thumbDiskPath(assetId)
 
     try {

@@ -63,9 +63,7 @@ export async function schedule3dThumbnailAfterImport(
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await sleep(1500 * attempt)
     thumb = await getThumbnailService().generateModel(destAbs, assetId, extNoDot, {
-      width: 256,
-      height: 256,
-      quality: 80,
+      ...getThumbnailService().getGenerationDefaults(),
       force: true
     })
     if (thumb?.buffer?.length) break
@@ -166,9 +164,7 @@ export async function regenerateModelThumbnails(
 
     try {
       const thumb = await thumbService.generateModel(absFile, row.id, row.extension, {
-        width: 256,
-        height: 256,
-        quality: 80,
+        ...thumbService.getGenerationDefaults(),
         force: true
       })
 

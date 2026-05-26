@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { existsSync, statSync, readdirSync, readFileSync } from 'fs'
 import { join, basename, extname, dirname } from 'path'
-import { db, flushDatabase, persistDatabase, getDatabase } from '../../db'
+import { flushDatabase, persistDatabase, getDatabase } from '../../db'
 import { assets, assetTags, assetFolders } from '../../db/schema'
 import { eq, and, inArray, desc, asc, sql, count, type SQL } from 'drizzle-orm'
 import type { AssetItem, QueryParams, QueryResult, ImportProgress } from '@/shared/types'
@@ -39,6 +39,8 @@ import {
   isCustomThumbnail
 } from '../../services/assetThumbnailOverride'
 import { notifyAllWindowsAssetsImported } from '../../services/importNotify'
+import { isAutoWatchFoldersEnabled } from '../../services/appPreferencesStore'
+import { assertPlainObject, assertString, assertStringArray } from '../ipcGuards'
 
 registerDuplicateImportPromptHandlers()
 
@@ -111,8 +113,12 @@ function attachResolvedPaths<
 }
 
 export function handleAssetOperations(ipc: typeof ipcMain): void {
-  ipc.handle('assets:query', async (_event, params: QueryParams = {}) => {
-    const database = db!
+  ipc.handle('assets:query', async (_event, rawParams: unknown) => {
+    const params: QueryParams =
+      rawParams != null && typeof rawParams === 'object' && !Array.isArray(rawParams)
+        ? (rawParams as QueryParams)
+        : {}
+    const database = getDatabase()
     const page = params.page ?? 1
     const rawSize = params.pageSize ?? 80
     const pageSize = Math.min(200, Math.max(1, rawSize))
@@ -223,7 +229,8 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:get-by-id', async (_event, id: string) => {
-    const database = db!
+    assertString('id', id)
+    const database = getDatabase()
     const item = await database.select().from(assets).where(eq(assets.id, id)).get()
 
     if (item) {
@@ -244,6 +251,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:import', async (event, filePaths: string[], optionsOrFolderId?: string | ImportAssetOptions) => {
+    assertStringArray('filePaths', filePaths)
     const win = BrowserWindow.fromWebContents(event.sender)
     const importOptions = normalizeImportOptions(optionsOrFolderId)
     const session = createImportSession(win ?? undefined)
@@ -282,7 +290,9 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
         if (asset) {
           results.push(asset)
           try {
-            getFileWatcher().watch(dirname(filePath))
+            if (isAutoWatchFoldersEnabled()) {
+              getFileWatcher().watch(dirname(filePath))
+            }
           } catch (e) {
             console.warn('[Import] watch:', e)
           }
@@ -309,6 +319,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:import-folder', async (event, folderPath: string, optionsOrFolderId?: string | ImportAssetOptions) => {
+    assertString('folderPath', folderPath)
     const win = BrowserWindow.fromWebContents(event.sender)!
     const importOptions = normalizeImportOptions(optionsOrFolderId)
     const session = createImportSession(win)
@@ -351,10 +362,12 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
         )
         if (asset) {
           imported.push(asset)
-          try {
-            getFileWatcher().watch(dirname(fp))
-          } catch (e) {
-            console.warn('[Import] watch:', e)
+          if (isAutoWatchFoldersEnabled()) {
+            try {
+              getFileWatcher().watch(dirname(fp))
+            } catch (e) {
+              console.warn('[Import] watch:', e)
+            }
           }
           notifyAllWindowsAssetsImported()
         }
@@ -376,7 +389,8 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:delete', async (_event, ids: string[]) => {
-    const database = db!
+    assertStringArray('ids', ids)
+    const database = getDatabase()
     for (const id of ids) {
       removeItemPack(id)
     }
@@ -386,7 +400,9 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:add-to-folders', async (_event, assetIds: string[], folderIds: string[]) => {
-    const database = db!
+    assertStringArray('assetIds', assetIds)
+    assertStringArray('folderIds', folderIds)
+    const database = getDatabase()
     if (assetIds.length === 0 || folderIds.length === 0) return true
     for (const assetId of assetIds) {
       for (const folderId of folderIds) {
@@ -406,7 +422,9 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:remove-from-folders', async (_event, assetIds: string[], folderIds: string[]) => {
-    const database = db!
+    assertStringArray('assetIds', assetIds)
+    assertStringArray('folderIds', folderIds)
+    const database = getDatabase()
     if (assetIds.length === 0 || folderIds.length === 0) return true
     await database
       .delete(assetFolders)
@@ -420,7 +438,9 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
   /** @deprecated Use assets:add-to-folders — kept for compatibility; adds to folder without removing others */
   ipc.handle('assets:move', async (_event, ids: string[], targetFolderId: string) => {
-    const database = db!
+    assertStringArray('ids', ids)
+    assertString('targetFolderId', targetFolderId)
+    const database = getDatabase()
     for (const assetId of ids) {
       const existing = await database
         .select()
@@ -437,7 +457,9 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:update-metadata', async (_event, id: string, metadata: Record<string, unknown>) => {
-    const database = db!
+    assertString('id', id)
+    assertPlainObject('metadata', metadata)
+    const database = getDatabase()
     await database
       .update(assets)
       .set({ metadata: JSON.stringify(metadata), updatedAt: new Date() })
@@ -448,7 +470,8 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:update-notes', async (_event, id: string, notes: unknown) => {
-    const database = db!
+    assertString('id', id)
+    const database = getDatabase()
     const raw = typeof notes === 'string' ? notes : ''
     const trimmed = raw.slice(0, 16000)
     await database
@@ -461,11 +484,14 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:rename', async (_event, id: string, newName: string) => {
+    assertString('id', id)
+    assertString('newName', newName)
     return renameAsset(id, newName)
   })
 
   ipc.handle('assets:analyze-colors-batch', async (_event, ids: string[]) => {
-    const database = db!
+    assertStringArray('ids', ids)
+    const database = getDatabase()
     let updated = 0
     for (const id of ids) {
       const asset = await database.select().from(assets).where(eq(assets.id, id)).get()
@@ -482,11 +508,14 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:copy-to-library', async (_event, assetIds: string[], targetLibraryRoot: string) => {
+    assertStringArray('assetIds', assetIds)
+    assertString('targetLibraryRoot', targetLibraryRoot)
     return copyAssetsToOtherLibrary(assetIds, targetLibraryRoot)
   })
 
   ipc.handle('assets:analyze-colors', async (_event, id: string) => {
-    const database = db!
+    assertString('id', id)
+    const database = getDatabase()
     const asset = await database.select().from(assets).where(eq(assets.id, id)).get()
     if (!asset) return null
     if (asset.fileType !== 'image' && asset.fileType !== 'video') return null
@@ -502,9 +531,9 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:localize', async (_event, assetIds: string[]) => {
+    assertStringArray('assetIds', assetIds)
     const { localizeAssets } = await import('../../services/localizeAsset')
-    const ids = Array.isArray(assetIds) ? assetIds.filter((x): x is string => typeof x === 'string') : []
-    return localizeAssets(ids, { preferHardlink: true })
+    return localizeAssets(assetIds, { preferHardlink: true })
   })
 
   ipc.handle('assets:relink', async (_event, assetId: string, newPath: string) => {
@@ -516,7 +545,8 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:get-thumbnail', async (_event, id: string) => {
-    const database = db!
+    assertString('id', id)
+    const database = getDatabase()
     const asset = await database
       .select({
         id: assets.id,
@@ -574,11 +604,11 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     }
 
     if (asset.fileType === 'image' && absFile && existsSync(absFile)) {
-      const gen = await getThumbnailService().generate(absFile, asset.id, {
-        width: 256,
-        height: 256,
-        quality: 80
-      })
+      const gen = await getThumbnailService().generate(
+        absFile,
+        asset.id,
+        getThumbnailService().getGenerationDefaults()
+      )
       if (gen?.buffer?.length) {
         if (!gen.usedOriginal) {
           const relThumb = itemThumbRelative(asset.id)
@@ -599,11 +629,11 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     }
 
     if (asset.fileType === 'video' && absFile && existsSync(absFile)) {
-      const gen = await getThumbnailService().generateVideo(absFile, asset.id, {
-        width: 256,
-        height: 256,
-        quality: 80
-      })
+      const gen = await getThumbnailService().generateVideo(
+        absFile,
+        asset.id,
+        getThumbnailService().getGenerationDefaults()
+      )
       if (gen?.buffer?.length) {
         const relThumb = itemThumbRelative(asset.id)
         await database
@@ -670,9 +700,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       clearModelThumbnailSkip(asset.id)
       await waitForModelSnapshotBridge(90_000)
       const gen = await getThumbnailService().generateModel(absFile, asset.id, ext, {
-        width: 256,
-        height: 256,
-        quality: 80,
+        ...getThumbnailService().getGenerationDefaults(),
         force: true
       })
       if (gen?.buffer?.length) {
@@ -746,6 +774,8 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:set-custom-thumbnail-file', async (_event, id: string, sourcePath: string) => {
+    assertString('id', id)
+    assertString('sourcePath', sourcePath)
     const database = getDatabase()
     if (!database) throw new Error('Database not ready')
     if (!sourcePath?.trim()) throw new Error('未选择图片文件')
@@ -754,6 +784,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:set-custom-thumbnail-clipboard', async (_event, id: string) => {
+    assertString('id', id)
     const database = getDatabase()
     if (!database) throw new Error('Database not ready')
     await setCustomThumbnailFromClipboard(database, id)
@@ -761,6 +792,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('assets:refresh-thumbnail', async (_event, ids: string[]) => {
+    assertStringArray('ids', ids)
     const database = getDatabase()
     if (!database) throw new Error('Database not ready')
     let updated = 0
