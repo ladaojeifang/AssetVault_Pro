@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, copyFileSync, writeFileSync } from 'fs'
 import { join, isAbsolute, sep } from 'path'
 import { eq } from 'drizzle-orm'
-import { getDatabase, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import {
   getLibraryRoot,
@@ -10,6 +10,7 @@ import {
   sanitizeStorageFileName
 } from './libraryBundle'
 import { writeAssetSidecarMeta } from './assetSidecar'
+import { getLibraryMode } from './libraryManifest'
 
 const MIGRATION_FLAG = '.bundle-migration-v1.done'
 
@@ -20,6 +21,16 @@ export async function runLegacyPathsMigrationIfNeeded(): Promise<void> {
   const libraryRoot = getLibraryRoot()
   const flagPath = join(libraryRoot, MIGRATION_FLAG)
   if (existsSync(flagPath)) return
+
+  if (getLibraryMode() === 'catalog') {
+    writeFileSync(
+      flagPath,
+      `${new Date().toISOString()}\ncatalog library — index mode keeps absolute file_path; skip bundle migration.\n`,
+      'utf-8'
+    )
+    console.log('[Library] Skipping legacy path migration for catalog (index) library')
+    return
+  }
 
   const database = getDatabase()
   const all = await database.select().from(assets).all()
@@ -85,5 +96,4 @@ export async function runLegacyPathsMigrationIfNeeded(): Promise<void> {
 
   writeFileSync(flagPath, new Date().toISOString(), 'utf-8')
   console.log('[Library] Legacy path migration finished; flag written:', flagPath)
-  persistDatabase()
 }

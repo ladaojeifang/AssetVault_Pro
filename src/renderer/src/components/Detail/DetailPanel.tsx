@@ -196,8 +196,7 @@ const DetailPanel: React.FC = () => {
   }
 
   function openInExplorer() {
-    const p = asset.resolvedFilePath ?? asset.filePath
-    window.assetVaultAPI.fs.openInExplorer(p)
+    void window.assetVaultAPI.fs.openAssetItemDirectory(asset.id)
   }
 
   const flatFolders = flattenFolderTree(folderTree)

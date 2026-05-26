@@ -24,7 +24,7 @@ AssetVault Pro is a modern, high-performance desktop application for managing di
 | Frontend | React 18 + TypeScript 5 |
 | State | Zustand + Context API |
 | UI Library | TailwindCSS + Arco Design |
-| Database | SQLite via sql.js (WASM) + `assets_search` LIKE index |
+| Database | SQLite via better-sqlite3 (WAL) + `assets_search` LIKE index |
 | ORM | Drizzle ORM |
 | Image Processing | Sharp |
 | File Watching | chokidar |
@@ -193,7 +193,7 @@ src/
 
 - 每次打开库都会执行 `createInitialSchemaOnSqlite()`：新增列仍用 `ALTER TABLE` + `try/catch`，但现在也会调用 `runLibrarySchemaMigrations()`；通过 `_av_schema_meta` 记录 `schema_version`，按版本递增分支执行迁移（当前版本常量为 2）。
 - 风险依旧在于跨多版/旧版程序打开导致结构不兼容，但现在至少有“版本锚点”，可以避免只靠盲目堆叠 `ALTER`。
-- 引擎为 **sql.js**（WASM），开发态异常退出依赖定时 `flush`（见 `db/index.ts`），非正常退出可能丢末次写入。
+- 引擎为 **better-sqlite3**（文件 WAL）；切库/退出前 `wal_checkpoint`（见 `db/index.ts`）。资料库目录可能出现 `library.sqlite-wal` / `-shm`，属正常。
 
 ### P0：`sessionLibraryMode`
 

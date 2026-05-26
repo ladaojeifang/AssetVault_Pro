@@ -1,5 +1,5 @@
 import { and, eq, isNotNull, isNull } from 'drizzle-orm'
-import { getDatabase, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import { classifyColorBucket } from '@/shared/colorBucket'
 
@@ -21,5 +21,4 @@ export async function backfillColorBuckets(): Promise<void> {
     await database.update(assets).set({ colorBucket: bucket }).where(eq(assets.id, row.id))
     n++
   }
-  if (n > 0) persistDatabase()
 }

@@ -334,6 +334,7 @@ const api = {
     getPathForFile: (file: File) => webUtils.getPathForFile(file),
     pathKind: (filePath: string) =>
       ipcRenderer.invoke('fs:path-kind', filePath) as Promise<'file' | 'directory' | 'missing'>,
+    /** Show asset in system file manager (referenced = source path, local = library copy). */
     openAssetItemDirectory: (assetId: string) =>
       ipcRenderer.invoke('fs:open-asset-item-directory', assetId) as Promise<boolean>,
     copyFilesToClipboard: (assetIds: string[]) =>

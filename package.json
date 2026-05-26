@@ -6,20 +6,21 @@
   "author": "AssetVault Team",
   "license": "MIT",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "preview": "electron-vite preview",
-    "postinstall": "electron-builder install-app-deps",
+    "dev": "pnpm exec electron-vite dev",
+    "build": "pnpm exec electron-vite build",
+    "preview": "pnpm exec electron-vite preview",
+    "postinstall": "node scripts/postinstall.mjs",
     "prepackage": "node scripts/prepackage-clean.mjs",
-    "package": "electron-vite build && electron-builder --win",
-    "package:mac": "electron-vite build && electron-builder --mac",
-    "package:linux": "electron-vite build && electron-builder --linux",
-    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
-    "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",
-    "typecheck": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio",
+    "package": "pnpm exec electron-vite build && pnpm exec electron-builder --win",
+    "package:mac": "pnpm exec electron-vite build && pnpm exec electron-builder --mac",
+    "package:linux": "pnpm exec electron-vite build && pnpm exec electron-builder --linux",
+    "lint": "pnpm exec eslint . --ext .ts,.tsx,.js,.jsx",
+    "lint:fix": "pnpm exec eslint . --ext .ts,.tsx,.js,.jsx --fix",
+    "typecheck": "pnpm exec tsc --noEmit",
+    "rebuild:native": "node scripts/postinstall.mjs",
+    "db:generate": "pnpm exec drizzle-kit generate",
+    "db:migrate": "pnpm exec drizzle-kit migrate",
+    "db:studio": "pnpm exec drizzle-kit studio",
     "clean:install": "powershell -ExecutionPolicy Bypass -File scripts/clean-install.ps1",
     "preinstall": "node scripts/guard-package-manager.mjs"
   },
@@ -32,6 +33,7 @@
     "@tanstack/react-virtual": "^3.5.6",
     "@xyflow/react": "^12.10.2",
     "babylonjs-fbx-loader": "^1.1.0",
+    "better-sqlite3": "^11.10.0",
     "chokidar": "^3.6.0",
     "dayjs": "^1.11.13",
     "drizzle-orm": "^0.33.0",
@@ -48,11 +50,11 @@
     "react-markdown": "^10.1.0",
     "react-router-dom": "^6.26.0",
     "remark-gfm": "^4.0.1",
-    "sql.js": "^1.10.3",
     "uuid": "^10.0.0",
     "zustand": "^4.5.5"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/mime-types": "^2.1.4",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
@@ -71,6 +73,7 @@
     "eslint-plugin-react-refresh": "^0.4.12",
     "postcss": "^8.4.47",
     "prettier": "^3.3.2",
+    "rcedit": "^4.0.1",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.3",
     "vite": "^5.4.11"
@@ -78,16 +81,25 @@
   "build": {
     "appId": "com.assetvault.app",
     "productName": "AssetVault Pro",
+    "icon": "resources/icon.ico",
+    "afterPack": "scripts/after-pack.cjs",
+    "npmRebuild": false,
     "directories": {
       "output": "release"
     },
+    "extraResources": [
+      { "from": "resources/icon.ico", "to": "app-icon.ico" },
+      { "from": "resources/icon.png", "to": "app-icon.png" }
+    ],
     "asarUnpack": [
+      "node_modules/better-sqlite3/**",
       "node_modules/ffmpeg-static/**",
       "node_modules/@napi-rs/canvas/**"
     ],
     "files": [
       "out/**/*",
       "resources/**/*",
+      "node_modules/better-sqlite3/**/*",
       "node_modules/ffmpeg-static/**/*",
       "node_modules/@napi-rs/canvas/**/*"
     ],
@@ -109,7 +121,9 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico"
     },
     "mac": {
       "target": [

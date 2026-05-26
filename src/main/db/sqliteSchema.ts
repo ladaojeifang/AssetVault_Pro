@@ -1,35 +1,22 @@
-import type initSqlJs from 'sql.js'
+import type { RawSqliteDb } from './rawSqlite'
 
 const SCHEMA_META_KEY = 'schema_version'
 
 /**
  * Monotonic library DB schema revision. Bump when adding a new branch in
- * `runLibrarySchemaMigrations` — do not edit old steps in place.
+ * `runLibrarySchemaMigrations` ??do not edit old steps in place.
  */
-export const CURRENT_LIBRARY_SCHEMA_VERSION = 2
-
-function execSelectInt(sqlite: initSqlJs.Database, sql: string): number | null {
-  try {
-    const rows = sqlite.exec(sql)
-    const v = rows[0]?.values?.[0]?.[0]
-    if (typeof v === 'number' && Number.isFinite(v)) return v
-    if (v != null && !Number.isNaN(Number(v))) return Number(v)
-  } catch {
-    /* no table or empty */
-  }
-  return null
-}
+export const CURRENT_LIBRARY_SCHEMA_VERSION = 3
 
 /** Current persisted schema version, or 0 if meta table / row missing. */
-export function getLibrarySchemaVersion(sqlite: initSqlJs.Database): number {
-  const v = execSelectInt(
-    sqlite,
+export function getLibrarySchemaVersion(sqlite: RawSqliteDb): number {
+  const v = sqlite.getScalarInt(
     `SELECT value FROM _av_schema_meta WHERE key = '${SCHEMA_META_KEY}' LIMIT 1`
   )
   return v != null && v >= 0 ? Math.floor(v) : 0
 }
 
-export function setLibrarySchemaVersion(sqlite: initSqlJs.Database, version: number): void {
+export function setLibrarySchemaVersion(sqlite: RawSqliteDb, version: number): void {
   const v = Math.max(0, Math.floor(version))
   sqlite.run(
     `INSERT OR REPLACE INTO _av_schema_meta (key, value) VALUES ('${SCHEMA_META_KEY}', ${v})`
@@ -38,9 +25,9 @@ export function setLibrarySchemaVersion(sqlite: initSqlJs.Database, version: num
 
 /**
  * Run forward-only migrations after `CREATE TABLE` / best-effort ALTERs above.
- * New columns: add `if (v < N) { …; set(N) }` — never change past N in place.
+ * New columns: add `if (v < N) { ?? set(N) }` ??never change past N in place.
  */
-export function runLibrarySchemaMigrations(sqlite: initSqlJs.Database): void {
+export function runLibrarySchemaMigrations(sqlite: RawSqliteDb): void {
   sqlite.run(`
     CREATE TABLE IF NOT EXISTS _av_schema_meta (
       key TEXT PRIMARY KEY NOT NULL,
@@ -58,21 +45,36 @@ export function runLibrarySchemaMigrations(sqlite: initSqlJs.Database): void {
   }
 
   if (v < 2) {
-    // v2 marker only: no ALTER here yet. Next real migration → add `if (v < 3) { … }`.
+    // v2 marker only: no ALTER here yet. Next real migration ??add `if (v < 3) { ??}`.
     v = 2
+    setLibrarySchemaVersion(sqlite, v)
+  }
+
+  if (v < 3) {
+    sqlite.run(`
+      UPDATE assets SET storage_mode = 'referenced'
+      WHERE (storage_mode IS NULL OR trim(storage_mode) = '' OR storage_mode = 'local')
+        AND length(trim(file_path)) >= 2
+        AND substr(trim(file_path), 2, 1) = ':'
+    `)
+    sqlite.run(`
+      UPDATE assets SET storage_mode = 'local'
+      WHERE storage_mode IS NULL OR trim(storage_mode) = ''
+    `)
+    v = 3
     setLibrarySchemaVersion(sqlite, v)
   }
 
   const stamped = getLibrarySchemaVersion(sqlite)
   if (stamped !== CURRENT_LIBRARY_SCHEMA_VERSION) {
     console.warn(
-      `[DB] schema meta version=${stamped} but CURRENT_LIBRARY_SCHEMA_VERSION=${CURRENT_LIBRARY_SCHEMA_VERSION} — add a migration branch or fix the constant`
+      `[DB] schema meta version=${stamped} but CURRENT_LIBRARY_SCHEMA_VERSION=${CURRENT_LIBRARY_SCHEMA_VERSION} ??add a migration branch or fix the constant`
     )
   }
 }
 
-/** Idempotent schema setup for a raw sql.js database (new library or migration). */
-export function createInitialSchemaOnSqlite(sqlite: initSqlJs.Database): void {
+/** Idempotent schema setup for a raw SQLite connection (new library or migration). */
+export function createInitialSchemaOnSqlite(sqlite: RawSqliteDb): void {
   sqlite.run(`
     CREATE TABLE IF NOT EXISTS folders (
       id TEXT PRIMARY KEY,
@@ -180,6 +182,12 @@ export function createInitialSchemaOnSqlite(sqlite: initSqlJs.Database): void {
   } catch {
     /* column already exists */
   }
+  sqlite.run(`
+    UPDATE assets SET storage_mode = 'referenced'
+    WHERE (storage_mode IS NULL OR trim(storage_mode) = '')
+      AND length(trim(file_path)) >= 2
+      AND substr(trim(file_path), 2, 1) = ':'
+  `)
   sqlite.run(`UPDATE assets SET storage_mode = 'local' WHERE storage_mode IS NULL OR trim(storage_mode) = ''`)
 
   try {

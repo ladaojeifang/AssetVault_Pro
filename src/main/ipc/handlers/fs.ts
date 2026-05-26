@@ -1,12 +1,13 @@
 import { ipcMain, dialog, clipboard } from 'electron'
 import { shell } from 'electron'
 import { pathToFileURL } from 'url'
-import { join } from 'path'
+import { dirname } from 'path'
 import { supportedExtensionsForDialog } from '@/shared/supportedFormats'
 import { existsSync, statSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { eq, inArray } from 'drizzle-orm'
-import { resolveLibraryPath, isLibraryReady, getLibraryRoot } from '../../services/libraryBundle'
+import { resolveLibraryPath, isLibraryReady } from '../../services/libraryBundle'
+import { resolveAssetContentPath } from '../../services/assetPathResolver'
 import { getDatabase } from '../../db'
 import { assets } from '../../db/schema'
 import { copyFilesToSystemClipboard } from '../../utils/clipboardFiles'
@@ -101,13 +102,31 @@ export function handleFsOperations(ipc: typeof ipcMain): void {
     return true
   })
 
+  /** Reveal the asset's content file in the system file manager (index = source path, full = library copy). */
   ipc.handle('fs:open-asset-item-directory', async (_event, assetId: string) => {
     assertString('assetId', assetId)
-    const dir = join(getLibraryRoot(), 'items', assetId)
-    if (!existsSync(dir)) throw new Error('资产目录不存在')
-    const result = await shell.openPath(dir)
-    if (result) throw new Error(result)
-    return true
+    const database = getDatabase()
+    const row = await database
+      .select({ filePath: assets.filePath, storageMode: assets.storageMode })
+      .from(assets)
+      .where(eq(assets.id, assetId))
+      .get()
+    if (!row) throw new Error('资产不存在')
+
+    const abs = resolveAssetContentPath(row)
+    if (existsSync(abs)) {
+      shell.showItemInFolder(abs)
+      return true
+    }
+
+    const dir = dirname(abs)
+    if (existsSync(dir)) {
+      const result = await shell.openPath(dir)
+      if (result) throw new Error(result)
+      return true
+    }
+
+    throw new Error('源文件或所在目录不存在')
   })
 
   ipc.handle('fs:copy-files-to-clipboard', async (_event, assetIds: string[]) => {

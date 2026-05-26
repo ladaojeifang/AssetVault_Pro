@@ -90,4 +90,9 @@ Do NOT run npm install in this repo — only pnpm install.
 
 Write-Host "Running pnpm install..."
 & pnpm install
-exit $LASTEXITCODE
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+Write-Host ""
+Write-Host "If install previously failed on @tweenjs/tween.js ENOENT, node_modules is now clean." -ForegroundColor Green
+Write-Host "Before pnpm package, rebuild better-sqlite3 for Electron (needs VS C++ once): pnpm run rebuild:native"
+exit 0

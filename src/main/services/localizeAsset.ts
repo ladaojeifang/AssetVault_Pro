@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync } from 'fs'
 import { basename, dirname, extname, join, sep } from 'path'
 import { eq } from 'drizzle-orm'
-import { getDatabase, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import {
   getLibraryRoot,
@@ -37,7 +37,6 @@ export async function localizeOneAsset(
         updatedAt: new Date()
       })
       .where(eq(assets.id, assetId))
-    persistDatabase()
     return { ok: false, reason: '源文件不存在' }
   }
 
@@ -64,7 +63,6 @@ export async function localizeOneAsset(
       .update(assets)
       .set({ localizationState: 'failed', updatedAt: new Date() })
       .where(eq(assets.id, assetId))
-    persistDatabase()
     return { ok: false, reason: e instanceof Error ? e.message : String(e) }
   }
 
@@ -80,7 +78,6 @@ export async function localizeOneAsset(
     .where(eq(assets.id, assetId))
 
   await syncAssetSidecarFromDb(database, assetId)
-  persistDatabase()
   return { ok: true }
 }
 

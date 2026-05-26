@@ -1,25 +1,17 @@
-import initSqlJs from 'sql.js'
-import { drizzle } from 'drizzle-orm/sql-js'
-import { join, dirname, normalize } from 'path'
-import { readFile, writeFile, rename, mkdir, unlink } from 'fs/promises'
-import { randomBytes } from 'node:crypto'
-import { app } from 'electron'
+import Database from 'better-sqlite3'
+import { drizzle } from 'drizzle-orm/better-sqlite3'
+import { dirname, join, normalize } from 'path'
+import { existsSync, mkdirSync, renameSync, readdirSync, statSync } from 'fs'
+import { mkdir } from 'fs/promises'
 import * as schema from './schema'
 import { createInitialSchemaOnSqlite } from './sqliteSchema'
+import { wrapBetterSqlite } from './rawSqlite'
 import { backfillColorBuckets } from '../services/backfillColorBuckets'
 
 let db: ReturnType<typeof drizzle> | null = null
-let SQLjsDb: initSqlJs.Database | null = null
+let sqliteDb: Database | null = null
 /** Absolute path to the active library.sqlite (set in initDatabase). */
 let activeDbFilePath: string | null = null
-
-/** True after mutations until a successful saveDatabase(). */
-let dbDirty = false
-
-/** Periodic flush when debounced persist has not run yet (dev: 2s, production: 30s). */
-let periodicAutosaveInterval: ReturnType<typeof setInterval> | null = null
-const DEV_AUTOSAVE_MS = 2000
-const PROD_AUTOSAVE_MS = 30_000
 
 export function getDatabase() {
   if (!db) {
@@ -28,109 +20,130 @@ export function getDatabase() {
   return db
 }
 
-/** Serialize disk writes — overlapping saves used the same *.tmp path and broke rename on Windows (ENOENT). */
-let saveTail: Promise<void> = Promise.resolve()
+export function getRawSqlite(): Database {
+  if (!sqliteDb) {
+    throw new Error('Database not initialized. Call initDatabase() first.')
+  }
+  return sqliteDb
+}
 
-async function writeDbAtomic(dbPath: string, buffer: Buffer): Promise<void> {
-  await mkdir(dirname(dbPath), { recursive: true })
-  const tmp = `${dbPath}.${process.pid}.${randomBytes(8).toString('hex')}.tmp`
+function applyPragmas(raw: Database): void {
+  raw.pragma('journal_mode = WAL')
+  raw.pragma('synchronous = NORMAL')
+  raw.pragma('cache_size = -64000')
+  raw.pragma('foreign_keys = ON')
+  raw.pragma('temp_store = MEMORY')
+  raw.pragma('busy_timeout = 5000')
+}
+
+function walCheckpoint(raw: Database): void {
   try {
-    await writeFile(tmp, buffer)
-    await rename(tmp, dbPath)
+    raw.pragma('wal_checkpoint(TRUNCATE)')
   } catch (e) {
-    await unlink(tmp).catch(() => {})
-    throw e
+    console.warn('[DB] wal_checkpoint failed:', e)
   }
 }
 
 /**
- * Persist the in-memory SQLite database to disk.
- * Call this after important write operations or on app close.
- */
-export async function saveDatabase(): Promise<void> {
-  if (!SQLjsDb || !activeDbFilePath) return
-
-  const p = saveTail.then(async () => {
-    if (!SQLjsDb || !activeDbFilePath) return
-    const dbPath = activeDbFilePath
-    const buffer = Buffer.from(SQLjsDb.export())
-    await writeDbAtomic(dbPath, buffer)
-    dbDirty = false
-  })
-  saveTail = p.catch(() => {})
-  return p
-}
-
-let persistTimer: ReturnType<typeof setTimeout> | null = null
-const PERSIST_DEBOUNCE_MS = 120
-
-/**
- * Debounced disk persist for sql.js — coalesces rapid writes.
- */
-export function persistDatabase(): void {
-  dbDirty = true
-  if (persistTimer) clearTimeout(persistTimer)
-  persistTimer = setTimeout(() => {
-    persistTimer = null
-    void saveDatabase().catch((e) => console.error('[DB] persist failed:', e))
-  }, PERSIST_DEBOUNCE_MS)
-}
-
-/**
- * Flush any pending debounced persist and write DB to disk immediately.
+ * Checkpoint WAL so readers / copy tools see a consistent main file.
  */
 export async function flushDatabase(): Promise<void> {
-  if (persistTimer) {
-    clearTimeout(persistTimer)
-    persistTimer = null
-  }
-  await saveDatabase()
-}
-
-/** Stop periodic autosave timer (app quit / DB close). */
-export function stopDevAutosave(): void {
-  if (periodicAutosaveInterval) {
-    clearInterval(periodicAutosaveInterval)
-    periodicAutosaveInterval = null
-  }
+  if (sqliteDb) walCheckpoint(sqliteDb)
 }
 
 /**
- * Close the in-memory DB and release sql.js (e.g. before switching library root).
+ * Close the database connection (e.g. before switching library root).
  */
 export async function closeDatabase(): Promise<void> {
-  stopDevAutosave()
-  if (persistTimer) {
-    clearTimeout(persistTimer)
-    persistTimer = null
-  }
-  await saveTail.catch(() => {})
-  if (SQLjsDb && activeDbFilePath) {
+  if (sqliteDb) {
+    walCheckpoint(sqliteDb)
     try {
-      const p = activeDbFilePath
-      const buffer = Buffer.from(SQLjsDb.export())
-      await writeDbAtomic(p, buffer)
-    } catch (e) {
-      console.error('[DB] closeDatabase flush failed:', e)
-    }
-  }
-  dbDirty = false
-  db = null
-  if (SQLjsDb) {
-    try {
-      SQLjsDb.close()
+      sqliteDb.close()
     } catch {
       /* ignore */
     }
-    SQLjsDb = null
+    sqliteDb = null
   }
+  db = null
   activeDbFilePath = null
-  saveTail = Promise.resolve()
+}
+
+function findLatestCorruptBackup(normalized: string): string | null {
+  const dir = dirname(normalized)
+  const base = normalized.split(/[/\\]/).pop() ?? 'library.sqlite'
+  const prefix = `${base}.corrupt-`
+  let best: { path: string; size: number; mtime: number } | null = null
+  try {
+    for (const name of readdirSync(dir)) {
+      if (!name.startsWith(prefix)) continue
+      const full = join(dir, name)
+      const st = statSync(full)
+      if (!st.isFile()) continue
+      if (!best || st.mtimeMs > best.mtime || (st.mtimeMs === best.mtime && st.size > best.size)) {
+        best = { path: full, size: st.size, mtime: st.mtimeMs }
+      }
+    }
+  } catch {
+    return null
+  }
+  return best && best.size > 4096 ? best.path : null
+}
+
+function openSqliteFile(normalized: string): Database {
+  const hasFile = existsSync(normalized)
+  const size = hasFile ? statSync(normalized).size : 0
+
+  if (hasFile && size > 0) {
+    try {
+      const raw = new Database(normalized)
+      console.log('[DB] Opened existing database from disk')
+      return raw
+    } catch (openErr) {
+      console.error('[DB] File exists but is not a valid SQLite DB; keeping a backup copy:', openErr)
+      const corruptPath = `${normalized}.corrupt-${Date.now()}`
+      try {
+        renameSync(normalized, corruptPath)
+        console.error(`[DB] Renamed unreadable DB to: ${corruptPath}`)
+        console.error(
+          `[DB] To restore index/archive data: quit the app, rename that file back to ${normalized}, then restart.`
+        )
+      } catch (renameErr) {
+        console.error('[DB] Could not rename corrupt DB file:', renameErr)
+      }
+    }
+  }
+
+  const backup = findLatestCorruptBackup(normalized)
+  if (backup) {
+    try {
+      const raw = new Database(backup, { readonly: true })
+      const row = raw.prepare('SELECT count(*) AS c FROM assets').get() as { c: number }
+      raw.close()
+      const count = Number(row?.c ?? 0)
+      if (count > 0) {
+        throw new Error(
+          `资料库数据库无法打开，但发现备份 ${backup}（约 ${count} 条资产）。` +
+            `请关闭应用后，将该文件复制/重命名为 ${normalized} 再启动。`
+        )
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('资料库数据库无法打开')) throw e
+      /* backup not readable — fall through */
+    }
+  }
+
+  if (hasFile && size > 0) {
+    throw new Error(
+      `无法打开资料库数据库 ${normalized}。若目录下有 library.sqlite.corrupt-* 文件，请按日志说明恢复后再启动。`
+    )
+  }
+
+  console.log('[DB] Creating new database file')
+  return new Database(normalized)
 }
 
 /**
- * Initialize database with sql.js (pure WASM SQLite).
- * Loads existing DB from disk or creates a new one with full schema.
+ * Open library.sqlite with better-sqlite3 (file-backed WAL).
  * @param dbPath Absolute path to library.sqlite inside the library root.
  */
 export async function initDatabase(dbPath: string): Promise<void> {
@@ -144,81 +157,18 @@ export async function initDatabase(dbPath: string): Promise<void> {
   }
 
   activeDbFilePath = normalized
-
   await mkdir(dirname(normalized), { recursive: true })
 
-  console.log(`[DB] Initializing sql.js database at: ${normalized}`)
+  console.log(`[DB] Initializing better-sqlite3 database at: ${normalized}`)
 
-  // Initialize sql.js WASM engine
-  const SQL = await initSqlJs()
+  sqliteDb = openSqliteFile(normalized)
+  applyPragmas(sqliteDb)
 
-  let isFreshDb = false
-  let fileBuffer: Buffer | undefined
-  try {
-    fileBuffer = await readFile(normalized)
-  } catch (err: unknown) {
-    const code = err && typeof err === 'object' && 'code' in err ? (err as NodeJS.ErrnoException).code : undefined
-    if (code !== 'ENOENT') {
-      console.error('[DB] Failed to read database file:', err)
-      throw err
-    }
-  }
-
-  if (fileBuffer && fileBuffer.length > 0) {
-    try {
-      SQLjsDb = new SQL.Database(fileBuffer)
-      console.log('[DB] Loaded existing database from disk')
-    } catch (openErr) {
-      console.error('[DB] File exists but is not a valid SQLite DB; keeping a backup copy:', openErr)
-      const corruptPath = `${normalized}.corrupt-${Date.now()}`
-      try {
-        await rename(normalized, corruptPath)
-        console.error(`[DB] Renamed unreadable DB to: ${corruptPath}`)
-      } catch (renameErr) {
-        console.error('[DB] Could not rename corrupt DB file:', renameErr)
-      }
-      SQLjsDb = new SQL.Database()
-      isFreshDb = true
-      console.log('[DB] Created new database after replacing corrupt file')
-    }
-  } else {
-    SQLjsDb = new SQL.Database()
-    isFreshDb = true
-    console.log('[DB] Created new database (first run or empty DB file)')
-  }
-
-  // In-memory pragmas only — persistence is full DB export(), not SQLite WAL files on disk.
-  SQLjsDb.run('PRAGMA journal_mode = WAL;')
-  SQLjsDb.run('PRAGMA synchronous = NORMAL;')
-  SQLjsDb.run('PRAGMA cache_size = -64000;') // 64MB
-  SQLjsDb.run('PRAGMA foreign_keys = ON;')
-  SQLjsDb.run('PRAGMA temp_store = MEMORY;')
-
-  // Create drizzle instance wrapping the raw Database
-  db = drizzle(SQLjsDb, { schema })
-
-  // Run schema creation (idempotent — all CREATE IF NOT EXISTS)
-  createInitialSchemaOnSqlite(SQLjsDb)
+  db = drizzle(sqliteDb, { schema })
+  createInitialSchemaOnSqlite(wrapBetterSqlite(sqliteDb))
   await backfillColorBuckets()
-
-  // Save initial state to disk if this is a fresh DB
-  if (isFreshDb) {
-    await saveDatabase()
-  }
-
-  // sql.js persists via full export(); periodic flush limits loss if the process is killed abruptly.
-  if (periodicAutosaveInterval) clearInterval(periodicAutosaveInterval)
-  const autosaveMs = app.isPackaged ? PROD_AUTOSAVE_MS : DEV_AUTOSAVE_MS
-  periodicAutosaveInterval = setInterval(() => {
-    if (!dbDirty || !SQLjsDb) return
-    void flushDatabase().catch((e) => console.error('[DB] periodic autosave failed:', e))
-  }, autosaveMs)
-  console.log(
-    `[DB] Periodic autosave every ${autosaveMs / 1000}s when there are pending changes`
-  )
 
   console.log('[DB] Database initialized successfully')
 }
 
-export { db }
 export * from './schema'

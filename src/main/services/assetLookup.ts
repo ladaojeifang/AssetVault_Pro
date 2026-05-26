@@ -1,8 +1,8 @@
-import { db } from '../db'
+import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import { eq, or } from 'drizzle-orm'
 
-type Database = NonNullable<typeof db>
+type Database = ReturnType<typeof getDatabase>
 
 /** Resolve an on-disk path to an asset id (import_source or catalog file_path). */
 export async function findAssetIdByCanonicalPath(

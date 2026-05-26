@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { existsSync } from 'fs'
-import { db, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import { resolveLibraryPath, itemThumbRelative } from './libraryBundle'
 import { resolveAssetContentPath } from './assetPathResolver'
@@ -16,7 +16,7 @@ import { tryAutoColorFromThumbnail } from './persistAssetColors'
 
 export { notifyAllWindowsAssetsImported }
 
-type Database = NonNullable<typeof db>
+type Database = ReturnType<typeof getDatabase>
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
@@ -44,7 +44,6 @@ export async function schedule3dThumbnailAfterImport(
         })
         .where(eq(assets.id, assetId))
       await syncAssetSidecarFromDb(database, assetId)
-      persistDatabase()
       notifyAllWindowsAssetsImported()
     } catch (error) {
       console.warn('[Import] 3D thumbnail DB sync failed:', error)
@@ -86,7 +85,6 @@ export async function schedule3dThumbnailAfterImport(
       .where(eq(assets.id, assetId))
 
     await syncAssetSidecarFromDb(database, assetId)
-    persistDatabase()
     const absThumb = resolveLibraryPath(itemThumbRelative(assetId))
     void tryAutoColorFromThumbnail(database, assetId, absThumb)
     notifyAllWindowsAssetsImported()
@@ -142,7 +140,7 @@ export async function regenerateModelThumbnails(
     const absFile = row.filePath ? resolveAssetContentPath(row) : ''
     if (!absFile || !existsSync(absFile)) {
       errors++
-      failures.push({ assetId: row.id, filename: row.filename, reason: '模型文件不存在' })
+      failures.push({ assetId: row.id, filename: row.filename, reason: '??????????????' })
       onProgress?.({ current: i + 1, total, assetId: row.id, status: 'error' })
       continue
     }
@@ -171,7 +169,7 @@ export async function regenerateModelThumbnails(
       if (!thumb?.buffer?.length) {
         markModelThumbnailSkipped(row.id, 'regenerate render failed')
         errors++
-        failures.push({ assetId: row.id, filename: row.filename, reason: '缩略图渲染失败' })
+        failures.push({ assetId: row.id, filename: row.filename, reason: '?????????????' })
         onProgress?.({ current: i + 1, total, assetId: row.id, status: 'error' })
         continue
       }
@@ -199,7 +197,7 @@ export async function regenerateModelThumbnails(
     }
   }
 
-  if (updated > 0) persistDatabase()
+
   if (updated > 0) notifyAllWindowsAssetsImported()
 
   return { scanned: total, updated, skipped, errors, failures }

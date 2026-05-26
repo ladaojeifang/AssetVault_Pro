@@ -1,7 +1,7 @@
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { mkdirSync } from 'fs'
-import { initDatabase, flushDatabase, stopDevAutosave, getDatabase } from './db'
+import { initDatabase, flushDatabase, getDatabase } from './db'
 import { prepareOnStartup } from './services/libraryBundle'
 import { readAppPreferences, applyAppPreferencesToRuntime } from './services/appPreferencesStore'
 import { getThumbnailService } from './services/ThumbnailService'
@@ -20,6 +20,7 @@ import {
   registerModelFileProtocol,
   setupModelFileProtocolHandler
 } from './services/modelFileProtocol'
+import { resolveAppIcon } from './appIcon'
 
 registerModelFileProtocol()
 
@@ -82,7 +83,6 @@ async function shutdownFromSignal(signal: string): Promise<void> {
   console.log(`[Main] ${signal} — flushing database…`)
   getHotkeyManager().unregisterAll()
   getFileWatcher().stop()
-  stopDevAutosave()
   await flushDatabase().catch((e) => console.error('[Main] flush on signal failed:', e))
   process.exit(0)
 }
@@ -91,6 +91,7 @@ process.on('SIGINT', () => void shutdownFromSignal('SIGINT'))
 process.on('SIGTERM', () => void shutdownFromSignal('SIGTERM'))
 
 function createWindow(): BrowserWindow {
+  const appIcon = resolveAppIcon()
   const mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -100,6 +101,7 @@ function createWindow(): BrowserWindow {
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#0F1117',
+    ...(appIcon && !appIcon.isEmpty() ? { icon: appIcon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -177,7 +179,15 @@ if (gotSingleInstanceLock) {
     readAppPreferences()
     applyAppPreferencesToRuntime()
 
-    await initDatabase(dbPath)
+    try {
+      await initDatabase(dbPath)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[Main] initDatabase failed:', e)
+      dialog.showErrorBox('资料库无法打开', msg)
+      app.quit()
+      return
+    }
     await runLegacyPathsMigrationIfNeeded()
     await migrateOriginalExtToDisplayFilenames()
     await repairOrphanItemPacks()
@@ -220,8 +230,6 @@ app.on('window-all-closed', async () => {
 
   getFileWatcher().stop()
 
-  stopDevAutosave()
-  // Persist sql.js database to disk before exit (flush pending debounced writes)
   await flushDatabase()
 
   if (process.platform !== 'darwin') {
@@ -232,7 +240,6 @@ app.on('window-all-closed', async () => {
 app.on('before-quit', async () => {
   getHotkeyManager().unregisterAll()
   getFileWatcher().stop()
-  stopDevAutosave()
   await flushDatabase()
 })
 

@@ -1,4 +1,4 @@
-import { sql, type SQL } from 'drizzle-orm'
+import { gte, sql, type SQL } from 'drizzle-orm'
 import { assets } from '../db/schema'
 import type { ColorBucket } from '@/shared/colorBucket'
 import type { DatePreset, SizePreset } from '@/shared/assetFilters'
@@ -69,12 +69,12 @@ export function buildFileSizeMbCondition(
 ): SQL | null {
   const parts: SQL[] = []
   if (minMb != null && minMb >= 0) {
-    const minBytes = Math.floor(minMb * 1024 * 1024)
-    parts.push(sql`${assets.fileSize} >= ${minBytes}`)
+    const minBytes = Math.floor(Number(minMb) * 1024 * 1024)
+    if (Number.isFinite(minBytes)) parts.push(sql`${assets.fileSize} >= ${minBytes}`)
   }
   if (maxMb != null && maxMb >= 0) {
-    const maxBytes = Math.floor(maxMb * 1024 * 1024)
-    parts.push(sql`${assets.fileSize} <= ${maxBytes}`)
+    const maxBytes = Math.floor(Number(maxMb) * 1024 * 1024)
+    if (Number.isFinite(maxBytes)) parts.push(sql`${assets.fileSize} <= ${maxBytes}`)
   }
   if (parts.length === 0) return null
   if (parts.length === 1) return parts[0]!
@@ -83,5 +83,6 @@ export function buildFileSizeMbCondition(
 
 export function buildDatePresetCondition(preset: DatePreset): SQL {
   const cutoff = datePresetCutoff(preset)
-  return sql`${assets.importedAt} >= ${cutoff}`
+  // better-sqlite3 rejects Date in raw sql binds; drizzle maps Date → unix for timestamp columns.
+  return gte(assets.importedAt, cutoff)
 }

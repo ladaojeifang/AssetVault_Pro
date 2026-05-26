@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
-import { persistDatabase, getDatabase } from '../../db'
+import { getDatabase } from '../../db'
 import { tags, assetTags } from '../../db/schema'
 import { eq, and, count, asc } from 'drizzle-orm'
 import { syncAssetSidecarFromDb } from '../../services/assetSidecar'
@@ -41,7 +41,6 @@ export function handleTagOperations(ipc: typeof ipcMain): void {
         description: data.description || null
       })
 
-      persistDatabase()
       return { id, ...data }
     }
   )
@@ -52,7 +51,6 @@ export function handleTagOperations(ipc: typeof ipcMain): void {
     assertPlainObject('data', data)
     await database.update(tags).set(data as any).where(eq(tags.id, id))
     await rebuildSearchTextForTag(database, id)
-    persistDatabase()
     return true
   })
 
@@ -61,7 +59,6 @@ export function handleTagOperations(ipc: typeof ipcMain): void {
     assertString('id', id)
     await rebuildSearchTextForTag(database, id)
     await database.delete(tags).where(eq(tags.id, id))
-    persistDatabase()
     return true
   })
 
@@ -87,7 +84,6 @@ export function handleTagOperations(ipc: typeof ipcMain): void {
       await syncAssetSidecarFromDb(database, assetId)
     }
 
-    persistDatabase()
     return true
   })
 
@@ -107,7 +103,6 @@ export function handleTagOperations(ipc: typeof ipcMain): void {
       await syncAssetSidecarFromDb(database, assetId)
     }
 
-    persistDatabase()
     return true
   })
 }

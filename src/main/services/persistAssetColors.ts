@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'fs'
 import { eq } from 'drizzle-orm'
-import { getDatabase, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import { classifyColorBucket } from '@/shared/colorBucket'
 import type { AssetColorAnalysis } from './analyzeAssetColors'
@@ -25,7 +25,6 @@ export async function persistAssetColorAnalysis(
     })
     .where(eq(assets.id, assetId))
   await syncAssetSidecarFromDb(database, assetId)
-  persistDatabase()
 }
 
 /** Analyze palette from an on-disk thumbnail (e.g. after 3D render). */

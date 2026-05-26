@@ -2,7 +2,7 @@ import { existsSync, readdirSync, statSync } from 'fs'
 import { join, basename, extname } from 'path'
 import { eq } from 'drizzle-orm'
 import mime from 'mime-types'
-import { getDatabase, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import { getLibraryRoot, itemPackFileRelative, ITEMS_DIR } from './libraryBundle'
 import { getFileType } from '../utils/fileUtils'
@@ -104,7 +104,6 @@ export async function repairOrphanItemPacks(): Promise<number> {
   }
 
   if (repaired > 0) {
-    persistDatabase()
     console.log(`[Library] Repaired ${repaired} orphan item pack(s)`)
   }
 

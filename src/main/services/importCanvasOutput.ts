@@ -3,7 +3,7 @@ import { join } from 'path'
 import { app } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import { eq } from 'drizzle-orm'
-import { getDatabase, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import { importSingleAsset } from './importSingleAsset'
 import { syncAssetSidecarFromDb } from './assetSidecar'
@@ -74,7 +74,6 @@ export async function importCanvasOutputFromPng(
     .set({ metadata: JSON.stringify(meta), updatedAt: new Date() })
     .where(eq(assets.id, assetId))
 
-  persistDatabase()
   await syncAssetSidecarFromDb(database, assetId)
 
   return { assetId }

@@ -1,6 +1,6 @@
 import { existsSync, renameSync } from 'fs'
 import { eq } from 'drizzle-orm'
-import { getDatabase, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets, assetsSearch } from '../db/schema'
 import { syncAssetSidecarFromDb } from './assetSidecar'
 import {
@@ -67,6 +67,5 @@ export async function renameAsset(assetId: string, newNameInput: string): Promis
   }
 
   await syncAssetSidecarFromDb(database, assetId)
-  persistDatabase()
   return { filename }
 }

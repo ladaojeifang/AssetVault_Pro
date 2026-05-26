@@ -3,7 +3,11 @@ import { LRUCache } from 'lru-cache'
 import { app } from 'electron'
 import { join } from 'path'
 import { existsSync, mkdirSync, unlinkSync, statSync, readdirSync, writeFileSync, readFileSync } from 'fs'
-import { extractVideoFramePngBestEffort } from '../utils/videoFrame'
+import {
+  extractGifFramePngBestEffort,
+  extractVideoFramePngBestEffort,
+  isGifFilePath
+} from '../utils/videoFrame'
 import { renderModelToPngBuffer } from './modelThumbnailRenderer'
 import { renderFontPreviewPng, FONT_THUMB_CANVAS_SIZE } from '../utils/fontPreviewRender'
 import { FONT_THUMB_SAMPLE_TEXT } from '@/shared/fontTypes'
@@ -51,11 +55,7 @@ export class ThumbnailService {
       mkdirSync(this.thumbDirLegacy, { recursive: true })
     }
 
-    this.lruCache = new LRUCache<string, Buffer>({
-      maxSize: this.maxMemorySize * 1024 * 1024,
-      sizeCalculation: (value) => value.length,
-      ttl: 1000 * 60 * 30 // 30 min TTL for memory
-    })
+    this.lruCache = this.createLruCache()
 
     console.log(
       `[ThumbnailService] Initialized - Memory: ${this.maxMemorySize}MB, legacy dir: ${this.thumbDirLegacy}`
@@ -81,13 +81,20 @@ export class ThumbnailService {
     }
   }
 
-  /** Resize in-memory LRU cap (clears cache when limit changes). */
+  private createLruCache(): LRUCache<string, Buffer> {
+    return new LRUCache<string, Buffer>({
+      maxSize: this.maxMemorySize * 1024 * 1024,
+      sizeCalculation: (value) => value.length,
+      ttl: 1000 * 60 * 30 // 30 min TTL for memory
+    })
+  }
+
+  /** Resize in-memory LRU cap (recreates cache when limit changes). */
   setMemoryCacheLimitMB(mb: number): void {
     const next = Math.min(10240, Math.max(256, Math.floor(mb)))
     if (next === this.maxMemorySize) return
     this.maxMemorySize = next
-    this.lruCache.clear()
-    this.lruCache.maxSize = next * 1024 * 1024
+    this.lruCache = this.createLruCache()
     console.log(`[ThumbnailService] Memory cache limit: ${next}MB`)
   }
 
@@ -98,6 +105,42 @@ export class ThumbnailService {
       return join(dir, 'thumb.webp')
     }
     return join(this.thumbDirLegacy, `${assetId}.webp`)
+  }
+
+  /** Raster frame (video / GIF) ? thumb.webp via ffmpeg + @napi-rs/image. */
+  private async generateFromFfmpegFrame(
+    filePath: string,
+    assetId: string,
+    options: { width?: number; height?: number; quality?: number },
+    extractFrame: (path: string) => Promise<Buffer | null>
+  ): Promise<ThumbnailGenerateResult | null> {
+    const maxEdge = options.width ?? this.generationMaxEdge
+    const { height = maxEdge, quality = options.quality ?? this.generationQuality } = options
+    const outputPath = this.thumbDiskPath(assetId)
+
+    if (existsSync(outputPath)) {
+      const diskBuffer = readFileSync(outputPath)
+      this.lruCache.set(assetId, diskBuffer)
+      return { buffer: diskBuffer, path: outputPath }
+    }
+
+    const png = await extractFrame(filePath)
+    if (!png) {
+      if (isGifFilePath(filePath)) {
+        console.warn(`[ThumbnailService] GIF frame extract failed (ffmpeg): ${filePath}`)
+      }
+      return null
+    }
+
+    const transformer = new Transformer(png)
+    const frameInfo = await transformer.metadata()
+    const webpBuffer = shouldUseOriginalImageDimensions(frameInfo.width, frameInfo.height)
+      ? await transformer.webp(quality)
+      : await transformer.resize(maxEdge, height, undefined, ResizeFit.Inside).webp(quality)
+
+    writeFileSafely(outputPath, webpBuffer as Buffer)
+    this.lruCache.set(assetId, webpBuffer as Buffer)
+    return { buffer: webpBuffer as Buffer, path: outputPath }
   }
 
   /**
@@ -112,6 +155,15 @@ export class ThumbnailService {
     const { height = maxEdge, quality = options.quality ?? this.generationQuality } = options
 
     try {
+      if (isGifFilePath(filePath)) {
+        return await this.generateFromFfmpegFrame(
+          filePath,
+          assetId,
+          options,
+          extractGifFramePngBestEffort
+        )
+      }
+
       if (isCustomThumbnail(assetId)) {
         const customPath = this.thumbDiskPath(assetId)
         if (existsSync(customPath)) {
@@ -203,7 +255,7 @@ export class ThumbnailService {
     }
   }
 
-  /** Font preview thumbnail — renders sample text via fontkit + Skia canvas. */
+  /** Font preview thumbnail ??renders sample text via fontkit + Skia canvas. */
   async generateFont(
     filePath: string,
     assetId: string,
@@ -256,30 +308,13 @@ export class ThumbnailService {
     assetId: string,
     options: { width?: number; height?: number; quality?: number } = {}
   ): Promise<ThumbnailGenerateResult | null> {
-    const maxEdge = options.width ?? this.generationMaxEdge
-    const { height = maxEdge, quality = options.quality ?? this.generationQuality } = options
-    const outputPath = this.thumbDiskPath(assetId)
-
     try {
-      if (existsSync(outputPath)) {
-        const diskBuffer = readFileSync(outputPath)
-        this.lruCache.set(assetId, diskBuffer)
-        return { buffer: diskBuffer, path: outputPath }
-      }
-
-      const png = await extractVideoFramePngBestEffort(filePath)
-      if (!png) return null
-
-      const transformer = new Transformer(png)
-      const frameInfo = await transformer.metadata()
-      const webpBuffer = shouldUseOriginalImageDimensions(frameInfo.width, frameInfo.height)
-        ? await transformer.webp(quality)
-        : await transformer.resize(maxEdge, height, undefined, ResizeFit.Inside).webp(quality)
-
-      writeFileSafely(outputPath, webpBuffer as Buffer)
-      this.lruCache.set(assetId, webpBuffer as Buffer)
-
-      return { buffer: webpBuffer as Buffer, path: outputPath }
+      return await this.generateFromFfmpegFrame(
+        filePath,
+        assetId,
+        options,
+        extractVideoFramePngBestEffort
+      )
     } catch (error) {
       console.error(`[ThumbnailService] Failed to generate video thumbnail for ${filePath}:`, error)
       return null

@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import { existsSync, copyFileSync, mkdirSync, readFileSync, statSync, unlinkSync } from 'fs'
 import { join, sep, extname } from 'path'
-import { persistDatabase, getDatabase } from '../../db'
+import { getDatabase } from '../../db'
 import { folders, assetFolders, assets } from '../../db/schema'
 import { eq, asc, countDistinct, and, inArray, or, desc } from 'drizzle-orm'
 import type { Folder } from '../../db/schema'
@@ -87,7 +87,6 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
       .update(folders)
       .set({ coverAssetId: assetId, updatedAt: new Date() })
       .where(eq(folders.id, folderId))
-    persistDatabase()
     return true
   })
 
@@ -211,7 +210,6 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
         icon
       } as any)
 
-      persistDatabase()
 
       return {
         id,
@@ -262,7 +260,6 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
       if (data.name) {
         const folder = await database.select().from(folders).where(eq(folders.id, id)).get()
         if (!folder) {
-          persistDatabase()
           return true
         }
 
@@ -287,7 +284,6 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
         }
       }
 
-      persistDatabase()
       return true
     }
   )
@@ -300,7 +296,6 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
       tryRemoveFolderIconFile(row.icon)
     }
     await database.delete(folders).where(eq(folders.id, id))
-    persistDatabase()
     return true
   })
 
@@ -341,7 +336,6 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
       await updateDescendantPaths(database, oldPath, newPath, levelDelta)
     }
 
-    persistDatabase()
     return true
   })
 }

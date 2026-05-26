@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'fs'
 import { eq, sql } from 'drizzle-orm'
 import type { BrowserWindow } from 'electron'
-import { getDatabase, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import { getLibraryRoot } from './libraryBundle'
 import { getLibraryMode, readLibraryManifestFile, writeLibraryManifest } from './libraryManifest'
@@ -104,7 +104,6 @@ export async function upgradeCatalogLibraryToArchive(
     }
   })
 
-  persistDatabase()
   return { ok: true }
 }
 
@@ -132,7 +131,6 @@ export async function relinkAssetSource(assetId: string, newSourcePath: string):
 
   const { syncAssetSidecarFromDb } = await import('./assetSidecar')
   await syncAssetSidecarFromDb(database, assetId)
-  persistDatabase()
   return { ok: true }
 }
 
@@ -153,6 +151,5 @@ export async function verifyReferencedSources(): Promise<{ checked: number; miss
       })
       .where(eq(assets.id, row.id))
   }
-  persistDatabase()
   return { checked: rows.length, missing }
 }

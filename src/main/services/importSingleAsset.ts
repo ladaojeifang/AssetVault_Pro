@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid'
 import mime from 'mime-types'
 import { Transformer, ResizeFit } from '@napi-rs/image'
 import ExifReader from 'exifreader'
-import { getDatabase, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets, assetFolders } from '../db/schema'
 import { eq, and } from 'drizzle-orm'
 import type { DuplicateImportAnswer, DuplicateImportPromptPayload, DuplicatePolicy, ImportAssetOptions } from '@/shared/importTypes'
@@ -340,7 +340,6 @@ export async function importSingleAsset(
             .get()
           if (!existingAf) {
             await database.insert(assetFolders).values({ assetId: row.id, folderId: targetFolderId })
-            persistDatabase()
             await syncAssetSidecarFromDb(database, row.id)
           }
         }
@@ -404,7 +403,6 @@ async function finalizeImportedAsset(
     void schedule3dThumbnailAfterImport(database, id, destAbs, extNoDot)
   }
 
-  persistDatabase()
   return id
 }
 
@@ -426,7 +424,6 @@ async function linkExistingAsset(
       .get()
     if (!existingAf) {
       await database.insert(assetFolders).values({ assetId: existingId, folderId: targetFolderId })
-      persistDatabase()
       await syncAssetSidecarFromDb(database, existingId)
     }
   }

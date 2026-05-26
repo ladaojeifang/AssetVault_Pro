@@ -17,7 +17,7 @@ export function tokenizeSearchQuery(raw: string): string[] {
 
 /**
  * Per-token match via EXISTS on assets_search + filename/original_name.
- * Avoids loading all matching IDs into JS (FTS5 alternative for sql.js).
+ * Avoids loading all matching IDs into JS (FTS5 optional later).
  */
 export function buildSearchCondition(tokens: string[]): SQL | null {
   if (tokens.length === 0) return null

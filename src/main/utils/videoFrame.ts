@@ -1,4 +1,5 @@
 import { spawn } from 'child_process'
+import { extname } from 'path'
 import ffmpegStatic from 'ffmpeg-static'
 
 const EXTRACT_TIMEOUT_MS = 45_000
@@ -86,4 +87,13 @@ export async function extractVideoFramePngBestEffort(filePath: string): Promise<
   let png = await extractVideoFramePng(filePath, 0.5)
   if (!png) png = await extractVideoFramePng(filePath, 0)
   return png
+}
+
+export function isGifFilePath(filePath: string): boolean {
+  return extname(filePath).toLowerCase() === '.gif'
+}
+
+/** GIF decode via ffmpeg — @napi-rs/image does not support GIF. */
+export function extractGifFramePngBestEffort(filePath: string): Promise<Buffer | null> {
+  return extractVideoFramePng(filePath, 0).then((png) => png ?? extractVideoFramePng(filePath, 0.1))
 }

@@ -3,7 +3,7 @@ import { join } from 'path'
 import { and, eq } from 'drizzle-orm'
 import type { DuplicateImportPromptPayload } from '@/shared/importTypes'
 import { CONTENT_HASH_ALGO } from '@/shared/importTypes'
-import { getDatabase, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets, assetFolders, folders } from '../db/schema'
 import { computeFileSha256 } from '../utils/contentHash'
 import { resolveLibraryPath, getLibraryRoot } from './libraryBundle'
@@ -36,7 +36,7 @@ function readSidecarContentHash(assetId: string): string | null {
   return null
 }
 
-/** Resolve cached hash: DB → meta.json → compute from library file and persist. */
+/** Resolve cached hash: DB ???meta.json ???compute from library file and persist. */
 export async function ensureAssetContentHash(database: Database, assetId: string): Promise<string | null> {
   const row = await database.select().from(assets).where(eq(assets.id, assetId)).get()
   if (!row) return null
@@ -49,7 +49,6 @@ export async function ensureAssetContentHash(database: Database, assetId: string
       .update(assets)
       .set({ contentHash: fromSidecar, contentHashComputedAt: new Date(), updatedAt: new Date() })
       .where(eq(assets.id, assetId))
-    persistDatabase()
     return fromSidecar
   }
 
@@ -61,7 +60,6 @@ export async function ensureAssetContentHash(database: Database, assetId: string
     .update(assets)
     .set({ contentHash: hash, contentHashComputedAt: new Date(), updatedAt: new Date() })
     .where(eq(assets.id, assetId))
-  persistDatabase()
   await syncAssetSidecarFromDb(database, assetId)
   return hash
 }
@@ -109,7 +107,6 @@ export async function findAssetIdByContentHash(
           .where(eq(assets.id, id))
         await syncAssetSidecarFromDb(database, id)
       }
-      if (pendingHashWrites.length > 0) persistDatabase()
       return candidate.id
     }
   }
@@ -121,7 +118,6 @@ export async function findAssetIdByContentHash(
       .where(eq(assets.id, id))
     await syncAssetSidecarFromDb(database, id)
   }
-  if (pendingHashWrites.length > 0) persistDatabase()
 
   return null
 }
@@ -189,7 +185,6 @@ export async function scanLibraryContentHashes(
 
   for (let i = 0; i < rows.length; i++) {
     if (contentHashScanCancelRequested) {
-      if (updated > 0) persistDatabase()
       return { scanned: i, updated, skipped, errors, cancelled: true }
     }
 
@@ -244,15 +239,12 @@ export async function scanLibraryContentHashes(
         .where(eq(assets.id, row.id))
       await syncAssetSidecarFromDb(database, row.id)
       updated++
-      if (updated % 50 === 0) persistDatabase()
       onProgress?.({ current: i + 1, total, assetId: row.id, status: 'done' })
     } catch {
       errors++
       onProgress?.({ current: i + 1, total, assetId: row.id, status: 'error' })
     }
   }
-
-  if (updated > 0) persistDatabase()
 
   return { scanned: total, updated, skipped, errors, cancelled: contentHashScanCancelRequested }
 }

@@ -9,7 +9,6 @@ import { notifyAllWindowsAssetsImported } from './importNotify'
 import { toCanonicalFilePath } from '../utils/pathUtils'
 import { removeItemPack } from './libraryBundle'
 import { findAssetIdByCanonicalPath } from './assetLookup'
-import { persistDatabase } from '../db'
 
 /**
  * File Watcher Service using Chokidar
@@ -104,7 +103,6 @@ export class FileWatcher {
 
         console.log(`[FileWatcher] Auto-importing: ${basename(canonical)}`)
         await importSingleAsset(canonical)
-        persistDatabase()
         notifyAllWindowsAssetsImported()
       } catch (error) {
         console.error(`[FileWatcher] Error handling add for ${filePath}:`, error)
@@ -129,7 +127,6 @@ export class FileWatcher {
               updatedAt: new Date()
             })
             .where(eq(assets.id, assetId))
-          persistDatabase()
         }
       } catch (error) {
         console.error(`[FileWatcher] Error handling change for ${filePath}:`, error)
@@ -148,7 +145,6 @@ export class FileWatcher {
           removeItemPack(assetId)
           await database.delete(assets).where(eq(assets.id, assetId))
           console.log(`[FileWatcher] Removed deleted file from DB: ${basename(canonical)}`)
-          persistDatabase()
         }
       } catch (error) {
         console.error(`[FileWatcher] Error handling delete for ${filePath}:`, error)

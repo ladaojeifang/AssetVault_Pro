@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow, dialog, shell } from 'electron'
 import { copyFileSync, existsSync, mkdirSync } from 'fs'
 import { basename, join } from 'path'
 import { eq } from 'drizzle-orm'
-import { getDatabase, persistDatabase } from '../../db'
+import { getDatabase } from '../../db'
 import { assets } from '../../db/schema'
 import type { FontFamilyGroup, FontPreviewRenderRequest, ParsedFontMetadata } from '@/shared/fontTypes'
 import { resolveLibraryPath, getLibraryRoot } from '../../services/libraryBundle'
@@ -120,7 +120,6 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
           updatedAt: new Date()
         })
         .where(eq(assets.id, assetId))
-      persistDatabase()
       return { ok: true as const, font: (metadataObj.font as ParsedFontMetadata) ?? null }
     }
   )

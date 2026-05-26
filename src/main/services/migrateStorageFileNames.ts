@@ -1,7 +1,7 @@
 import { existsSync, renameSync, writeFileSync } from 'fs'
 import { join, basename, sep } from 'path'
 import { eq } from 'drizzle-orm'
-import { getDatabase, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import {
   getLibraryRoot,
@@ -58,6 +58,5 @@ export async function migrateOriginalExtToDisplayFilenames(): Promise<void> {
   writeFileSync(flagPath, new Date().toISOString(), 'utf-8')
   if (renamed > 0) {
     console.log(`[Library] Renamed ${renamed} on-disk asset file(s) to original display names`)
-    persistDatabase()
   }
 }

@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { existsSync, statSync, readdirSync, readFileSync } from 'fs'
 import { join, basename, extname, dirname } from 'path'
-import { flushDatabase, persistDatabase, getDatabase } from '../../db'
+import { flushDatabase, getDatabase } from '../../db'
 import { assets, assetTags, assetFolders } from '../../db/schema'
 import { eq, and, inArray, desc, asc, sql, count, type SQL } from 'drizzle-orm'
 import type { AssetItem, QueryParams, QueryResult, ImportProgress } from '@/shared/types'
@@ -243,7 +243,6 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
         getAssetTags(database, id),
         getAssetFolderIds(database, id)
       ])
-      persistDatabase()
       return { ...attachResolvedPaths(item), tagIds, folderIds }
     }
 
@@ -395,7 +394,6 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       removeItemPack(id)
     }
     await database.delete(assets).where(inArray(assets.id, ids))
-    persistDatabase()
     return true
   })
 
@@ -417,7 +415,6 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       }
       await syncAssetSidecarFromDb(database, assetId)
     }
-    persistDatabase()
     return true
   })
 
@@ -432,7 +429,6 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     for (const id of assetIds) {
       await syncAssetSidecarFromDb(database, id)
     }
-    persistDatabase()
     return true
   })
 
@@ -452,7 +448,6 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       }
       await syncAssetSidecarFromDb(database, assetId)
     }
-    persistDatabase()
     return true
   })
 
@@ -464,7 +459,6 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       .update(assets)
       .set({ metadata: JSON.stringify(metadata), updatedAt: new Date() })
       .where(eq(assets.id, id))
-    persistDatabase()
     await syncAssetSidecarFromDb(database, id)
     return true
   })
@@ -478,7 +472,6 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       .update(assets)
       .set({ notes: trimmed.length > 0 ? trimmed : null, updatedAt: new Date() })
       .where(eq(assets.id, id))
-    persistDatabase()
     await syncAssetSidecarFromDb(database, id)
     return true
   })
@@ -503,7 +496,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       await persistAssetColorAnalysis(database, id, result)
       updated++
     }
-    if (updated > 0) persistDatabase()
+
     return { updated }
   })
 
@@ -620,7 +613,6 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
               updatedAt: new Date()
             })
             .where(eq(assets.id, id))
-          persistDatabase()
           const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
           return `data:image/webp;base64,${buf.toString('base64')}`
         }
@@ -644,7 +636,6 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
             updatedAt: new Date()
           })
           .where(eq(assets.id, id))
-        persistDatabase()
         const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
         return `data:image/webp;base64,${buf.toString('base64')}`
       }
@@ -666,7 +657,6 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
             updatedAt: new Date()
           })
           .where(eq(assets.id, id))
-        persistDatabase()
         const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
         return `data:image/webp;base64,${buf.toString('base64')}`
       }
@@ -691,7 +681,6 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
                 updatedAt: new Date()
               })
               .where(eq(assets.id, id))
-            persistDatabase()
           }
           return fromDisk
         }
@@ -712,7 +701,6 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
             updatedAt: new Date()
           })
           .where(eq(assets.id, id))
-        persistDatabase()
         const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
         return `data:image/webp;base64,${buf.toString('base64')}`
       }

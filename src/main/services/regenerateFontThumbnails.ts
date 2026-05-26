@@ -1,6 +1,6 @@
 import { existsSync } from 'fs'
 import { eq } from 'drizzle-orm'
-import { getDatabase, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import type { FontRegenerateFailure, FontRegenerateResult } from '@/shared/fontTypes'
 import { resolveLibraryPath, itemThumbRelative } from './libraryBundle'
@@ -117,7 +117,7 @@ export async function regenerateFontThumbnails(
     }
   }
 
-  if (updated > 0) persistDatabase()
+
 
   return { scanned: total, updated, skipped, errors, failures }
 }

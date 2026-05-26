@@ -2,7 +2,7 @@ import { existsSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { eq } from 'drizzle-orm'
 import { clipboard } from 'electron'
-import { db, persistDatabase } from '../db'
+import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import { resolveLibraryPath, itemThumbRelative } from './libraryBundle'
 import { getThumbnailService } from './ThumbnailService'
@@ -18,7 +18,7 @@ import { parseFontFile } from './fontMetadata'
 import { FONT_THUMB_CANVAS_SIZE } from '../utils/fontPreviewRender'
 import { notifyAllWindowsAssetsImported } from './importNotify'
 
-type Database = NonNullable<typeof db>
+type Database = ReturnType<typeof getDatabase>
 
 export async function setCustomThumbnailFromFile(
   database: Database,
@@ -60,7 +60,6 @@ async function applyCustomThumbnail(
     .where(eq(assets.id, assetId))
 
   await syncAssetSidecarFromDb(database, assetId)
-  persistDatabase()
   notifyAllWindowsAssetsImported()
 }
 
@@ -83,7 +82,6 @@ export async function refreshAssetThumbnail(
       .update(assets)
       .set({ hasThumbnail: false, thumbnailPath: null, updatedAt: new Date() })
       .where(eq(assets.id, assetId))
-    persistDatabase()
     notifyAllWindowsAssetsImported()
     return false
   }
@@ -119,7 +117,6 @@ export async function refreshAssetThumbnail(
       .set({ hasThumbnail: false, thumbnailPath: null, updatedAt: new Date() })
       .where(eq(assets.id, assetId))
     await syncAssetSidecarFromDb(database, assetId)
-    persistDatabase()
     notifyAllWindowsAssetsImported()
     return false
   }
@@ -135,7 +132,6 @@ export async function refreshAssetThumbnail(
     .where(eq(assets.id, assetId))
 
   await syncAssetSidecarFromDb(database, assetId)
-  persistDatabase()
   notifyAllWindowsAssetsImported()
   return true
 }
