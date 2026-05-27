@@ -188,6 +188,28 @@ paths:
       responses:
         '200': { description: OK }
 
+  /asset/importFromURL:
+    post:
+      tags: [asset]
+      summary: 从 URL 导入（主进程下载）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, example: 'https://example.com/photo.jpg' }
+                filename: { type: string, example: 'photo.jpg' }
+                targetFolderId: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [ask, use_existing, import_copy]
+                  default: use_existing
+      responses:
+        '200': { description: OK }
+
   /asset/importBatch:
     post:
       tags: [asset]
@@ -200,6 +222,33 @@ paths:
               required: [filePaths]
               properties:
                 filePaths: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /asset/importFromURLBatch:
+    post:
+      tags: [asset]
+      summary: 批量从 URL 导入（主进程下载）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [url]
+                    properties:
+                      url: { type: string, example: 'https://example.com/a.jpg' }
+                      filename: { type: string, example: 'a.jpg' }
+                targetFolderId: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [ask, use_existing, import_copy]
+                  default: use_existing
       responses:
         '200': { description: OK }
 

@@ -101,6 +101,25 @@ export type AssetImportFolderResponse = {
   errors: Array<{ filePath: string; message: string }>
 }
 
+export type AssetImportFromUrlRequest = {
+  url: string
+  filename?: string
+  targetFolderId?: string
+  duplicatePolicy?: 'ask' | 'use_existing' | 'import_copy'
+}
+
+export type AssetImportFromUrlBatchRequest = {
+  items: Array<{ url: string; filename?: string }>
+  targetFolderId?: string
+  duplicatePolicy?: 'ask' | 'use_existing' | 'import_copy'
+}
+
+export type AssetImportFromUrlBatchResponse = {
+  imported: string[]
+  skipped: Array<{ url: string; reason: string; existingAssetId?: string }>
+  errors: Array<{ url: string; message: string }>
+}
+
 /** HTTP query/body → internal QueryParams */
 export type WebApiAssetQueryInput = QueryParams & {
   offset?: number

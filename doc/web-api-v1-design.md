@@ -382,6 +382,55 @@ interface AssetImportFolderResponse {
 
 ---
 
+#### `POST /asset/importFromURL`
+
+由**主进程**下载 `http`/`https` URL 后导入（浏览器扩展、网页采集）。不在 HTTP 层传 `tagIds`；打标签见 `POST /tag/assign`。
+
+**Body:**
+
+```typescript
+interface AssetImportFromUrlRequest {
+  url: string                    // 必填
+  filename?: string              // 可选，推断扩展名/原始文件名，如 photo.jpg
+  targetFolderId?: string
+  duplicatePolicy?: DuplicatePolicy
+}
+```
+
+**下载限制：** 硬上限 300MB；有 `Content-Length` 时自适应上限（约 `length × 1.15 + 1MB`）。超限 → `400 INVALID_REQUEST`。
+
+**落盘：** `libraryRoot/remote-imports/<sha256>/<safeFileName>`，再 `importSingleAsset`（catalog 引用该路径，archive 拷贝进 items）。
+
+**映射：** `urlAssetImportService.importAssetFromUrl` → `importAssetFromPath`。
+
+---
+
+#### `POST /asset/importFromURLBatch`
+
+**Body:**
+
+```typescript
+interface AssetImportFromUrlBatchRequest {
+  items: Array<{ url: string; filename?: string }>
+  targetFolderId?: string
+  duplicatePolicy?: DuplicatePolicy
+}
+```
+
+**Response `data`:**
+
+```typescript
+interface AssetImportFromUrlBatchResponse {
+  imported: string[]
+  skipped: Array<{ url: string; reason: string; existingAssetId?: string }>
+  errors: Array<{ url: string; message: string }>
+}
+```
+
+**映射：** `urlAssetImportService.importAssetFromUrlBatch`（默认顺序下载，单条失败记入 `errors`）。
+
+---
+
 #### `DELETE /asset/delete`
 
 **Body:**
@@ -593,6 +642,7 @@ interface WebApiPreferences {
 - [x] 抽取 `assetQueryService`、`assetImportService`
 - [x] 路由：`app/info`、`library/info`、`library/state`
 - [x] 路由：`asset/get`、`asset/info`、`asset/import`、`importBatch`、`importFolder`、`asset/delete`
+- [x] 路由：`asset/importFromURL`、`asset/importFromURLBatch`（主进程下载，浏览器扩展）
 - [x] `shared/webApiTypes.ts`
 - [ ] 单元测试（supertest）
 - [ ] README 链接本文档
@@ -619,12 +669,13 @@ interface WebApiPreferences {
 |-------|----------------|
 | `http://localhost:41595/api/v2/` | `http://127.0.0.1:41596/api/v1/` |
 | `item/get` | `asset/get` |
-| `item/add`（上传） | `asset/import`（本机路径） |
+| `item/addFromURL` / 41593 表单 | `asset/importFromURL`（主进程下载） |
+| `item/add`（本机/扩展下载） | `asset/import`（本机绝对路径） |
 | `library/info` | `library/info` |
 | localhost 免 token | 同左；远程需 token |
 | JSend + offset/limit | 同左 |
 
-差异：**v1 不提供 multipart 上传**，自动化场景假定文件已在磁盘；后续 v1.1 可加 `POST /asset/upload`。
+差异：**v1 不提供 multipart 直传**；浏览器扩展应使用 `importFromURL`，由应用下载并入库。标签在 Eagle 扩展侧可随单条请求携带；AssetVault v1 为 **导入 + `tag/assign` 两步**。
 
 ---
 

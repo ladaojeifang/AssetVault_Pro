@@ -22,7 +22,8 @@ import {
   fileNotFound,
   invalidRequest
 } from '../errors'
-import { assertLibraryReady, requireString, requireStringArray } from './common'
+import { assertLibraryReady, requireString, requireStringArray, optionalString } from './common'
+import { importAssetFromUrl, importAssetFromUrlBatch } from '../../services/urlAssetImportService'
 
 function parseIntParam(value: unknown, fallback: number): number {
   if (value === undefined || value === null || value === '') return fallback
@@ -178,6 +179,69 @@ export async function handleAssetImportFolder(body: Record<string, unknown>) {
       if (e.message === 'FILE_NOT_FOUND') throw fileNotFound(folderPath)
       if (e.message === 'FILE_NOT_DIRECTORY') throw fileNotDirectory(folderPath)
     }
+    throw e
+  }
+}
+
+export async function handleAssetImportFromUrl(body: Record<string, unknown>) {
+  assertLibraryReady()
+  const url = requireString(body.url, 'url')
+  const filename = optionalString(body.filename)
+  const targetFolderId = typeof body.targetFolderId === 'string' ? body.targetFolderId : undefined
+  const duplicatePolicy =
+    body.duplicatePolicy === 'ask' ||
+    body.duplicatePolicy === 'use_existing' ||
+    body.duplicatePolicy === 'import_copy'
+      ? body.duplicatePolicy
+      : 'use_existing'
+
+  try {
+    const result = await importAssetFromUrl(url, { filename, targetFolderId, duplicatePolicy })
+    return jsendSuccess(result)
+  } catch (e) {
+    if (e instanceof Error) {
+      if (e.message === 'INVALID_URL') throw invalidRequest('无效的 url')
+      if (e.message === 'UNSUPPORTED_URL_SCHEME') throw invalidRequest('只支持 http/https url')
+      if (e.message === 'UNSUPPORTED_FILE_EXTENSION') throw invalidRequest('不支持的文件扩展名')
+      if (e.message === 'DOWNLOAD_SIZE_EXCEEDED') throw invalidRequest('下载文件超过最大限制', { maxBytes: 300 * 1024 * 1024 })
+      if (e.message.startsWith('DOWNLOAD_FAILED_')) throw invalidRequest(`下载失败: ${e.message.replace('DOWNLOAD_FAILED_', '')}`)
+    }
+    throw e
+  }
+}
+
+export async function handleAssetImportFromUrlBatch(body: Record<string, unknown>) {
+  assertLibraryReady()
+  const rawItems = body.items
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    throw invalidRequest('缺少 items 数组')
+  }
+
+  const items: Array<{ url: string; filename?: string }> = []
+  for (const x of rawItems) {
+    if (typeof x !== 'object' || x == null) continue
+    const maybeUrl = (x as Record<string, unknown>).url
+    if (typeof maybeUrl !== 'string' || !maybeUrl.trim()) continue
+    const filename = optionalString((x as Record<string, unknown>).filename)
+    if (filename) items.push({ url: maybeUrl.trim(), filename })
+    else items.push({ url: maybeUrl.trim() })
+  }
+
+  if (items.length === 0) throw invalidRequest('items 中缺少有效 url')
+
+  const targetFolderId = typeof body.targetFolderId === 'string' ? body.targetFolderId : undefined
+  const duplicatePolicy =
+    body.duplicatePolicy === 'ask' ||
+    body.duplicatePolicy === 'use_existing' ||
+    body.duplicatePolicy === 'import_copy'
+      ? body.duplicatePolicy
+      : 'use_existing'
+
+  try {
+    const result = await importAssetFromUrlBatch(items, { targetFolderId, duplicatePolicy })
+    return jsendSuccess(result)
+  } catch (e) {
+    // In batch mode, service converts most failures into `errors[]`.
     throw e
   }
 }
