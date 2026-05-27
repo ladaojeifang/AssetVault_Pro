@@ -7,6 +7,11 @@ import * as schema from './schema'
 import { createInitialSchemaOnSqlite } from './sqliteSchema'
 import { wrapBetterSqlite } from './rawSqlite'
 import { backfillColorBuckets } from '../services/backfillColorBuckets'
+import {
+  BETTER_SQLITE_REBUILD_HINT,
+  isBetterSqliteBindingsError,
+  openBetterSqliteDatabase
+} from './betterSqliteNative'
 
 let db: ReturnType<typeof drizzle> | null = null
 let sqliteDb: Database | null = null
@@ -95,10 +100,16 @@ function openSqliteFile(normalized: string): Database {
 
   if (hasFile && size > 0) {
     try {
-      const raw = new Database(normalized)
+      const raw = openBetterSqliteDatabase(normalized)
       console.log('[DB] Opened existing database from disk')
       return raw
     } catch (openErr) {
+      if (isBetterSqliteBindingsError(openErr)) {
+        console.error('[DB] better-sqlite3 native module missing or wrong ABI:', openErr)
+        throw new Error(
+          `无法加载数据库原生模块（资料库文件未损坏）。\n${BETTER_SQLITE_REBUILD_HINT}`
+        )
+      }
       console.error('[DB] File exists but is not a valid SQLite DB; keeping a backup copy:', openErr)
       const corruptPath = `${normalized}.corrupt-${Date.now()}`
       try {
@@ -116,7 +127,7 @@ function openSqliteFile(normalized: string): Database {
   const backup = findLatestCorruptBackup(normalized)
   if (backup) {
     try {
-      const raw = new Database(backup, { readonly: true })
+      const raw = openBetterSqliteDatabase(backup, { readonly: true })
       const row = raw.prepare('SELECT count(*) AS c FROM assets').get() as { c: number }
       raw.close()
       const count = Number(row?.c ?? 0)
@@ -139,7 +150,7 @@ function openSqliteFile(normalized: string): Database {
   }
 
   console.log('[DB] Creating new database file')
-  return new Database(normalized)
+  return openBetterSqliteDatabase(normalized)
 }
 
 /**

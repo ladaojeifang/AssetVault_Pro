@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { mkdirSync } from 'fs'
 import { initDatabase, flushDatabase, getDatabase } from './db'
+import { BETTER_SQLITE_REBUILD_HINT, isBetterSqliteBindingsError, probeBetterSqliteNative } from './db/betterSqliteNative'
 import { prepareOnStartup } from './services/libraryBundle'
 import { readAppPreferences, applyAppPreferencesToRuntime } from './services/appPreferencesStore'
 import { getThumbnailService } from './services/ThumbnailService'
@@ -16,6 +17,8 @@ import { getFileWatcher } from './services/FileWatcher'
 import { initModelThumbnailRenderer, warmHiddenThumbnailWindow } from './services/modelThumbnailRenderer'
 import { setMainBrowserWindow } from './services/mainWindowRef'
 import { attachMainWindowLifecycle } from './services/aiCanvasWindow'
+import { stopApiServer } from './api/server'
+import { applyWebApiFromPreferences } from './api/webApiRuntime'
 import {
   registerModelFileProtocol,
   setupModelFileProtocolHandler
@@ -180,6 +183,20 @@ if (gotSingleInstanceLock) {
     applyAppPreferencesToRuntime()
 
     try {
+      probeBetterSqliteNative()
+    } catch (e) {
+      const msg = isBetterSqliteBindingsError(e)
+        ? `无法加载数据库原生模块。\n\n${BETTER_SQLITE_REBUILD_HINT}`
+        : e instanceof Error
+          ? e.message
+          : String(e)
+      console.error('[Main] better-sqlite3 probe failed:', e)
+      dialog.showErrorBox('无法启动数据库', msg)
+      app.quit()
+      return
+    }
+
+    try {
       await initDatabase(dbPath)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -200,6 +217,12 @@ if (gotSingleInstanceLock) {
 
     // Register IPC handlers
     registerIpcHandlers(ipcMain)
+
+    try {
+      await applyWebApiFromPreferences()
+    } catch (e) {
+      console.error('[WebAPI] Failed to start:', e)
+    }
 
     // OS-wide shortcuts: only when ASSETVAULT_GLOBAL_HOTKEYS=1 (otherwise they steal keys from IDE/browser)
     if (process.env.ASSETVAULT_GLOBAL_HOTKEYS === '1') {
@@ -240,6 +263,7 @@ app.on('window-all-closed', async () => {
 app.on('before-quit', async () => {
   getHotkeyManager().unregisterAll()
   getFileWatcher().stop()
+  await stopApiServer()
   await flushDatabase()
 })
 

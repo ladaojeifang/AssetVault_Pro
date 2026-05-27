@@ -15,6 +15,11 @@ AssetVault Pro is a modern, high-performance desktop application for managing di
 - **Thumbnail Generation**: Fast image/video thumbnail extraction
 - **Virtual Scrolling**: Smooth rendering of 100K+ assets
 - **Dark Theme**: Professional dark UI optimized for creative workflows
+- **Web API (v1)**: Local HTTP API for automation while the app is running — see [doc/web-api-v1-guide.md](doc/web-api-v1-guide.md)
+
+## Documentation
+
+All project documentation lives under **[doc/](doc/README.md)** (PRD, development plan, Web API guide, AI gateway spec, etc.).
 
 ## Tech Stack
 

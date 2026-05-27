@@ -1,3 +1,11 @@
+import {
+  DEFAULT_WEB_API_PREFERENCES,
+  normalizeWebApiPreferences,
+  type WebApiPreferences
+} from './webApiPreferences'
+
+export type { WebApiPreferences }
+
 export type AppPreferences = {
   /** Optional default folder for import dialogs (not all flows use this yet). */
   defaultImportPath: string
@@ -7,6 +15,7 @@ export type AppPreferences = {
   thumbnailMaxEdge: number
   maxCacheSizeMB: number
   searchDebounceMs: number
+  webApi: WebApiPreferences
 }
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
@@ -15,7 +24,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   thumbnailQuality: 80,
   thumbnailMaxEdge: 256,
   maxCacheSizeMB: 2048,
-  searchDebounceMs: 300
+  searchDebounceMs: 300,
+  webApi: { ...DEFAULT_WEB_API_PREFERENCES }
 }
 
 function clamp(n: number, min: number, max: number): number {
@@ -43,6 +53,7 @@ export function normalizeAppPreferences(raw: unknown): AppPreferences {
       512
     ),
     maxCacheSizeMB: clamp(Number(o.maxCacheSizeMB), 256, 10240),
-    searchDebounceMs: clamp(Number(o.searchDebounceMs ?? o.debounceMs), 100, 800)
+    searchDebounceMs: clamp(Number(o.searchDebounceMs ?? o.debounceMs), 100, 800),
+    webApi: normalizeWebApiPreferences(o.webApi)
   }
 }

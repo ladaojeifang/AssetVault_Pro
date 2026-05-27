@@ -18,6 +18,7 @@ import {
   upgradeCatalogLibraryToArchive,
   verifyReferencedSources
 } from '../../services/libraryUpgrade'
+import { getLibraryInfo, getLibraryState } from '../../services/libraryApiService'
 import {
   switchActiveLibrary,
   assertEmptyDirectoryForNewLibrary,
@@ -42,30 +43,7 @@ function readLibraryDisplayName(root: string): string {
 }
 
 export function handleLibraryOperations(ipc: typeof ipcMain): void {
-  ipc.handle('library:get-state', async () => {
-    const ud = app.getPath('userData')
-    const active = getLibraryRoot()
-    const st = readLibraryUserState(ud)
-    const raw = st?.recentLibraries ?? []
-    const merged = [active, ...raw.filter((r) => r.toLowerCase() !== active.toLowerCase())]
-    const dedup: string[] = []
-    const seen = new Set<string>()
-    for (const r of merged) {
-      const k = r.toLowerCase()
-      if (seen.has(k)) continue
-      seen.add(k)
-      dedup.push(r)
-    }
-    const manifest = readLibraryManifestFile(active)
-    return {
-      activeLibraryRoot: active,
-      recentLibraries: dedup,
-      libraryDisplayName: readLibraryDisplayName(active),
-      libraryMode: manifest?.libraryMode ?? getLibraryMode(),
-      manifestPath: join(active, 'manifest.json'),
-      dbPath: join(active, LIBRARY_DB_NAME)
-    }
-  })
+  ipc.handle('library:get-state', async () => getLibraryState())
 
   ipc.handle('library:switch', async (_event, targetRoot: unknown) => {
     if (typeof targetRoot !== 'string' || !targetRoot.trim()) {
@@ -131,19 +109,7 @@ export function handleLibraryOperations(ipc: typeof ipcMain): void {
     }
   })
 
-  ipc.handle('library:get-info', async () => {
-    const root = getLibraryRoot()
-    const manifest = readLibraryManifestFile(root)
-    const stats = await getLibraryModeStats()
-    return {
-      libraryRoot: root,
-      manifestPath: join(root, 'manifest.json'),
-      dbPath: join(root, LIBRARY_DB_NAME),
-      libraryMode: manifest?.libraryMode ?? getLibraryMode(),
-      localization: manifest?.localization ?? null,
-      stats
-    }
-  })
+  ipc.handle('library:get-info', async () => getLibraryInfo())
 
   ipc.handle('library:get-mode-stats', async () => getLibraryModeStats())
 

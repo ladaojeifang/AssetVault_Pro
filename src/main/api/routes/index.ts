@@ -1,0 +1,86 @@
+import type { ApiRequestContext } from '../request'
+import { handleAppInfo } from '../handlers/app'
+import { handleLibraryInfo, handleLibraryState } from '../handlers/library'
+import {
+  handleAssetDelete,
+  handleAssetGet,
+  handleAssetImport,
+  handleAssetImportBatch,
+  handleAssetImportFolder,
+  handleAssetInfo,
+  handleAssetLocalize,
+  handleAssetRelink,
+  handleAssetRename,
+  handleAssetUpdate
+} from '../handlers/asset'
+import {
+  handleFolderCreate,
+  handleFolderDelete,
+  handleFolderGet,
+  handleFolderInfo,
+  handleFolderMove,
+  handleFolderTree,
+  handleFolderUpdate
+} from '../handlers/folder'
+import {
+  handleTagAssign,
+  handleTagCreate,
+  handleTagDelete,
+  handleTagGet,
+  handleTagInfo,
+  handleTagRemove,
+  handleTagUpdate
+} from '../handlers/tag'
+
+type RouteHandler = (ctx: ApiRequestContext) => Promise<unknown>
+
+type RouteDef = {
+  method: string
+  path: string
+  handler: RouteHandler
+}
+
+const API_PREFIX = '/api/v1'
+
+const routes: RouteDef[] = [
+  { method: 'GET', path: `${API_PREFIX}/app/info`, handler: () => handleAppInfo() },
+  { method: 'GET', path: `${API_PREFIX}/library/info`, handler: () => handleLibraryInfo() },
+  { method: 'GET', path: `${API_PREFIX}/library/state`, handler: () => handleLibraryState() },
+
+  { method: 'GET', path: `${API_PREFIX}/asset/get`, handler: (ctx) => handleAssetGet({ ...ctx.query }) },
+  { method: 'POST', path: `${API_PREFIX}/asset/get`, handler: (ctx) => handleAssetGet(ctx.body) },
+  { method: 'GET', path: `${API_PREFIX}/asset/info`, handler: (ctx) => handleAssetInfo(ctx.query.id) },
+  { method: 'POST', path: `${API_PREFIX}/asset/import`, handler: (ctx) => handleAssetImport(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/asset/importBatch`, handler: (ctx) => handleAssetImportBatch(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/asset/importFolder`, handler: (ctx) => handleAssetImportFolder(ctx.body) },
+  { method: 'DELETE', path: `${API_PREFIX}/asset/delete`, handler: (ctx) => handleAssetDelete(ctx.body) },
+  { method: 'PATCH', path: `${API_PREFIX}/asset/update`, handler: (ctx) => handleAssetUpdate(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/asset/rename`, handler: (ctx) => handleAssetRename(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/asset/relink`, handler: (ctx) => handleAssetRelink(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/asset/localize`, handler: (ctx) => handleAssetLocalize(ctx.body) },
+
+  { method: 'GET', path: `${API_PREFIX}/folder/get`, handler: () => handleFolderGet() },
+  { method: 'GET', path: `${API_PREFIX}/folder/tree`, handler: () => handleFolderTree() },
+  { method: 'GET', path: `${API_PREFIX}/folder/info`, handler: (ctx) => handleFolderInfo(ctx.query.id) },
+  { method: 'POST', path: `${API_PREFIX}/folder/create`, handler: (ctx) => handleFolderCreate(ctx.body) },
+  { method: 'PATCH', path: `${API_PREFIX}/folder/update`, handler: (ctx) => handleFolderUpdate(ctx.body) },
+  { method: 'DELETE', path: `${API_PREFIX}/folder/delete`, handler: (ctx) => handleFolderDelete(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/folder/move`, handler: (ctx) => handleFolderMove(ctx.body) },
+
+  { method: 'GET', path: `${API_PREFIX}/tag/get`, handler: () => handleTagGet() },
+  { method: 'GET', path: `${API_PREFIX}/tag/info`, handler: (ctx) => handleTagInfo(ctx.query.id) },
+  { method: 'POST', path: `${API_PREFIX}/tag/create`, handler: (ctx) => handleTagCreate(ctx.body) },
+  { method: 'PATCH', path: `${API_PREFIX}/tag/update`, handler: (ctx) => handleTagUpdate(ctx.body) },
+  { method: 'DELETE', path: `${API_PREFIX}/tag/delete`, handler: (ctx) => handleTagDelete(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/tag/assign`, handler: (ctx) => handleTagAssign(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/tag/remove`, handler: (ctx) => handleTagRemove(ctx.body) }
+]
+
+export function matchRoute(ctx: ApiRequestContext): RouteHandler | null {
+  const hit = routes.find((r) => r.method === ctx.method && r.path === ctx.pathname)
+  return hit?.handler ?? null
+}
+
+export function listApiRoutes(): Array<{ method: string; path: string }> {
+  return routes.map((r) => ({ method: r.method, path: r.path }))
+}

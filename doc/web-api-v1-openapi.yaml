@@ -1,0 +1,485 @@
+openapi: 3.1.0
+info:
+  title: AssetVault Pro Web API
+  version: 1.0.0
+  description: |
+    本地 HTTP API（应用运行时可访问）。默认 `http://127.0.0.1:41596/api/v1/`。
+
+    - 响应格式：[JSend](https://github.com/omniti-labs/jsend)
+    - 本机访问默认无需 Token；开启「允许远程」后须 `Authorization: Bearer <token>` 或 `?token=`
+    - Playground：`/api/v1/playground/`
+  contact:
+    name: AssetVault Pro
+servers:
+  - url: http://127.0.0.1:41596/api/v1
+    description: 默认本机（端口可在设置中修改）
+
+tags:
+  - name: app
+  - name: library
+  - name: asset
+  - name: folder
+  - name: tag
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    queryToken:
+      type: apiKey
+      in: query
+      name: token
+  schemas:
+    JSendSuccess:
+      type: object
+      required: [status, data]
+      properties:
+        status:
+          type: string
+          enum: [success]
+        data: {}
+    JSendError:
+      type: object
+      required: [status, code, message]
+      properties:
+        status:
+          type: string
+          enum: [error]
+        code:
+          type: string
+        message:
+          type: string
+    AppInfo:
+      type: object
+      properties:
+        name: { type: string }
+        version: { type: string }
+        apiVersion: { type: string, enum: [v1] }
+        platform: { type: string }
+        packaged: { type: boolean }
+    AssetDto:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        fileType: { type: string }
+        filePath: { type: string }
+        resolvedFilePath: { type: string }
+        importedAt: { type: string, format: date-time }
+        tagIds: { type: array, items: { type: string } }
+        folderIds: { type: array, items: { type: string } }
+    AssetListPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/AssetDto' }
+        total: { type: integer }
+        offset: { type: integer }
+        limit: { type: integer }
+    FolderDto:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        parentId: { type: string, nullable: true }
+        path: { type: string }
+        level: { type: integer }
+        assetCount: { type: integer }
+    TagDto:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        color: { type: string }
+        usageCount: { type: integer }
+
+paths:
+  /app/info:
+    get:
+      tags: [app]
+      summary: 应用信息
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/JSendSuccess'
+                  - properties:
+                      data: { $ref: '#/components/schemas/AppInfo' }
+
+  /library/info:
+    get:
+      tags: [library]
+      summary: 当前资料库元数据
+      responses:
+        '200': { description: OK }
+
+  /library/state:
+    get:
+      tags: [library]
+      summary: 活动库与最近列表
+      responses:
+        '200': { description: OK }
+
+  /asset/get:
+    get:
+      tags: [asset]
+      summary: 分页查询资产
+      parameters:
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 1000 } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: folderId, in: query, schema: { type: string } }
+        - { name: fileType, in: query, schema: { type: string } }
+        - { name: sortBy, in: query, schema: { type: string } }
+        - { name: sortOrder, in: query, schema: { type: string, enum: [asc, desc] } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/JSendSuccess'
+                  - properties:
+                      data: { $ref: '#/components/schemas/AssetListPage' }
+    post:
+      tags: [asset]
+      summary: 复杂条件查询（body 同 query 参数）
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: OK }
+
+  /asset/info:
+    get:
+      tags: [asset]
+      summary: 单条资产
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+        '404': { description: 资产不存在 }
+
+  /asset/import:
+    post:
+      tags: [asset]
+      summary: 从本机路径导入
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filePath]
+              properties:
+                filePath: { type: string, example: 'G:\\images\\photo.jpg' }
+                targetFolderId: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [ask, use_existing, import_copy]
+                  default: use_existing
+      responses:
+        '200': { description: OK }
+
+  /asset/importBatch:
+    post:
+      tags: [asset]
+      summary: 批量导入
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filePaths]
+              properties:
+                filePaths: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /asset/importFolder:
+    post:
+      tags: [asset]
+      summary: 递归导入文件夹
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [folderPath]
+              properties:
+                folderPath: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /asset/delete:
+    delete:
+      tags: [asset]
+      summary: 删除资产
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /asset/update:
+    patch:
+      tags: [asset]
+      summary: 更新备注或 metadata
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                notes: { type: string }
+                metadata: { type: object }
+      responses:
+        '200': { description: OK }
+
+  /asset/rename:
+    post:
+      tags: [asset]
+      summary: 重命名资产
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, newName]
+              properties:
+                id: { type: string }
+                newName: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /asset/relink:
+    post:
+      tags: [asset]
+      summary: 索引库重链源文件
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetId, newSourcePath]
+              properties:
+                assetId: { type: string }
+                newSourcePath: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /asset/localize:
+    post:
+      tags: [asset]
+      summary: 索引资产本地化到完整库
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetIds]
+              properties:
+                assetIds: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /folder/get:
+    get:
+      tags: [folder]
+      summary: 文件夹列表（扁平）
+      responses:
+        '200': { description: OK }
+
+  /folder/tree:
+    get:
+      tags: [folder]
+      summary: 文件夹树
+      responses:
+        '200': { description: OK }
+
+  /folder/info:
+    get:
+      tags: [folder]
+      summary: 单个文件夹
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /folder/create:
+    post:
+      tags: [folder]
+      summary: 创建文件夹
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                parentId: { type: string, nullable: true }
+                color: { type: string }
+                icon: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /folder/update:
+    patch:
+      tags: [folder]
+      summary: 更新文件夹
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                name: { type: string }
+                color: { type: string }
+                icon: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /folder/delete:
+    delete:
+      tags: [folder]
+      summary: 删除文件夹
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /folder/move:
+    post:
+      tags: [folder]
+      summary: 移动文件夹
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                newParentId: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /tag/get:
+    get:
+      tags: [tag]
+      summary: 标签列表
+      responses:
+        '200': { description: OK }
+
+  /tag/info:
+    get:
+      tags: [tag]
+      summary: 单个标签
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /tag/create:
+    post:
+      tags: [tag]
+      summary: 创建标签
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                color: { type: string }
+                description: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /tag/update:
+    patch:
+      tags: [tag]
+      summary: 更新标签
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                name: { type: string }
+                color: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /tag/delete:
+    delete:
+      tags: [tag]
+      summary: 删除标签
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /tag/assign:
+    post:
+      tags: [tag]
+      summary: 为资产打标签
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetIds, tagIds]
+              properties:
+                assetIds: { type: array, items: { type: string } }
+                tagIds: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /tag/remove:
+    post:
+      tags: [tag]
+      summary: 移除资产标签
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetIds, tagIds]
+              properties:
+                assetIds: { type: array, items: { type: string } }
+                tagIds: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }

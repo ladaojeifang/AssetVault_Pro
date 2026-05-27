@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AssetVault Pro API Playground</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui.css" />
+    <style>
+      html {
+        box-sizing: border-box;
+        overflow-y: scroll;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: inherit;
+      }
+      body {
+        margin: 0;
+        background: #0f1419;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        background: #1a2332;
+        border-bottom: 1px solid #2d3a4d;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+        color: #c8d4e0;
+      }
+      .topbar strong {
+        color: #fff;
+      }
+      .topbar a {
+        color: #60a5fa;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <strong>AssetVault Pro</strong>
+      <span>Web API v1</span>
+      <a href="../docs/openapi.yaml" target="_blank" rel="noopener">openapi.yaml</a>
+    </div>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-bundle.js" crossorigin></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-standalone-preset.js" crossorigin></script>
+    <script>
+      window.onload = function () {
+        const specUrl = new URL('../docs/openapi.yaml', window.location.href).href
+        window.ui = SwaggerUIBundle({
+          url: specUrl,
+          dom_id: '#swagger-ui',
+          deepLinking: true,
+          presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+          layout: 'StandaloneLayout',
+          tryItOutEnabled: true,
+          persistAuthorization: true
+        })
+      }
+    </script>
+  </body>
+</html>

@@ -23,4 +23,4 @@
 
 ## 网关对接
 
-完整 API、inputs 校验、积分与 IPC 规划见 **[docs/AI_GATEWAY_SPEC.md](./docs/AI_GATEWAY_SPEC.md)**。
+完整 API、inputs 校验、积分与 IPC 规划见 **[AI_GATEWAY_SPEC.md](./AI_GATEWAY_SPEC.md)**。

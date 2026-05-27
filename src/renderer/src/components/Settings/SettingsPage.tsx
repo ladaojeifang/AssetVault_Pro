@@ -13,6 +13,8 @@ import {
   DEFAULT_APP_PREFERENCES,
   type AppPreferences
 } from '@/shared/appPreferences'
+import type { WebApiPreferences } from '@/shared/webApiPreferences'
+import { WebApiSettingsSection } from './WebApiSettingsSection'
 
 const GRID_SIZE_COLUMN_WIDTH: Record<string, number> = {
   small: 120,
@@ -51,6 +53,10 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
 
   const updatePref = useCallback(<K extends keyof AppPreferences>(key: K, value: AppPreferences[K]) => {
     setPrefs((prev) => ({ ...prev, [key]: value }))
+  }, [])
+
+  const updateWebApi = useCallback((webApi: WebApiPreferences) => {
+    setPrefs((prev) => ({ ...prev, webApi }))
   }, [])
 
   const handleSave = useCallback(async () => {
@@ -120,7 +126,9 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
             />
           )}
           {activeTab === 'shortcuts' && <ShortcutSettings />}
-          {activeTab === 'advanced' && <AdvancedSettings prefs={prefs} onUpdate={updatePref} />}
+          {activeTab === 'advanced' && (
+            <AdvancedSettings prefs={prefs} onUpdate={updatePref} onUpdateWebApi={updateWebApi} />
+          )}
         </div>
       </div>
 
@@ -400,14 +408,18 @@ function LibraryStorageStatsCard(): React.ReactElement {
 
 function AdvancedSettings({
   prefs,
-  onUpdate
+  onUpdate,
+  onUpdateWebApi
 }: {
   prefs: AppPreferences
   onUpdate: <K extends keyof AppPreferences>(key: K, value: AppPreferences[K]) => void
+  onUpdateWebApi: (webApi: WebApiPreferences) => void
 }) {
   return (
     <div className="space-y-6">
       <h3 className="text-base font-semibold mb-4">Advanced Settings</h3>
+
+      <WebApiSettingsSection prefs={prefs} onUpdateWebApi={onUpdateWebApi} />
 
       <LibraryStorageStatsCard />
 

@@ -3,8 +3,8 @@ import { existsSync, statSync, readdirSync, readFileSync } from 'fs'
 import { join, basename, extname, dirname } from 'path'
 import { flushDatabase, getDatabase } from '../../db'
 import { assets, assetTags, assetFolders } from '../../db/schema'
-import { eq, and, inArray, desc, asc, sql, count, type SQL } from 'drizzle-orm'
-import type { AssetItem, QueryParams, QueryResult, ImportProgress } from '@/shared/types'
+import { eq, and, inArray } from 'drizzle-orm'
+import type { QueryParams, ImportProgress } from '@/shared/types'
 import type { DuplicatePolicy, ImportAssetOptions } from '@/shared/importTypes'
 import { importSingleAsset, type ImportSingleAssetOptions } from '../../services/importSingleAsset'
 import { getFileWatcher } from '../../services/FileWatcher'
@@ -12,17 +12,11 @@ import { getThumbnailService } from '../../services/ThumbnailService'
 import { isModelThumbnailSkipped, clearModelThumbnailSkip } from '../../services/modelThumbnailSkip'
 import { waitForModelSnapshotBridge } from '../../services/modelThumbnailRenderer'
 import { ALL_SUPPORTED_IMPORT_EXTENSIONS } from '@/shared/supportedFormats'
-import { resolveLibraryPath, removeItemPack, itemThumbRelative } from '../../services/libraryBundle'
-import { resolveAssetContentPath, isAssetSourceMissing } from '../../services/assetPathResolver'
+import { resolveLibraryPath, itemThumbRelative } from '../../services/libraryBundle'
+import { resolveAssetContentPath } from '../../services/assetPathResolver'
 import { syncAssetSidecarFromDb } from '../../services/assetSidecar'
 import { analyzeColorsFromFile } from '../../services/analyzeAssetColors'
-import { buildSearchCondition, tokenizeSearchQuery } from '../../services/assetSearch'
-import {
-  buildColorBucketCondition,
-  buildDatePresetCondition,
-  buildFileSizeMbCondition,
-  buildSizePresetCondition
-} from '../../services/assetQueryFilters'
+import { queryAssets, getAssetById, deleteAssets } from '../../services/assetQueryService'
 import { persistAssetColorAnalysis } from '../../services/persistAssetColors'
 import { bufferToImageDataUrl, shouldUseOriginalImageDimensions } from '../../utils/thumbnailSizing'
 import { renameAsset } from '../../services/renameAsset'
@@ -75,178 +69,18 @@ function createImportSession(win: BrowserWindow | undefined) {
   return { buildSingleImportOptions }
 }
 
-async function getAssetTags(database: ReturnType<typeof getDatabase>, assetId: string): Promise<string[]> {
-  const results = await database
-    .select({ tagId: assetTags.tagId })
-    .from(assetTags)
-    .where(eq(assetTags.assetId, assetId))
-    .all()
-  return results.map((r) => r.tagId)
-}
-
-async function getAssetFolderIds(database: ReturnType<typeof getDatabase>, assetId: string): Promise<string[]> {
-  const results = await database
-    .select({ folderId: assetFolders.folderId })
-    .from(assetFolders)
-    .where(eq(assetFolders.assetId, assetId))
-    .all()
-  return results.map((r) => r.folderId)
-}
-
-function attachResolvedPaths<
-  T extends {
-    filePath: string
-    thumbnailPath?: string | null
-    storageMode?: string | null
-  }
->(row: T): T & {
-  resolvedFilePath: string
-  resolvedThumbnailPath: string | null
-  sourceMissing: boolean
-} {
-  return {
-    ...row,
-    resolvedFilePath: resolveAssetContentPath(row),
-    resolvedThumbnailPath: row.thumbnailPath ? resolveLibraryPath(row.thumbnailPath) : null,
-    sourceMissing: isAssetSourceMissing(row)
-  }
-}
-
 export function handleAssetOperations(ipc: typeof ipcMain): void {
   ipc.handle('assets:query', async (_event, rawParams: unknown) => {
     const params: QueryParams =
       rawParams != null && typeof rawParams === 'object' && !Array.isArray(rawParams)
         ? (rawParams as QueryParams)
         : {}
-    const database = getDatabase()
-    const page = params.page ?? 1
-    const rawSize = params.pageSize ?? 80
-    const pageSize = Math.min(200, Math.max(1, rawSize))
-    const offset =
-      typeof params.offset === 'number' && params.offset >= 0
-        ? params.offset
-        : (page - 1) * pageSize
-
-    const conditions: SQL[] = []
-
-    const searchTokens = tokenizeSearchQuery(params.search ?? '')
-    const searchCond = buildSearchCondition(searchTokens)
-    if (searchCond) conditions.push(searchCond)
-
-    if (params.colorBucket) {
-      conditions.push(buildColorBucketCondition(params.colorBucket))
-    }
-
-    if (params.sizePreset) {
-      conditions.push(buildSizePresetCondition(params.sizePreset))
-    } else {
-      const sizeMbCond = buildFileSizeMbCondition(params.minFileSizeMb, params.maxFileSizeMb)
-      if (sizeMbCond) conditions.push(sizeMbCond)
-    }
-
-    if (params.datePreset) {
-      conditions.push(buildDatePresetCondition(params.datePreset))
-    }
-
-    if (params.folderId) {
-      conditions.push(
-        sql`exists (select 1 from asset_folders af where af.asset_id = ${assets.id} and af.folder_id = ${params.folderId})`
-      )
-    }
-
-    if (params.fileType) {
-      conditions.push(eq(assets.fileType, params.fileType))
-    }
-
-    if (params.tags?.length) {
-      for (const tagId of params.tags) {
-        conditions.push(
-          sql`exists (select 1 from asset_tags at where at.asset_id = ${assets.id} and at.tag_id = ${tagId})`
-        )
-      }
-    }
-
-    const whereExpr = conditions.length > 0 ? and(...conditions) : undefined
-
-    const totalResult = whereExpr
-      ? await database.select({ count: count() }).from(assets).where(whereExpr).get()
-      : await database.select({ count: count() }).from(assets).get()
-    const total = totalResult?.count ?? 0
-
-    let orderBy
-    switch (params.sortBy) {
-      case 'filename':
-        orderBy = params.sortOrder === 'asc' ? asc(assets.filename) : desc(assets.filename)
-        break
-      case 'fileSize':
-        orderBy = params.sortOrder === 'asc' ? asc(assets.fileSize) : desc(assets.fileSize)
-        break
-      case 'fileType':
-        orderBy = params.sortOrder === 'asc' ? asc(assets.fileType) : desc(assets.fileType)
-        break
-      case 'extension':
-        orderBy = params.sortOrder === 'asc' ? asc(assets.extension) : desc(assets.extension)
-        break
-      case 'viewCount':
-        orderBy = desc(assets.viewCount)
-        break
-      case 'dominantColor':
-        orderBy =
-          params.sortOrder === 'asc' ? asc(assets.dominantColor) : desc(assets.dominantColor)
-        break
-      case 'random':
-        orderBy = sql`RANDOM()`
-        break
-      case 'importedAt':
-      default:
-        orderBy = desc(assets.importedAt)
-        break
-    }
-
-    const items = whereExpr
-      ? await database.select().from(assets).where(whereExpr).orderBy(orderBy).limit(pageSize).offset(offset).all()
-      : await database.select().from(assets).orderBy(orderBy).limit(pageSize).offset(offset).all()
-
-    const itemsWithTags = await Promise.all(
-      items.map(async (item) => {
-        const [tagIds, folderIds] = await Promise.all([
-          getAssetTags(database, item.id),
-          getAssetFolderIds(database, item.id)
-        ])
-        return { ...attachResolvedPaths(item), tagIds, folderIds }
-      })
-    )
-
-    const pageComputed = Math.floor(offset / pageSize) + 1
-
-    return {
-      items: itemsWithTags,
-      total,
-      page: pageComputed,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize)
-    } as QueryResult<AssetItem>
+    return queryAssets(params)
   })
 
   ipc.handle('assets:get-by-id', async (_event, id: string) => {
     assertString('id', id)
-    const database = getDatabase()
-    const item = await database.select().from(assets).where(eq(assets.id, id)).get()
-
-    if (item) {
-      await database
-        .update(assets)
-        .set({ viewCount: sql`${assets.viewCount} + 1`, accessCount: sql`${assets.accessCount} + 1` })
-        .where(eq(assets.id, id))
-
-      const [tagIds, folderIds] = await Promise.all([
-        getAssetTags(database, id),
-        getAssetFolderIds(database, id)
-      ])
-      return { ...attachResolvedPaths(item), tagIds, folderIds }
-    }
-
-    return item ?? null
+    return getAssetById(id)
   })
 
   ipc.handle('assets:import', async (event, filePaths: string[], optionsOrFolderId?: string | ImportAssetOptions) => {
@@ -389,11 +223,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
   ipc.handle('assets:delete', async (_event, ids: string[]) => {
     assertStringArray('ids', ids)
-    const database = getDatabase()
-    for (const id of ids) {
-      removeItemPack(id)
-    }
-    await database.delete(assets).where(inArray(assets.id, ids))
+    await deleteAssets(ids)
     return true
   })
 
@@ -432,7 +262,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     return true
   })
 
-  /** @deprecated Use assets:add-to-folders — kept for compatibility; adds to folder without removing others */
+  /** @deprecated Use assets:add-to-folders ??? kept for compatibility; adds to folder without removing others */
   ipc.handle('assets:move', async (_event, ids: string[], targetFolderId: string) => {
     assertStringArray('ids', ids)
     assertString('targetFolderId', targetFolderId)
@@ -532,7 +362,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   ipc.handle('assets:relink', async (_event, assetId: string, newPath: string) => {
     const { relinkAssetSource } = await import('../../services/libraryUpgrade')
     if (typeof assetId !== 'string' || typeof newPath !== 'string') {
-      return { ok: false as const, error: '参数无效' }
+      return { ok: false as const, error: '???????????' }
     }
     return relinkAssetSource(assetId, newPath)
   })
@@ -766,7 +596,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     assertString('sourcePath', sourcePath)
     const database = getDatabase()
     if (!database) throw new Error('Database not ready')
-    if (!sourcePath?.trim()) throw new Error('未选择图片文件')
+    if (!sourcePath?.trim()) throw new Error('???????????????????')
     await setCustomThumbnailFromFile(database, id, sourcePath)
     return { ok: true as const }
   })

@@ -301,7 +301,33 @@ const api = {
       const handler = () => callback()
       ipcRenderer.on('settings:format-icon-overrides-changed', handler)
       return () => ipcRenderer.removeListener('settings:format-icon-overrides-changed', handler)
-    }
+    },
+    getWebApiStatus: () =>
+      ipcRenderer.invoke('settings:get-web-api-status') as Promise<{
+        running: boolean
+        enabled: boolean
+        baseUrl: string
+        playgroundUrl: string
+        openApiUrl: string
+        port: number
+        bind: string
+        allowRemote: boolean
+        token: string
+      }>,
+    regenerateWebApiToken: () =>
+      ipcRenderer.invoke('settings:regenerate-web-api-token') as Promise<{
+        running: boolean
+        enabled: boolean
+        baseUrl: string
+        playgroundUrl: string
+        openApiUrl: string
+        port: number
+        bind: string
+        allowRemote: boolean
+        token: string
+      }>,
+    openWebApiPlayground: (url: string) =>
+      ipcRenderer.invoke('settings:open-web-api-playground', url) as Promise<boolean>
   },
 
   // Tag operations

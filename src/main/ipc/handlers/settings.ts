@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, ipcMain, shell } from 'electron'
 import { isAppTheme, type AppTheme } from '@/shared/appTheme'
 import {
   normalizeFormatIconSettings,
@@ -14,6 +14,11 @@ import {
   removeStoredFormatIconImage,
   writeFormatIconOverrides
 } from '../../services/formatIconOverridesStore'
+import {
+  applyWebApiFromPreferences,
+  getWebApiStatus,
+  regenerateWebApiToken
+} from '../../api/webApiRuntime'
 
 function notifyFormatIconOverridesChanged(): void {
   for (const w of BrowserWindow.getAllWindows()) {
@@ -35,7 +40,21 @@ export function handleSettingsOperations(ipc: typeof ipcMain): void {
   ipc.handle('settings:get-app-preferences', async () => readAppPreferences())
 
   ipc.handle('settings:set-app-preferences', async (_event, raw: unknown) => {
-    return writeAppPreferences(normalizeAppPreferences(raw))
+    const next = writeAppPreferences(normalizeAppPreferences(raw))
+    await applyWebApiFromPreferences()
+    return next
+  })
+
+  ipc.handle('settings:get-web-api-status', async () => getWebApiStatus())
+
+  ipc.handle('settings:regenerate-web-api-token', async () => regenerateWebApiToken())
+
+  ipc.handle('settings:open-web-api-playground', async (_event, url: unknown) => {
+    if (typeof url !== 'string' || !url.startsWith('http://127.0.0.1')) {
+      throw new Error('无效的 Playground URL')
+    }
+    await shell.openExternal(url)
+    return true
   })
 
   ipc.handle('settings:get-app-appearance', async () => readAppAppearanceSettings())
