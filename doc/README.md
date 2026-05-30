@@ -21,6 +21,7 @@
 |------|------|
 | [资源包.md](./资源包.md) | 资料库资源包结构说明 |
 | [eagle文件处理.md](./eagle文件处理.md) | Eagle 文件处理参考 |
+| [eagle插件探索方式.md](../eagle插件探索方式.md) | Eagle 扩展探测/采集思路与 AssetVault 对照 |
 | [node_type.md](./node_type.md) | AI 画布节点类型（对齐 modeconfig） |
 | [AI_GATEWAY_SPEC.md](./AI_GATEWAY_SPEC.md) | AI 网关 API、inputs 校验与 IPC 规划 |
 
@@ -40,6 +41,16 @@
 - OpenAPI：`http://127.0.0.1:41596/api/v1/docs/openapi.yaml`
 
 应用内：**设置 → Advanced → 开发者 · Web API**。
+
+---
+
+## 浏览器扩展
+
+| 路径 | 说明 |
+|------|------|
+| [browser-extension.md](./browser-extension.md) | Chrome MV3 扩展（独立仓库 `AssetVault_Browser_Extension`） |
+
+构建：在扩展仓库内 `pnpm run build` / `pnpm run package`（见 [browser-extension.md](./browser-extension.md)）。
 
 ---
 

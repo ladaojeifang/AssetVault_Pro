@@ -9,6 +9,7 @@
 | 产品范围与功能 | [doc/AssetVault_Pro_PRD_V1.0.md](doc/AssetVault_Pro_PRD_V1.0.md) |
 | 里程碑与待办 | [doc/DEVELOPMENT_PLAN.md](doc/DEVELOPMENT_PLAN.md) |
 | 本地 HTTP API | [doc/web-api-v1-guide.md](doc/web-api-v1-guide.md)、[doc/web-api-v1-design.md](doc/web-api-v1-design.md) |
+| 浏览器扩展 | [doc/browser-extension.md](doc/browser-extension.md)（独立仓库 `AssetVault_Browser_Extension`） |
 | AI 画布 / 网关 | [doc/node_type.md](doc/node_type.md)、[doc/AI_GATEWAY_SPEC.md](doc/AI_GATEWAY_SPEC.md) |
 
 ## 代码布局
@@ -17,6 +18,7 @@
 - `src/renderer/` — React UI
 - `src/shared/` — 主/渲染进程共享类型与常量
 - `doc/` — **所有** Markdown 规格与说明（勿使用已删除的 `docs/` 目录）
+- 浏览器扩展 — 独立项目 `AssetVault_Browser_Extension/`（与桌面端并列克隆；见 [doc/browser-extension.md](doc/browser-extension.md)）
 
 ## Web API v1
 
