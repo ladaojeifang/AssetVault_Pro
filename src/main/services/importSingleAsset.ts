@@ -1,5 +1,5 @@
-import { statSync, readFileSync, mkdirSync, rmSync, existsSync } from 'fs'
-import { basename, extname, join } from 'path'
+import { statSync, readFileSync, mkdirSync, rmSync, existsSync, renameSync } from 'fs'
+import { basename, extname, join, sep } from 'path'
 import { toCanonicalFilePath, isSqliteUniqueConstraintError } from '../utils/pathUtils'
 import { v4 as uuidv4 } from 'uuid'
 import mime from 'mime-types'
@@ -55,6 +55,7 @@ export async function importSingleAsset(
   const database = getDatabase()
   const opts = normalizeImportOptions(options)
   const targetFolderId = opts.targetFolderId
+  const policy: DuplicatePolicy = opts.duplicatePolicy ?? 'ask'
 
   const filePathCanonical = toCanonicalFilePath(filePath)
 
@@ -64,7 +65,7 @@ export async function importSingleAsset(
     .where(eq(assets.importSource, filePathCanonical))
     .get()
 
-  if (dupSource) {
+  if (dupSource && policy !== 'import_copy') {
     console.log(`[Import] Same source path already imported, skipping: ${basename(filePathCanonical)}`)
     return linkExistingAsset(database, dupSource.id, targetFolderId)
   }
@@ -74,8 +75,6 @@ export async function importSingleAsset(
   const hashDuplicateId = await findAssetIdByContentHash(database, stat.size, contentHash)
 
   if (hashDuplicateId) {
-    const policy: DuplicatePolicy = opts.duplicatePolicy ?? 'ask'
-
     if (policy === 'use_existing') {
       console.log(`[Import] Content hash match, using existing asset: ${basename(filePathCanonical)}`)
       return linkExistingAsset(database, hashDuplicateId, targetFolderId)
@@ -117,15 +116,42 @@ export async function importSingleAsset(
   const catalogMode = getLibraryMode() === 'catalog'
   const itemDirAbs = join(libraryRoot, 'items', id)
   mkdirSync(itemDirAbs, { recursive: true })
+  const remoteImportsRoot = toCanonicalFilePath(join(libraryRoot, 'remote-imports'))
+  const remoteImportsPrefix = remoteImportsRoot.endsWith(sep)
+    ? remoteImportsRoot
+    : `${remoteImportsRoot}${sep}`
+  const fromManagedRemoteImport =
+    filePathCanonical === remoteImportsRoot || filePathCanonical.startsWith(remoteImportsPrefix)
+  let importSourcePath = filePathCanonical
 
   let storedFilePath: string
   let destAbs: string
   let storageMode: 'local' | 'referenced'
 
   if (catalogMode) {
-    storedFilePath = filePathCanonical
-    destAbs = filePathCanonical
-    storageMode = 'referenced'
+    if (policy === 'import_copy' || fromManagedRemoteImport) {
+      // In catalog mode, import_copy should create an actual local copy in items/{id}/
+      // and mark it as local to keep localization semantics consistent.
+      const relOriginal = itemPackFileRelative(id, storageFileName)
+      const copyAbs = posixRelToFsAbs(libraryRoot, relOriginal)
+      if (fromManagedRemoteImport) {
+        try {
+          renameSync(filePathCanonical, copyAbs)
+        } catch {
+          copyOrHardlinkIntoLibrary(filePathCanonical, copyAbs, true)
+        }
+      } else {
+        copyOrHardlinkIntoLibrary(filePathCanonical, copyAbs, true)
+      }
+      storedFilePath = relOriginal
+      destAbs = copyAbs
+      storageMode = 'local'
+      importSourcePath = toCanonicalFilePath(copyAbs)
+    } else {
+      storedFilePath = filePathCanonical
+      destAbs = filePathCanonical
+      storageMode = 'referenced'
+    }
   } else {
     const relOriginal = itemPackFileRelative(id, storageFileName)
     storedFilePath = relOriginal
@@ -287,7 +313,7 @@ export async function importSingleAsset(
     filePath: storedFilePath,
     storageMode,
     localizationState: 'idle',
-    importSource: filePathCanonical,
+    importSource: importSourcePath,
     fileSize: stat.size,
     contentHash,
     contentHashComputedAt: hashComputedAt,
@@ -320,11 +346,18 @@ export async function importSingleAsset(
     }
 
     if (isSqliteUniqueConstraintError(e)) {
-      const row = await database
+      let row = await database
         .select({ id: assets.id })
         .from(assets)
         .where(eq(assets.importSource, filePathCanonical))
         .get()
+      if (!row) {
+        row = await database
+          .select({ id: assets.id })
+          .from(assets)
+          .where(eq(assets.filePath, storedFilePath))
+          .get()
+      }
       if (row) {
         console.log(`[Import] Already in library (race): ${basename(filePathCanonical)}`)
         try {
