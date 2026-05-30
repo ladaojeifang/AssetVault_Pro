@@ -183,10 +183,25 @@ export async function handleAssetImportFolder(body: Record<string, unknown>) {
   }
 }
 
+function parseOptionalHeaders(body: Record<string, unknown>): Record<string, string> | undefined {
+  const raw = body.headers
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof k !== 'string' || typeof v !== 'string') continue
+    const key = k.trim()
+    const val = v.trim()
+    if (!key || !val) continue
+    out[key] = val
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 export async function handleAssetImportFromUrl(body: Record<string, unknown>) {
   assertLibraryReady()
   const url = requireString(body.url, 'url')
   const filename = optionalString(body.filename)
+  const headers = parseOptionalHeaders(body)
   const targetFolderId = typeof body.targetFolderId === 'string' ? body.targetFolderId : undefined
   const duplicatePolicy =
     body.duplicatePolicy === 'ask' ||
@@ -196,15 +211,27 @@ export async function handleAssetImportFromUrl(body: Record<string, unknown>) {
       : 'use_existing'
 
   try {
-    const result = await importAssetFromUrl(url, { filename, targetFolderId, duplicatePolicy })
+    const result = await importAssetFromUrl(url, { filename, targetFolderId, duplicatePolicy, headers })
     return jsendSuccess(result)
   } catch (e) {
     if (e instanceof Error) {
-      if (e.message === 'INVALID_URL') throw invalidRequest('无效的 url')
-      if (e.message === 'UNSUPPORTED_URL_SCHEME') throw invalidRequest('只支持 http/https url')
-      if (e.message === 'UNSUPPORTED_FILE_EXTENSION') throw invalidRequest('不支持的文件扩展名')
-      if (e.message === 'DOWNLOAD_SIZE_EXCEEDED') throw invalidRequest('下载文件超过最大限制', { maxBytes: 300 * 1024 * 1024 })
-      if (e.message.startsWith('DOWNLOAD_FAILED_')) throw invalidRequest(`下载失败: ${e.message.replace('DOWNLOAD_FAILED_', '')}`)
+      const msg = e.message
+      if (msg === 'INVALID_URL') throw invalidRequest('无效的 url')
+      if (msg === 'UNSUPPORTED_URL_SCHEME') throw invalidRequest('只支持 http/https url')
+      if (msg === 'UNSUPPORTED_FILE_EXTENSION') throw invalidRequest('不支持的文件扩展名')
+      if (msg === 'DOWNLOAD_SIZE_EXCEEDED') throw invalidRequest('下载文件超过最大限制', { maxBytes: 300 * 1024 * 1024 })
+      if (msg === 'DOWNLOAD_EMPTY_BODY') throw invalidRequest('下载响应体为空')
+      if (msg.startsWith('DOWNLOAD_FAILED_')) throw invalidRequest(`下载失败: ${msg.replace('DOWNLOAD_FAILED_', '')}`)
+      if (msg === 'FILE_NOT_FOUND') throw invalidRequest('下载后的文件不存在')
+      if (msg === 'FILE_NOT_FILE') throw invalidRequest('下载结果不是有效文件')
+      if (msg === 'DOWNLOAD_TIMEOUT') throw invalidRequest('下载超时')
+      if (msg === 'DOWNLOAD_TOO_MANY_REDIRECTS') throw invalidRequest('下载重定向次数过多')
+      if (msg.startsWith('DOWNLOAD_NETWORK_ERROR:')) {
+        throw invalidRequest(`网络下载失败: ${msg.replace('DOWNLOAD_NETWORK_ERROR:', '')}`)
+      }
+      if (msg.includes('fetch failed') || msg.includes('ENOTFOUND') || msg.includes('ECONNREFUSED')) {
+        throw invalidRequest(`网络下载失败: ${msg}`)
+      }
     }
     throw e
   }
@@ -217,14 +244,20 @@ export async function handleAssetImportFromUrlBatch(body: Record<string, unknown
     throw invalidRequest('缺少 items 数组')
   }
 
-  const items: Array<{ url: string; filename?: string }> = []
+  const batchHeaders = parseOptionalHeaders(body)
+  const items: Array<{ url: string; filename?: string; headers?: Record<string, string> }> = []
   for (const x of rawItems) {
     if (typeof x !== 'object' || x == null) continue
-    const maybeUrl = (x as Record<string, unknown>).url
+    const row = x as Record<string, unknown>
+    const maybeUrl = row.url
     if (typeof maybeUrl !== 'string' || !maybeUrl.trim()) continue
-    const filename = optionalString((x as Record<string, unknown>).filename)
-    if (filename) items.push({ url: maybeUrl.trim(), filename })
-    else items.push({ url: maybeUrl.trim() })
+    const filename = optionalString(row.filename)
+    const headers = parseOptionalHeaders(row) ?? batchHeaders
+    items.push({
+      url: maybeUrl.trim(),
+      ...(filename ? { filename } : {}),
+      ...(headers ? { headers } : {})
+    })
   }
 
   if (items.length === 0) throw invalidRequest('items 中缺少有效 url')

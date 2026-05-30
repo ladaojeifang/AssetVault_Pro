@@ -106,12 +106,15 @@ export type AssetImportFromUrlRequest = {
   filename?: string
   targetFolderId?: string
   duplicatePolicy?: 'ask' | 'use_existing' | 'import_copy'
+  /** Optional HTTP headers for remote download (e.g. Referer for hotlink protection). */
+  headers?: Record<string, string>
 }
 
 export type AssetImportFromUrlBatchRequest = {
-  items: Array<{ url: string; filename?: string }>
+  items: Array<{ url: string; filename?: string; headers?: Record<string, string> }>
   targetFolderId?: string
   duplicatePolicy?: 'ask' | 'use_existing' | 'import_copy'
+  headers?: Record<string, string>
 }
 
 export type AssetImportFromUrlBatchResponse = {
