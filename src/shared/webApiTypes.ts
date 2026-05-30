@@ -123,6 +123,15 @@ export type AssetImportFromUrlBatchResponse = {
   errors: Array<{ url: string; message: string }>
 }
 
+export type AssetImportFromDataUrlRequest = {
+  dataUrl: string
+  filename?: string
+  targetFolderId?: string
+  duplicatePolicy?: 'ask' | 'use_existing' | 'import_copy'
+}
+
+export type AssetImportFromDataUrlResult = AssetImportResult
+
 /** HTTP query/body → internal QueryParams */
 export type WebApiAssetQueryInput = QueryParams & {
   offset?: number

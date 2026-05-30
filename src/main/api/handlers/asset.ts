@@ -24,6 +24,7 @@ import {
 } from '../errors'
 import { assertLibraryReady, requireString, requireStringArray, optionalString } from './common'
 import { importAssetFromUrl, importAssetFromUrlBatch } from '../../services/urlAssetImportService'
+import { importAssetFromDataUrl } from '../../services/dataUrlAssetImportService'
 
 function parseIntParam(value: unknown, fallback: number): number {
   if (value === undefined || value === null || value === '') return fallback
@@ -275,6 +276,31 @@ export async function handleAssetImportFromUrlBatch(body: Record<string, unknown
     return jsendSuccess(result)
   } catch (e) {
     // In batch mode, service converts most failures into `errors[]`.
+    throw e
+  }
+}
+
+export async function handleAssetImportFromDataUrl(body: Record<string, unknown>) {
+  assertLibraryReady()
+  const dataUrl = requireString(body.dataUrl, 'dataUrl')
+  const filename = optionalString(body.filename)
+  const targetFolderId = typeof body.targetFolderId === 'string' ? body.targetFolderId : undefined
+  const duplicatePolicy =
+    body.duplicatePolicy === 'ask' ||
+    body.duplicatePolicy === 'use_existing' ||
+    body.duplicatePolicy === 'import_copy'
+      ? body.duplicatePolicy
+      : 'use_existing'
+
+  try {
+    const result = await importAssetFromDataUrl(dataUrl, { filename, targetFolderId, duplicatePolicy })
+    return jsendSuccess(result)
+  } catch (e) {
+    if (e instanceof Error) {
+      if (e.message === 'INVALID_DATA_URL') throw invalidRequest('无效的 dataUrl')
+      if (e.message === 'UNSUPPORTED_FILE_EXTENSION') throw invalidRequest('不支持的文件扩展名')
+      if (e.message === 'DOWNLOAD_SIZE_EXCEEDED') throw invalidRequest('下载文件超过最大限制', { maxBytes: 300 * 1024 * 1024 })
+    }
     throw e
   }
 }

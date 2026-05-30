@@ -207,6 +207,32 @@ paths:
                   type: string
                   enum: [ask, use_existing, import_copy]
                   default: use_existing
+                headers:
+                  type: object
+                  additionalProperties: { type: string }
+                  description: Optional download headers (Referer, User-Agent, Accept, Accept-Language)
+      responses:
+        '200': { description: OK }
+
+  /asset/importFromDataUrl:
+    post:
+      tags: [asset]
+      summary: 从 data URL 导入（主进程导入截图结果）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dataUrl]
+              properties:
+                dataUrl: { type: string, example: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..." }
+                filename: { type: string, example: "screenshot.jpg" }
+                targetFolderId: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [ask, use_existing, import_copy]
+                  default: use_existing
       responses:
         '200': { description: OK }
 
