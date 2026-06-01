@@ -232,6 +232,18 @@ interface LibraryStateResponse {
 }
 ```
 
+#### `POST /library/importFromLibrary`
+
+从其它 **archive** 资料库整库导入到当前库（标签、文件夹、资产；SHA-256 去重；来源库 displayName 作为 tag）。
+
+```json
+{ "sourceLibraryRoot": "G:\\other-archive-library" }
+```
+
+**映射：** `importLibraryFromPath(sourceLibraryRoot)`。进度仅 IPC（`library:import-progress`），HTTP 为同步阻塞直至完成。
+
+**Response `data`:** `ImportLibrarySuccess`（见 `src/shared/libraryTypes.ts`）。
+
 #### `POST /library/switch`（Phase 1 可选，默认 defer）
 
 ```json
@@ -453,11 +465,12 @@ interface AssetImportFromUrlBatchResponse {
 {
   "id": "uuid",
   "notes": "备注",
+  "sourceUrl": "https://example.com",
   "metadata": { "key": "value" }
 }
 ```
 
-**映射：** `assets:update-notes` / `assets:update-metadata`。
+**映射：** `assets:update-notes` / `assets:update-source-url` / `assets:update-metadata`。`sourceUrl` 仅接受 `http://` / `https://` 开头 URL，空字符串清空链接。
 
 ---
 
@@ -572,6 +585,7 @@ interface AssetDto {
   colorBucket?: string | null
   hasThumbnail: boolean
   notes?: string | null
+  sourceUrl?: string | null
   viewCount: number
   importedAt: string
   updatedAt: string

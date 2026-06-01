@@ -66,6 +66,8 @@ components:
         fileType: { type: string }
         filePath: { type: string }
         resolvedFilePath: { type: string }
+        notes: { type: string }
+        sourceUrl: { type: string }
         importedAt: { type: string, format: date-time }
         tagIds: { type: array, items: { type: string } }
         folderIds: { type: array, items: { type: string } }
@@ -124,6 +126,29 @@ paths:
       summary: 活动库与最近列表
       responses:
         '200': { description: OK }
+
+  /library/importFromLibrary:
+    post:
+      tags: [library]
+      summary: 从其它资料库整库导入（archive→archive 或 catalog→catalog）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sourceLibraryRoot]
+              properties:
+                sourceLibraryRoot:
+                  type: string
+                  description: 源资料库根目录（须与当前库同为 archive 或同为 catalog）
+      responses:
+        '200':
+          description: 导入成功（catalog 合并时 data 含 importMode、assetsAddedLocal 等扩展字段）
+        '400':
+          description: 无效路径、源库模式不符或 archive/catalog 组合不支持
+        '409':
+          description: 目标库模式不符或已有导入任务进行中
 
   /asset/get:
     get:
@@ -311,7 +336,7 @@ paths:
   /asset/update:
     patch:
       tags: [asset]
-      summary: 更新备注或 metadata
+      summary: 更新备注、来源链接或 metadata
       requestBody:
         content:
           application/json:
@@ -320,8 +345,9 @@ paths:
               required: [id]
               properties:
                 id: { type: string }
-                notes: { type: string }
-                metadata: { type: object }
+        notes: { type: string }
+        sourceUrl: { type: string }
+        metadata: { type: object }
       responses:
         '200': { description: OK }
 

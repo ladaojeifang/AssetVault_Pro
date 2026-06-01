@@ -23,6 +23,9 @@ const DetailPanel: React.FC = () => {
   const [notesDraft, setNotesDraft] = useState('')
   const notesDirtyRef = useRef(false)
   const savingNotesRef = useRef(false)
+  const [sourceUrlDraft, setSourceUrlDraft] = useState('')
+  const sourceUrlDirtyRef = useRef(false)
+  const savingSourceUrlRef = useRef(false)
   const [paletteColors, setPaletteColors] = useState<string[]>([])
   const [paletteLoading, setPaletteLoading] = useState(false)
 
@@ -53,6 +56,8 @@ const DetailPanel: React.FC = () => {
     if (!selectedAsset) return
     setNotesDraft(selectedAsset.notes ?? '')
     notesDirtyRef.current = false
+    setSourceUrlDraft(selectedAsset.sourceUrl ?? '')
+    sourceUrlDirtyRef.current = false
   }, [selectedAsset?.id])
 
   useEffect(() => {
@@ -119,6 +124,28 @@ const DetailPanel: React.FC = () => {
       savingNotesRef.current = false
     }
   }, [assets, selectedAssetIds, notesDraft, refreshAssets])
+
+  const saveSourceUrlIfChanged = useCallback(async () => {
+    const sel = assets.find((a) => selectedAssetIds.has(a.id))
+    if (!sel) return
+    if (!sourceUrlDirtyRef.current || savingSourceUrlRef.current) return
+    const prev = sel.sourceUrl ?? ''
+    if (sourceUrlDraft.trim() === prev.trim()) {
+      sourceUrlDirtyRef.current = false
+      return
+    }
+    savingSourceUrlRef.current = true
+    try {
+      await window.assetVaultAPI.assets.updateSourceUrl(sel.id, sourceUrlDraft.trim() || null)
+      sourceUrlDirtyRef.current = false
+      await refreshAssets()
+    } catch (e: any) {
+      console.error('Failed to save source URL:', e)
+      notify.error(e?.message ?? '保存链接失败')
+    } finally {
+      savingSourceUrlRef.current = false
+    }
+  }, [assets, selectedAssetIds, sourceUrlDraft, refreshAssets])
 
   if (!selectedAsset) {
     return <DetailContextPanel onClose={() => setDetailPanelOpen(false)} />
@@ -459,6 +486,53 @@ const DetailPanel: React.FC = () => {
             className="input-base w-full min-h-[100px] py-2 px-2.5 text-sm resize-y text-av-text-primary placeholder:text-av-text-muted leading-relaxed"
           />
           <p className="text-[11px] text-av-text-muted mt-1.5">失焦时自动保存，最多 16000 字</p>
+        </InfoSection>
+
+        {/* Source URL */}
+        <InfoSection title="SOURCE LINK">
+          <p className="text-[11px] text-av-text-muted mb-2 leading-relaxed">
+            资产来源网页链接；支持 http/https，失焦自动保存。
+          </p>
+          <div className="flex gap-1.5">
+            <input
+              type="text"
+              value={sourceUrlDraft}
+              onChange={(e) => {
+                setSourceUrlDraft(e.target.value)
+                sourceUrlDirtyRef.current = true
+              }}
+              onBlur={() => void saveSourceUrlIfChanged()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  void saveSourceUrlIfChanged();
+                  (e.target as HTMLInputElement).blur()
+                }
+              }}
+              placeholder="https://example.com"
+              maxLength={2048}
+              className="input-base py-1.5 px-2.5 text-xs flex-1 text-av-text-primary placeholder:text-av-text-muted"
+            />
+            {sourceUrlDraft.trim().length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const url = sourceUrlDraft.trim()
+                  if (/^https?:\/\/.+/i.test(url)) {
+                    window.open(url, '_blank', 'noopener,noreferrer')
+                  } else {
+                    notify.error('仅支持 http:// 或 https:// 开头的合法 URL')
+                  }
+                }}
+                className="btn-secondary py-1 px-2.5 text-xs shrink-0 flex items-center gap-1"
+                title="在浏览器中打开链接"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
+                </svg>
+                打开
+              </button>
+            )}
+          </div>
         </InfoSection>
       </div>
 

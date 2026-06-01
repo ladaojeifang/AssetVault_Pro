@@ -32,6 +32,7 @@ export type WebApiAssetDto = {
   hasThumbnail: boolean
   metadata?: string | null
   notes?: string | null
+  sourceUrl?: string | null
   viewCount: number
   accessCount: number
   fileCreatedAt?: string | null
@@ -75,6 +76,12 @@ export type LibraryStateResponse = {
   manifestPath: string
   dbPath: string
 }
+
+export type LibraryImportFromLibraryRequest = {
+  sourceLibraryRoot: string
+}
+
+export type LibraryImportFromLibraryResponse = import('./libraryTypes').ImportLibrarySuccess
 
 export type AssetImportRequest = {
   filePath: string

@@ -36,6 +36,7 @@ export function serializeAsset(row: AssetItem): WebApiAssetDto {
     hasThumbnail: row.hasThumbnail,
     metadata: row.metadata ?? null,
     notes: row.notes ?? null,
+    sourceUrl: row.sourceUrl ?? null,
     viewCount: row.viewCount,
     accessCount: row.accessCount,
     fileCreatedAt: toIso(row.fileCreatedAt),

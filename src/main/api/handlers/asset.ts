@@ -319,8 +319,8 @@ export async function handleAssetDelete(body: Record<string, unknown>) {
 export async function handleAssetUpdate(body: Record<string, unknown>) {
   assertLibraryReady()
   const id = requireString(body.id, 'id')
-  if (body.notes === undefined && body.metadata === undefined) {
-    throw invalidRequest('至少提供 notes 或 metadata')
+  if (body.notes === undefined && body.sourceUrl === undefined && body.metadata === undefined) {
+    throw invalidRequest('至少提供 notes, sourceUrl 或 metadata')
   }
   let metadata: Record<string, unknown> | undefined
   if (body.metadata !== undefined) {
@@ -329,7 +329,7 @@ export async function handleAssetUpdate(body: Record<string, unknown>) {
     }
     metadata = body.metadata as Record<string, unknown>
   }
-  const updated = await patchAsset(id, { notes: body.notes, metadata })
+  const updated = await patchAsset(id, { notes: body.notes, sourceUrl: body.sourceUrl, metadata })
   if (!updated) throw assetNotFound(id)
   return jsendSuccess(serializeAsset(updated))
 }

@@ -55,6 +55,8 @@ export interface AssetItem {
   metadata?: string | null
   /** User notes / remarks */
   notes?: string | null
+  /** External source / reference URL (shown in detail panel, openable in browser) */
+  sourceUrl?: string | null
   viewCount: number
   accessCount: number
   fileCreatedAt?: Date | null

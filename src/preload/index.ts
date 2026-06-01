@@ -126,6 +126,8 @@ const api = {
     updateMetadata: (id: string, metadata: Record<string, unknown>) =>
       ipcRenderer.invoke('assets:update-metadata', id, metadata),
     updateNotes: (id: string, notes: string) => ipcRenderer.invoke('assets:update-notes', id, notes),
+    updateSourceUrl: (id: string, url: string | null) =>
+      ipcRenderer.invoke('assets:update-source-url', id, url) as Promise<boolean>,
     getThumbnail: (id: string) => ipcRenderer.invoke('assets:get-thumbnail', id),
     setCustomThumbnailFile: (id: string, sourcePath: string) =>
       ipcRenderer.invoke('assets:set-custom-thumbnail-file', id, sourcePath) as Promise<{ ok: true }>,
@@ -186,6 +188,14 @@ const api = {
       >,
     verifySources: () =>
       ipcRenderer.invoke('library:verify-sources') as Promise<{ checked: number; missing: number }>,
+    pickSourceLibraryRoot: () =>
+      ipcRenderer.invoke('library:pick-source-library-root') as Promise<
+        { ok: true; path: string } | { ok: false; error: string }
+      >,
+    importFromLibrary: (sourceLibraryRoot: string) =>
+      ipcRenderer.invoke('library:import-from-library', sourceLibraryRoot) as Promise<
+        import('../../shared/libraryTypes').ImportLibraryResult
+      >,
     removeFromRecent: (path: string) => ipcRenderer.invoke('library:remove-from-recent', path),
     getStorageStats: () =>
       ipcRenderer.invoke('library:get-storage-stats') as Promise<{
@@ -203,6 +213,12 @@ const api = {
         callback(data)
       ipcRenderer.on('library:upgrade-progress', handler)
       return () => ipcRenderer.removeListener('library:upgrade-progress', handler)
+    },
+    onImportProgress: (callback: (data: import('../../shared/libraryTypes').ImportLibraryProgress) => void) => {
+      const handler = (_: unknown, data: import('../../shared/libraryTypes').ImportLibraryProgress) =>
+        callback(data)
+      ipcRenderer.on('library:import-progress', handler)
+      return () => ipcRenderer.removeListener('library:import-progress', handler)
     }
   },
 

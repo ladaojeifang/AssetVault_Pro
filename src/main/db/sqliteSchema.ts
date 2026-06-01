@@ -6,7 +6,7 @@ const SCHEMA_META_KEY = 'schema_version'
  * Monotonic library DB schema revision. Bump when adding a new branch in
  * `runLibrarySchemaMigrations` ??do not edit old steps in place.
  */
-export const CURRENT_LIBRARY_SCHEMA_VERSION = 3
+export const CURRENT_LIBRARY_SCHEMA_VERSION = 5
 
 /** Current persisted schema version, or 0 if meta table / row missing. */
 export function getLibrarySchemaVersion(sqlite: RawSqliteDb): number {
@@ -62,6 +62,21 @@ export function runLibrarySchemaMigrations(sqlite: RawSqliteDb): void {
       WHERE storage_mode IS NULL OR trim(storage_mode) = ''
     `)
     v = 3
+    setLibrarySchemaVersion(sqlite, v)
+  }
+
+  if (v < 4) {
+    sqlite.run(`DROP TRIGGER IF EXISTS tr_assets_search_update`)
+    sqlite.run(`DROP TRIGGER IF EXISTS tr_asset_tags_search_insert`)
+    sqlite.run(`DROP TRIGGER IF EXISTS tr_asset_tags_search_delete`)
+    v = 4
+    setLibrarySchemaVersion(sqlite, v)
+  }
+
+  if (v < 5) {
+    // v5: add source_url column for external web link
+    // No data migration needed — new column defaults to NULL
+    v = 5
     setLibrarySchemaVersion(sqlite, v)
   }
 
@@ -182,6 +197,11 @@ export function createInitialSchemaOnSqlite(sqlite: RawSqliteDb): void {
   } catch {
     /* column already exists */
   }
+  try {
+    sqlite.run('ALTER TABLE assets ADD COLUMN source_url TEXT')
+  } catch {
+    /* column already exists */
+  }
   sqlite.run(`
     UPDATE assets SET storage_mode = 'referenced'
     WHERE (storage_mode IS NULL OR trim(storage_mode) = '')
@@ -261,20 +281,12 @@ export function createInitialSchemaOnSqlite(sqlite: RawSqliteDb): void {
 
   sqlite.run(`
     CREATE TRIGGER IF NOT EXISTS tr_assets_search_insert AFTER INSERT ON assets BEGIN
-      INSERT INTO assets_search(asset_id, search_text)
+      INSERT OR IGNORE INTO assets_search(asset_id, search_text)
       VALUES (new.id, new.filename || ' ' || new.original_name);
     END;
 
     CREATE TRIGGER IF NOT EXISTS tr_assets_search_delete AFTER DELETE ON assets BEGIN
       DELETE FROM assets_search WHERE asset_id = old.id;
-    END;
-
-    CREATE TRIGGER IF NOT EXISTS tr_assets_search_update AFTER UPDATE ON assets BEGIN
-      DELETE FROM assets_search WHERE asset_id = old.id;
-      INSERT INTO assets_search(asset_id, search_text)
-      VALUES (new.id, new.filename || ' ' || new.original_name ||
-        COALESCE((SELECT ' ' || GROUP_CONCAT(t.name) FROM tags t JOIN asset_tags at ON t.id = at.tag_id WHERE at.asset_id = new.id), '')
-      );
     END;
   `)
 
@@ -285,30 +297,6 @@ export function createInitialSchemaOnSqlite(sqlite: RawSqliteDb): void {
 
     CREATE TRIGGER IF NOT EXISTS tr_tag_usage_delete AFTER DELETE ON asset_tags BEGIN
       UPDATE tags SET usage_count = MAX(0, usage_count - 1) WHERE id = old.tag_id;
-    END;
-  `)
-
-  sqlite.run(`
-    CREATE TRIGGER IF NOT EXISTS tr_asset_tags_search_insert AFTER INSERT ON asset_tags BEGIN
-      DELETE FROM assets_search WHERE asset_id = new.asset_id;
-      INSERT INTO assets_search(asset_id, search_text)
-      SELECT new.asset_id,
-        a.filename || ' ' || a.original_name ||
-        COALESCE((SELECT ' ' || GROUP_CONCAT(t.name) FROM tags t
-          JOIN asset_tags at ON t.id = at.tag_id WHERE at.asset_id = new.asset_id), '')
-      FROM assets a WHERE a.id = new.asset_id;
-    END;
-  `)
-
-  sqlite.run(`
-    CREATE TRIGGER IF NOT EXISTS tr_asset_tags_search_delete AFTER DELETE ON asset_tags BEGIN
-      DELETE FROM assets_search WHERE asset_id = old.asset_id;
-      INSERT INTO assets_search(asset_id, search_text)
-      SELECT old.asset_id,
-        a.filename || ' ' || a.original_name ||
-        COALESCE((SELECT ' ' || GROUP_CONCAT(t.name) FROM tags t
-          JOIN asset_tags at ON t.id = at.tag_id WHERE at.asset_id = old.asset_id), '')
-      FROM assets a WHERE a.id = old.asset_id;
     END;
   `)
 

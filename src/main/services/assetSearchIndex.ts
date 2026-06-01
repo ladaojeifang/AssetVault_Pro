@@ -1,12 +1,23 @@
 import type { getDatabase } from '../db'
+import { getRawSqlite } from '../db'
+import { wrapBetterSqlite } from '../db/rawSqlite'
 import { tags, assetTags, assetsSearch, assets } from '../db/schema'
 import { eq } from 'drizzle-orm'
+import { syncAssetSidecarFromDb } from './assetSidecar'
 
 type Database = ReturnType<typeof getDatabase>
 
+const SEARCH_INDEX_META_KEY = 'search_index_scheme_b'
+
+/** Sidecar + search index — call after asset/tags/folders/notes are stable. */
+export async function finalizeAssetRecords(database: Database, assetId: string): Promise<void> {
+  await rebuildAssetSearchText(database, assetId)
+  await syncAssetSidecarFromDb(database, assetId)
+}
+
 export async function rebuildAssetSearchText(database: Database, assetId: string): Promise<void> {
   const asset = await database
-    .select({ filename: assets.filename, originalName: assets.originalName })
+    .select({ filename: assets.filename, originalName: assets.originalName, notes: assets.notes, sourceUrl: assets.sourceUrl })
     .from(assets)
     .where(eq(assets.id, assetId))
     .get()
@@ -20,9 +31,21 @@ export async function rebuildAssetSearchText(database: Database, assetId: string
     .all()
 
   const tagPart = tagRows.map((t) => t.name).join(' ')
-  const searchText = `${asset.filename} ${asset.originalName}${tagPart ? ` ${tagPart}` : ''}`.trim()
+  const notesPart = asset.notes?.trim() ?? ''
+  const urlPart = asset.sourceUrl?.trim() ?? ''
+  const searchText = `${asset.filename} ${asset.originalName}${tagPart ? ` ${tagPart}` : ''}${notesPart ? ` ${notesPart}` : ''}${urlPart ? ` ${urlPart}` : ''}`.trim()
 
-  await database.update(assetsSearch).set({ searchText }).where(eq(assetsSearch.assetId, assetId))
+  const existing = await database
+    .select({ assetId: assetsSearch.assetId })
+    .from(assetsSearch)
+    .where(eq(assetsSearch.assetId, assetId))
+    .get()
+
+  if (existing) {
+    await database.update(assetsSearch).set({ searchText }).where(eq(assetsSearch.assetId, assetId))
+  } else {
+    await database.insert(assetsSearch).values({ assetId, searchText })
+  }
 }
 
 export async function rebuildSearchTextForTag(database: Database, tagId: string): Promise<void> {
@@ -34,4 +57,31 @@ export async function rebuildSearchTextForTag(database: Database, tagId: string)
   for (const { assetId } of links) {
     await rebuildAssetSearchText(database, assetId)
   }
+}
+
+export async function rebuildAllAssetSearchText(database: Database): Promise<number> {
+  const rows = await database.select({ id: assets.id }).from(assets).all()
+  for (let i = 0; i < rows.length; i++) {
+    await rebuildAssetSearchText(database, rows[i]!.id)
+    if (i > 0 && i % 50 === 0) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+  }
+  return rows.length
+}
+
+/** One-time backfill after scheme-B trigger migration (app layer owns search index). */
+export async function ensureAssetSearchIndexBackfill(): Promise<void> {
+  const sqlite = wrapBetterSqlite(getRawSqlite())
+  const done = sqlite.getScalarInt(
+    `SELECT value FROM _av_schema_meta WHERE key = '${SEARCH_INDEX_META_KEY}' LIMIT 1`
+  )
+  if (done === 1) return
+
+  const database = (await import('../db')).getDatabase()
+  const count = await rebuildAllAssetSearchText(database)
+  sqlite.run(
+    `INSERT OR REPLACE INTO _av_schema_meta (key, value) VALUES ('${SEARCH_INDEX_META_KEY}', 1)`
+  )
+  console.log(`[DB] Rebuilt assets_search for ${count} asset(s) (scheme B)`)
 }

@@ -35,6 +35,7 @@ export function writeAssetSidecarMeta(
     hasThumbnail: boolean
     metadata?: string | null
     notes?: string | null
+    sourceUrl?: string | null
     contentHash?: string | null
     contentHashComputedAt?: Date | null
     fileCreatedAt?: Date | null
@@ -86,6 +87,7 @@ export function writeAssetSidecarMeta(
     duration: row.duration ?? null,
     metadata: row.metadata ?? null,
     notes: row.notes ?? null,
+    sourceUrl: row.sourceUrl ?? null,
     fileCreatedAt: ts(row.fileCreatedAt),
     fileModifiedAt: ts(row.fileModifiedAt),
     importedAt: ts(row.importedAt),

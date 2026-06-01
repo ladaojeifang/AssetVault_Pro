@@ -20,6 +20,7 @@ import { queryAssets, getAssetById, deleteAssets } from '../../services/assetQue
 import { persistAssetColorAnalysis } from '../../services/persistAssetColors'
 import { bufferToImageDataUrl, shouldUseOriginalImageDimensions } from '../../utils/thumbnailSizing'
 import { renameAsset } from '../../services/renameAsset'
+import { updateAssetNotes, updateAssetSourceUrl } from '../../services/assetMutationService'
 import { copyAssetsToOtherLibrary } from '../../services/copyAssetsToOtherLibrary'
 import { promptDuplicateImport, registerDuplicateImportPromptHandlers } from '../../services/duplicateImportPrompt'
 import { scanLibraryContentHashes } from '../../services/contentHashService'
@@ -295,15 +296,12 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
   ipc.handle('assets:update-notes', async (_event, id: string, notes: unknown) => {
     assertString('id', id)
-    const database = getDatabase()
-    const raw = typeof notes === 'string' ? notes : ''
-    const trimmed = raw.slice(0, 16000)
-    await database
-      .update(assets)
-      .set({ notes: trimmed.length > 0 ? trimmed : null, updatedAt: new Date() })
-      .where(eq(assets.id, id))
-    await syncAssetSidecarFromDb(database, id)
-    return true
+    return updateAssetNotes(id, notes)
+  })
+
+  ipc.handle('assets:update-source-url', async (_event, id: string, url: unknown) => {
+    assertString('id', id)
+    return updateAssetSourceUrl(id, url)
   })
 
   ipc.handle('assets:rename', async (_event, id: string, newName: string) => {
@@ -596,7 +594,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     assertString('sourcePath', sourcePath)
     const database = getDatabase()
     if (!database) throw new Error('Database not ready')
-    if (!sourcePath?.trim()) throw new Error('???????????????????')
+    if (!sourcePath?.trim()) throw new Error('请提供有效的缩略图源文件路径')
     await setCustomThumbnailFromFile(database, id, sourcePath)
     return { ok: true as const }
   })
