@@ -31,8 +31,14 @@ import {
 import { copyOrHardlinkIntoLibrary } from './fileCopyIntoLibrary'
 import { copyObjCompanionMtlForImport, posixRelToFsAbs } from './importSingleAssetHelpers'
 import { syncAssetSidecarFromDb, writeAssetSidecarMeta } from './assetSidecar'
+import { finalizeAssetRecords } from './assetSearchIndex'
 import { parseFontFile } from './fontMetadata'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import { isSvgExtension, isSvgOverRasterLimit } from '@/shared/svgFormats'
+import { isExrExtension } from '@/shared/exrFormats'
+import { resolveExrFileMetadata, exrStoredMetadataFromFileMeta } from '../utils/exrMetadata'
+import { parseSvgDimensions } from '../utils/svgDimensions'
+import { markSvgRasterSkipped } from './svgRasterSkip'
 import { schedule3dThumbnailAfterImport } from './regenerateModelThumbnails'
 import { buildDuplicatePromptPayload, findAssetIdByContentHash } from './contentHashService'
 
@@ -177,13 +183,41 @@ export async function importSingleAsset(
 
   if (fileType === 'image') {
     try {
-      const fileBuffer = readFileSync(destAbs)
-      const transformer = new Transformer(fileBuffer)
-      const imgInfo = await transformer.metadata()
-      width = imgInfo.width
-      height = imgInfo.height
+      if (isSvgExtension(extNoDot)) {
+        if (isSvgOverRasterLimit(stat.size)) {
+          markSvgRasterSkipped(id, `oversized:${stat.size}`)
+        } else {
+          const svgText = readFileSync(destAbs, 'utf-8')
+          const dims = parseSvgDimensions(svgText)
+          width = dims.width
+          height = dims.height
 
-      if (!shouldUseOriginalImageDimensions(width, height)) {
+          const thumb = await getThumbnailService().generate(
+            destAbs,
+            id,
+            getThumbnailService().getGenerationDefaults()
+          )
+          if (thumb && !thumb.usedOriginal) {
+            thumbnailPath = itemThumbRelative(id)
+            hasThumbnail = true
+            try {
+              const palette = await extractPaletteFromImageBuffer(thumb.buffer)
+              dominantColor = palette.dominantColor
+              colorBucket = classifyColorBucket(palette.dominantColor) ?? undefined
+              colors = serializePaletteColors(palette.colors)
+            } catch {
+              /* palette optional for SVG */
+            }
+          }
+        }
+      } else if (isExrExtension(extNoDot)) {
+        const exrMeta = await resolveExrFileMetadata(destAbs)
+        if (exrMeta) {
+          width = exrMeta.width
+          height = exrMeta.height
+          metadataObj.exr = exrStoredMetadataFromFileMeta(exrMeta)
+        }
+
         const thumb = await getThumbnailService().generate(
           destAbs,
           id,
@@ -192,28 +226,54 @@ export async function importSingleAsset(
         if (thumb && !thumb.usedOriginal) {
           thumbnailPath = itemThumbRelative(id)
           hasThumbnail = true
-        }
-      }
-
-      const palette = await extractPaletteFromImageBuffer(fileBuffer)
-      dominantColor = palette.dominantColor
-      colorBucket = classifyColorBucket(palette.dominantColor) ?? undefined
-      colors = serializePaletteColors(palette.colors)
-
-      try {
-        const exifTags = ExifReader.load(destAbs, { expanded: true })
-        if (exifTags && typeof exifTags === 'object' && !Array.isArray(exifTags)) {
-          metadataObj.exif = {}
-          const tagMap = exifTags as unknown as Record<string, { value: unknown; description?: string }>
-          for (const [key, val] of Object.entries(tagMap)) {
-            if (val && typeof val === 'object' && 'value' in val) {
-              ;(metadataObj.exif as Record<string, unknown>)[key] =
-                val.description ?? (val as { value: unknown }).value
-            }
+          try {
+            const palette = await extractPaletteFromImageBuffer(thumb.buffer)
+            dominantColor = palette.dominantColor
+            colorBucket = classifyColorBucket(palette.dominantColor) ?? undefined
+            colors = serializePaletteColors(palette.colors)
+          } catch {
+            /* palette optional for EXR */
           }
         }
-      } catch {
-        // EXIF extraction failed
+      } else {
+        const fileBuffer = readFileSync(destAbs)
+        const transformer = new Transformer(fileBuffer)
+        const imgInfo = await transformer.metadata()
+        width = imgInfo.width
+        height = imgInfo.height
+
+        if (!shouldUseOriginalImageDimensions(width, height)) {
+          const thumb = await getThumbnailService().generate(
+            destAbs,
+            id,
+            getThumbnailService().getGenerationDefaults()
+          )
+          if (thumb && !thumb.usedOriginal) {
+            thumbnailPath = itemThumbRelative(id)
+            hasThumbnail = true
+          }
+        }
+
+        const palette = await extractPaletteFromImageBuffer(fileBuffer)
+        dominantColor = palette.dominantColor
+        colorBucket = classifyColorBucket(palette.dominantColor) ?? undefined
+        colors = serializePaletteColors(palette.colors)
+
+        try {
+          const exifTags = ExifReader.load(destAbs, { expanded: true })
+          if (exifTags && typeof exifTags === 'object' && !Array.isArray(exifTags)) {
+            metadataObj.exif = {}
+            const tagMap = exifTags as unknown as Record<string, { value: unknown; description?: string }>
+            for (const [key, val] of Object.entries(tagMap)) {
+              if (val && typeof val === 'object' && 'value' in val) {
+                ;(metadataObj.exif as Record<string, unknown>)[key] =
+                  val.description ?? (val as { value: unknown }).value
+              }
+            }
+          }
+        } catch {
+          // EXIF extraction failed
+        }
       }
     } catch (error) {
       console.error('[Import] Image processing error:', error)
@@ -373,7 +433,7 @@ export async function importSingleAsset(
             .get()
           if (!existingAf) {
             await database.insert(assetFolders).values({ assetId: row.id, folderId: targetFolderId })
-            await syncAssetSidecarFromDb(database, row.id)
+            await finalizeAssetRecords(database, row.id)
           }
         }
         return row.id
@@ -430,7 +490,7 @@ async function finalizeImportedAsset(
     }
   }
 
-  await syncAssetSidecarFromDb(database, id)
+  await finalizeAssetRecords(database, id)
 
   if (fileType === '3d' && isModel3dPreviewExtension(extNoDot)) {
     void schedule3dThumbnailAfterImport(database, id, destAbs, extNoDot)
@@ -457,7 +517,7 @@ async function linkExistingAsset(
       .get()
     if (!existingAf) {
       await database.insert(assetFolders).values({ assetId: existingId, folderId: targetFolderId })
-      await syncAssetSidecarFromDb(database, existingId)
+      await finalizeAssetRecords(database, existingId)
     }
   }
   return existingId

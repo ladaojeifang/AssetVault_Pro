@@ -12,6 +12,8 @@
 |------|------|
 | [AssetVault_Pro_PRD_V1.0.md](./AssetVault_Pro_PRD_V1.0.md) | 产品需求文档 V1.0 |
 | [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) | 开发计划 |
+| [library-import-from-library-spec.md](./library-import-from-library-spec.md) | **从其它资料库导入**（archive→archive 整库合并，LIM V1） |
+| [library-import-catalog-to-catalog-spec.md](./library-import-catalog-to-catalog-spec.md) | **索引库→索引库（同机）**整库导入（CC-V1，含 A 已本地化时的 hash 三分支） |
 
 ---
 
@@ -21,6 +23,9 @@
 |------|------|
 | [资源包.md](./资源包.md) | 资料库资源包结构说明 |
 | [eagle文件处理.md](./eagle文件处理.md) | Eagle 文件处理参考 |
+| [exr-preview.md](./exr-preview.md) | **OpenEXR** 多 AOV 预览与缩略图管线 |
+| [exr-preview-fix-plan.md](./exr-preview-fix-plan.md) | EXR 审阅后修复计划（F1–F7） |
+| [exr-preview-manual-acceptance.md](./exr-preview-manual-acceptance.md) | EXR 预览 **手工验收清单** |
 | [eagle插件探索方式.md](../eagle插件探索方式.md) | Eagle 扩展探测/采集思路与 AssetVault 对照 |
 | [node_type.md](./node_type.md) | AI 画布节点类型（对齐 modeconfig） |
 | [AI_GATEWAY_SPEC.md](./AI_GATEWAY_SPEC.md) | AI 网关 API、inputs 校验与 IPC 规划 |

@@ -371,7 +371,8 @@ def run(
     dry_run: bool,
 ) -> int:
     tag_cache = TagCache()
-    page = 376
+    page = 1
+    end_page = 5
     imported_count = 0
     error_count = 0
 

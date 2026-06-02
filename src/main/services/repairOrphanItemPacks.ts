@@ -6,7 +6,7 @@ import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import { getLibraryRoot, itemPackFileRelative, ITEMS_DIR } from './libraryBundle'
 import { getFileType } from '../utils/fileUtils'
-import { writeAssetSidecarMeta, syncAssetSidecarFromDb } from './assetSidecar'
+import { finalizeAssetRecords } from './assetSearchIndex'
 import { schedule3dThumbnailAfterImport } from './regenerateModelThumbnails'
 import { isModelThumbnailSkipped } from './modelThumbnailSkip'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
@@ -47,7 +47,7 @@ export async function repairOrphanItemPacks(): Promise<number> {
 
     const existing = await database.select().from(assets).where(eq(assets.id, id)).get()
     if (existing) {
-      await syncAssetSidecarFromDb(database, id)
+      await finalizeAssetRecords(database, id)
       if (
         existing.fileType === '3d' &&
         isModel3dPreviewExtension(extNoDot) &&
@@ -91,7 +91,7 @@ export async function repairOrphanItemPacks(): Promise<number> {
 
       const row = await database.select().from(assets).where(eq(assets.id, id)).get()
       if (row) {
-        writeAssetSidecarMeta(row, [], [])
+        await finalizeAssetRecords(database, id)
         if (fileType === '3d' && isModel3dPreviewExtension(extNoDot) && !isModelThumbnailSkipped(id)) {
           void schedule3dThumbnailAfterImport(database, id, origAbs, extNoDot)
         }

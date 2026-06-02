@@ -15,6 +15,7 @@ export const IMAGE_EXTENSIONS = new Set([
   '.ico',
   '.tiff',
   '.tif',
+  '.exr',
   '.heic',
   '.heif',
   '.avif',

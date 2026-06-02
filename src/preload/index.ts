@@ -222,6 +222,18 @@ const api = {
     }
   },
 
+  exr: {
+    getMetadata: (assetId: string) =>
+      ipcRenderer.invoke('exr:get-metadata', assetId) as Promise<
+        | { ok: true; metadata: import('../../shared/exrTypes').ExrFileMetadata }
+        | { ok: false; error: string }
+      >,
+    renderPreview: (req: import('../../shared/exrTypes').ExrPreviewRenderRequest) =>
+      ipcRenderer.invoke('exr:render-preview', req) as Promise<
+        import('../../shared/exrTypes').ExrPreviewRenderResult
+      >
+  },
+
   fonts: {
     getSettings: () =>
       ipcRenderer.invoke('fonts:get-settings') as Promise<import('../../shared/fontSettings').FontAppSettings>,

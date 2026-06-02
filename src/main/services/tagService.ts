@@ -3,8 +3,7 @@ import { getDatabase } from '../db'
 import { tags, assetTags } from '../db/schema'
 import { eq, and, count, asc } from 'drizzle-orm'
 import type { TagItem } from '@/shared/types'
-import { syncAssetSidecarFromDb } from './assetSidecar'
-import { rebuildAssetSearchText, rebuildSearchTextForTag } from './assetSearchIndex'
+import { finalizeAssetRecords, rebuildSearchTextForTag } from './assetSearchIndex'
 
 export async function listTags(): Promise<TagItem[]> {
   const database = getDatabase()
@@ -77,8 +76,7 @@ export async function assignTagsToAssets(assetIds: string[], tagIds: string[]): 
         await database.insert(assetTags).values({ assetId, tagId })
       }
     }
-    await rebuildAssetSearchText(database, assetId)
-    await syncAssetSidecarFromDb(database, assetId)
+    await finalizeAssetRecords(database, assetId)
   }
   return true
 }
@@ -91,8 +89,7 @@ export async function removeTagsFromAssets(assetIds: string[], tagIds: string[])
         .delete(assetTags)
         .where(and(eq(assetTags.assetId, assetId), eq(assetTags.tagId, tagId)))
     }
-    await rebuildAssetSearchText(database, assetId)
-    await syncAssetSidecarFromDb(database, assetId)
+    await finalizeAssetRecords(database, assetId)
   }
   return true
 }

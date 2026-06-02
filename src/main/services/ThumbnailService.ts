@@ -17,7 +17,12 @@ import {
   clearModelThumbnailSkip
 } from './modelThumbnailSkip'
 import { parseModel3dFormat } from '@/shared/model3dFormats'
+import { isSvgFilePath } from '@/shared/svgFormats'
+import { isExrFilePath } from '@/shared/exrFormats'
+import { renderExrThumbnailWebp } from './exrThumbnailRender'
 import { isCustomThumbnail } from './customThumbnail'
+import { renderSvgToWebpBuffer } from './svgThumbnailRenderer'
+import { isSvgRasterSkipped } from './svgRasterSkip'
 import {
   THUMBNAIL_MAX_EDGE,
   bufferToImageDataUrl,
@@ -151,6 +156,14 @@ export class ThumbnailService {
     assetId: string,
     options: { width?: number; height?: number; quality?: number } = {}
   ): Promise<ThumbnailGenerateResult | null> {
+    if (isSvgFilePath(filePath)) {
+      return this.generateSvg(filePath, assetId, options)
+    }
+
+    if (isExrFilePath(filePath)) {
+      return this.generateExr(filePath, assetId, options)
+    }
+
     const maxEdge = options.width ?? this.generationMaxEdge
     const { height = maxEdge, quality = options.quality ?? this.generationQuality } = options
 
@@ -199,6 +212,83 @@ export class ThumbnailService {
       return { buffer: webpBuffer as Buffer, path: outputPath }
     } catch (error) {
       console.error(`[ThumbnailService] Failed to generate thumbnail for ${filePath}:`, error)
+      return null
+    }
+  }
+
+  /** EXR (HDR float) → exrs default layer → WebP; falls back to napi/ffmpeg. */
+  async generateExr(
+    filePath: string,
+    assetId: string,
+    options: { width?: number; height?: number; quality?: number } = {}
+  ): Promise<ThumbnailGenerateResult | null> {
+    const maxEdge = options.width ?? this.generationMaxEdge
+    const quality = options.quality ?? this.generationQuality
+    const outputPath = this.thumbDiskPath(assetId)
+
+    try {
+      if (isCustomThumbnail(assetId) && existsSync(outputPath)) {
+        const diskBuffer = readFileSync(outputPath)
+        this.lruCache.set(assetId, diskBuffer)
+        return { buffer: diskBuffer, path: outputPath }
+      }
+
+      if (existsSync(outputPath)) {
+        const diskBuffer = readFileSync(outputPath)
+        this.lruCache.set(assetId, diskBuffer)
+        return { buffer: diskBuffer, path: outputPath }
+      }
+
+      const webpBuffer = await renderExrThumbnailWebp(filePath, maxEdge, quality)
+      if (!webpBuffer?.length) return null
+
+      writeFileSafely(outputPath, webpBuffer)
+      this.lruCache.set(assetId, webpBuffer)
+      return { buffer: webpBuffer, path: outputPath }
+    } catch (error) {
+      console.error(`[ThumbnailService] Failed to generate EXR thumbnail for ${filePath}:`, error)
+      return null
+    }
+  }
+
+  /** SVG → WebP via sandboxed hidden Chromium window. */
+  async generateSvg(
+    filePath: string,
+    assetId: string,
+    options: { width?: number; height?: number; quality?: number } = {}
+  ): Promise<ThumbnailGenerateResult | null> {
+    if (isSvgRasterSkipped(assetId)) {
+      return null
+    }
+
+    const maxEdge = options.width ?? this.generationMaxEdge
+    const quality = options.quality ?? this.generationQuality
+    const outputPath = this.thumbDiskPath(assetId)
+
+    try {
+      if (isCustomThumbnail(assetId) && existsSync(outputPath)) {
+        const diskBuffer = readFileSync(outputPath)
+        this.lruCache.set(assetId, diskBuffer)
+        return { buffer: diskBuffer, path: outputPath }
+      }
+
+      if (existsSync(outputPath)) {
+        const diskBuffer = readFileSync(outputPath)
+        this.lruCache.set(assetId, diskBuffer)
+        return { buffer: diskBuffer, path: outputPath }
+      }
+
+      const webpBuffer = await renderSvgToWebpBuffer(filePath, {
+        size: maxEdge,
+        quality
+      })
+      if (!webpBuffer?.length) return null
+
+      writeFileSafely(outputPath, webpBuffer)
+      this.lruCache.set(assetId, webpBuffer)
+      return { buffer: webpBuffer, path: outputPath }
+    } catch (error) {
+      console.error(`[ThumbnailService] Failed to generate SVG thumbnail for ${filePath}:`, error)
       return null
     }
   }
@@ -396,7 +486,79 @@ export class ThumbnailService {
     } catch {
       // dir not readable
     }
+
+    cleaned += this.cleanLibraryItemThumbs(maxAgeMs)
+    this.enforceLibraryThumbDiskBudget()
     return cleaned
+  }
+
+  /** Remove stale thumb.webp under library items/ (by mtime). */
+  private cleanLibraryItemThumbs(maxAgeMs: number): number {
+    if (!this.libraryRoot) return 0
+    const itemsDir = join(this.libraryRoot, 'items')
+    if (!existsSync(itemsDir)) return 0
+
+    let cleaned = 0
+    const now = Date.now()
+    try {
+      for (const entry of readdirSync(itemsDir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue
+        const thumbPath = join(itemsDir, entry.name, 'thumb.webp')
+        if (!existsSync(thumbPath)) continue
+        try {
+          const stat = statSync(thumbPath)
+          if (now - stat.mtimeMs > maxAgeMs) {
+            unlinkSync(thumbPath)
+            cleaned++
+          }
+        } catch {
+          /* skip */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return cleaned
+  }
+
+  /** Evict oldest library item thumbs when total disk cache exceeds maxDiskSize. */
+  private enforceLibraryThumbDiskBudget(): void {
+    if (!this.libraryRoot) return
+    const itemsDir = join(this.libraryRoot, 'items')
+    if (!existsSync(itemsDir)) return
+
+    const maxBytes = this.maxDiskSize * 1024 * 1024
+    const thumbs: Array<{ path: string; mtimeMs: number; size: number }> = []
+
+    try {
+      for (const entry of readdirSync(itemsDir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue
+        const thumbPath = join(itemsDir, entry.name, 'thumb.webp')
+        if (!existsSync(thumbPath)) continue
+        try {
+          const stat = statSync(thumbPath)
+          thumbs.push({ path: thumbPath, mtimeMs: stat.mtimeMs, size: stat.size })
+        } catch {
+          /* skip */
+        }
+      }
+    } catch {
+      return
+    }
+
+    let total = thumbs.reduce((sum, t) => sum + t.size, 0)
+    if (total <= maxBytes) return
+
+    thumbs.sort((a, b) => a.mtimeMs - b.mtimeMs)
+    for (const t of thumbs) {
+      if (total <= maxBytes) break
+      try {
+        unlinkSync(t.path)
+        total -= t.size
+      } catch {
+        /* skip */
+      }
+    }
   }
 }
 

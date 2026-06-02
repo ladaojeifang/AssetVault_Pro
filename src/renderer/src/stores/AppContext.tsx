@@ -50,6 +50,10 @@ interface AppState {
   fontPreviewAssetId: string | null
   /** Full-page 3D model preview (double-click 3d asset) */
   modelPreviewAssetId: string | null
+  /** Full-page SVG preview (double-click svg asset) */
+  svgPreviewAssetId: string | null
+  /** Full-page EXR preview (double-click exr asset) */
+  exrPreviewAssetId: string | null
 }
 
 interface AppActions {
@@ -84,6 +88,10 @@ interface AppActions {
   closeFontPreview: () => void
   openModelPreview: (assetId: string) => void
   closeModelPreview: () => void
+  openSvgPreview: (assetId: string) => void
+  closeSvgPreview: () => void
+  openExrPreview: (assetId: string) => void
+  closeExrPreview: () => void
 }
 
 const defaultState: AppState = {
@@ -114,7 +122,9 @@ const defaultState: AppState = {
   importProgress: null,
   selectedFontFamilyKey: null,
   fontPreviewAssetId: null,
-  modelPreviewAssetId: null
+  modelPreviewAssetId: null,
+  svgPreviewAssetId: null,
+  exrPreviewAssetId: null
 }
 
 const AppContext = createContext<(AppState & AppActions) | null>(null)
@@ -158,6 +168,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   stateRef.current = state
 
   const listGenerationRef = useRef(0)
+  const lastFullFetchGenRef = useRef(0)
   const importRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchDebounceGenRef = useRef(0)
@@ -199,6 +210,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       listGenerationRef.current += 1
     }
     const requestGen = listGenerationRef.current
+    const appendBaselineGen = append ? lastFullFetchGenRef.current : 0
 
     setState((prev) => ({
       ...prev,
@@ -213,6 +225,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const result = (await window.assetVaultAPI.assets.query(queryParams)) as QueryResult<AssetItem>
 
       if (listGenerationRef.current !== requestGen) return
+      if (append && lastFullFetchGenRef.current !== appendBaselineGen) return
 
       const items = result.items as AssetItem[]
       const newLen = offset + items.length
@@ -227,6 +240,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }))
 
       if (!append) {
+        lastFullFetchGenRef.current = requestGen
         await loadTagList()
       }
     } catch (error) {
@@ -255,6 +269,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const reloadAfterLibrarySwitch = useCallback(async () => {
     listGenerationRef.current += 1
+    lastFullFetchGenRef.current = listGenerationRef.current
     const gen = listGenerationRef.current
     const sortField = stateRef.current.sortField
     const sortOrder = stateRef.current.sortOrder
@@ -532,6 +547,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         fontPreviewAssetId: assetId,
         modelPreviewAssetId: null,
+        svgPreviewAssetId: null,
+        exrPreviewAssetId: null,
         selectedAssetIds: new Set([assetId]),
         detailPanelOpen: true
       })),
@@ -541,10 +558,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         modelPreviewAssetId: assetId,
         fontPreviewAssetId: null,
+        svgPreviewAssetId: null,
+        exrPreviewAssetId: null,
         selectedAssetIds: new Set([assetId]),
         detailPanelOpen: true
       })),
-    closeModelPreview: () => setState((prev) => ({ ...prev, modelPreviewAssetId: null }))
+    closeModelPreview: () => setState((prev) => ({ ...prev, modelPreviewAssetId: null })),
+    openSvgPreview: (assetId) =>
+      setState((prev) => ({
+        ...prev,
+        svgPreviewAssetId: assetId,
+        fontPreviewAssetId: null,
+        modelPreviewAssetId: null,
+        exrPreviewAssetId: null,
+        selectedAssetIds: new Set([assetId]),
+        detailPanelOpen: true
+      })),
+    closeSvgPreview: () => setState((prev) => ({ ...prev, svgPreviewAssetId: null })),
+    openExrPreview: (assetId) =>
+      setState((prev) => ({
+        ...prev,
+        exrPreviewAssetId: assetId,
+        fontPreviewAssetId: null,
+        modelPreviewAssetId: null,
+        svgPreviewAssetId: null,
+        selectedAssetIds: new Set([assetId]),
+        detailPanelOpen: true
+      })),
+    closeExrPreview: () => setState((prev) => ({ ...prev, exrPreviewAssetId: null }))
   }
 
   return <AppContext.Provider value={{ ...state, ...actions }}>{children}</AppContext.Provider>

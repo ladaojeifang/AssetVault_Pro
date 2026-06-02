@@ -11,10 +11,12 @@ import { ColorPaletteStrip, parseAssetPaletteColors } from '../Common/ColorPalet
 import DetailContextPanel from './DetailContextPanel'
 import { ModelViewer } from '../Preview/ModelViewer'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import { isSvgExtension, isSvgOverRasterLimit } from '@/shared/svgFormats'
+import { isExrExtension } from '@/shared/exrFormats'
 import { FileTypePlaceholder } from '../Common/FileTypePlaceholder'
 
 const DetailPanel: React.FC = () => {
-  const { selectedAssetIds, assets, tags, folderTree, clearSelection, refreshAssets, refreshFolders, setDetailPanelOpen, refreshTags, openFontPreview, openModelPreview } = useApp()
+  const { selectedAssetIds, assets, tags, folderTree, clearSelection, refreshAssets, refreshFolders, setDetailPanelOpen, refreshTags, openFontPreview, openModelPreview, openSvgPreview, openExrPreview } = useApp()
   const [assetTagIds, setAssetTagIds] = useState<string[]>([])
   const [assetFolderIds, setAssetFolderIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -80,6 +82,12 @@ const DetailPanel: React.FC = () => {
       return
     }
 
+    if (isSvgExtension(a.extension) && isSvgOverRasterLimit(a.fileSize)) {
+      setPaletteColors(existing.length > 0 ? existing : parseAssetPaletteColors(a.colors, a.dominantColor))
+      setPaletteLoading(false)
+      return
+    }
+
     let cancelled = false
     setPaletteLoading(true)
     void window.assetVaultAPI.assets.analyzeColors(a.id).then((res) => {
@@ -87,11 +95,11 @@ const DetailPanel: React.FC = () => {
       const data = res as { dominantColor?: string; colors?: string[] } | null
       if (data?.colors?.length) {
         setPaletteColors(data.colors.map((c) => c.toUpperCase()))
+        void refreshAssets()
       } else {
         setPaletteColors(parseAssetPaletteColors(a.colors, data?.dominantColor ?? a.dominantColor))
       }
       setPaletteLoading(false)
-      void refreshAssets()
     }).catch(() => {
       if (!cancelled) {
         setPaletteColors(existing.length > 0 ? existing : parseAssetPaletteColors(a.colors, a.dominantColor))
@@ -102,7 +110,7 @@ const DetailPanel: React.FC = () => {
     return () => {
       cancelled = true
     }
-  }, [selectedAsset?.id, selectedAsset?.colors, selectedAsset?.dominantColor, selectedAsset?.fileType, refreshAssets])
+  }, [selectedAsset?.id, selectedAsset?.colors, selectedAsset?.dominantColor, selectedAsset?.fileType])
 
   const saveNotesIfChanged = useCallback(async () => {
     const sel = assets.find((a) => selectedAssetIds.has(a.id))
@@ -291,6 +299,26 @@ const DetailPanel: React.FC = () => {
             onClick={() => openModelPreview(asset.id)}
           >
             3D 预览
+          </button>
+        )}
+
+        {asset.fileType === 'image' && isSvgExtension(asset.extension) && (
+          <button
+            type="button"
+            className="w-full btn-primary text-sm py-2"
+            onClick={() => openSvgPreview(asset.id)}
+          >
+            SVG 预览
+          </button>
+        )}
+
+        {asset.fileType === 'image' && isExrExtension(asset.extension) && (
+          <button
+            type="button"
+            className="w-full btn-primary text-sm py-2"
+            onClick={() => openExrPreview(asset.id)}
+          >
+            EXR 预览
           </button>
         )}
 

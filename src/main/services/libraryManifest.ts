@@ -1,4 +1,4 @@
-import { join } from 'path'
+import { basename, join } from 'path'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { v4 as uuidv4 } from 'uuid'
 import type { LibraryManifest, LibraryMode } from '@/shared/libraryTypes'
@@ -37,6 +37,21 @@ export function readLibraryManifestFile(root: string): LibraryManifest | null {
   } catch {
     return null
   }
+}
+
+/** Human-readable library name for UI and import source tag (manifest displayName, else folder basename). */
+export function readLibraryDisplayName(root: string): string {
+  const mf = join(root, MANIFEST_NAME)
+  if (!existsSync(mf)) return basename(root)
+  try {
+    const raw = JSON.parse(readFileSync(mf, 'utf-8')) as { displayName?: unknown }
+    if (typeof raw.displayName === 'string' && raw.displayName.trim()) {
+      return raw.displayName.trim()
+    }
+  } catch {
+    /* ignore malformed manifest */
+  }
+  return basename(root)
 }
 
 export function loadLibraryModeFromManifest(root: string): LibraryMode {

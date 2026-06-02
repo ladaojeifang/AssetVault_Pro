@@ -7,6 +7,7 @@ import * as schema from './schema'
 import { createInitialSchemaOnSqlite } from './sqliteSchema'
 import { wrapBetterSqlite } from './rawSqlite'
 import { backfillColorBuckets } from '../services/backfillColorBuckets'
+import { ensureAssetSearchIndexBackfill } from '../services/assetSearchIndex'
 import {
   BETTER_SQLITE_REBUILD_HINT,
   isBetterSqliteBindingsError,
@@ -30,6 +31,24 @@ export function getRawSqlite(): Database {
     throw new Error('Database not initialized. Call initDatabase() first.')
   }
   return sqliteDb
+}
+
+/** Serialize writes; rolls back on failure. Safe for async fn on the main DB connection. */
+export async function withSqliteTransaction<T>(fn: () => Promise<T>): Promise<T> {
+  const sqlite = getRawSqlite()
+  sqlite.prepare('BEGIN IMMEDIATE').run()
+  try {
+    const result = await fn()
+    sqlite.prepare('COMMIT').run()
+    return result
+  } catch (e) {
+    try {
+      sqlite.prepare('ROLLBACK').run()
+    } catch {
+      /* ignore rollback errors */
+    }
+    throw e
+  }
 }
 
 function applyPragmas(raw: Database): void {
@@ -178,6 +197,9 @@ export async function initDatabase(dbPath: string): Promise<void> {
   db = drizzle(sqliteDb, { schema })
   createInitialSchemaOnSqlite(wrapBetterSqlite(sqliteDb))
   await backfillColorBuckets()
+  void ensureAssetSearchIndexBackfill().catch((e) =>
+    console.error('[DB] assets_search backfill failed:', e)
+  )
 
   console.log('[DB] Database initialized successfully')
 }

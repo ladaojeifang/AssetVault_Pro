@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { AssetItem } from '@/shared/types'
 import { FONT_THUMB_SAMPLE_TEXT } from '@/shared/fontTypes'
 import { ModelViewer } from './ModelViewer'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import { isSvgExtension } from '@/shared/svgFormats'
+import { loadSvgPreviewObjectUrl, revokeSvgPreviewObjectUrl } from '../../utils/loadSvgPreviewUrl'
 import { useFontFace } from '../../hooks/useFontFace'
 import { fontFamilyLabel, parseFontMetadataFromAsset } from '../../utils/fontAssetMeta'
 
@@ -28,9 +30,12 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [modelFileUrl, setModelFileUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const previewBlobRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!asset || !isOpen) {
+      revokeSvgPreviewObjectUrl(previewBlobRef.current)
+      previewBlobRef.current = null
       setPreviewUrl(null)
       setModelFileUrl(null)
       return
@@ -38,9 +43,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
     loadPreview()
     return () => {
-      if (previewUrl && previewUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(previewUrl)
-      }
+      revokeSvgPreviewObjectUrl(previewBlobRef.current)
+      previewBlobRef.current = null
     }
   }, [asset?.id, isOpen])
 
@@ -50,7 +54,17 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
     setLoading(true)
     setModelFileUrl(null)
     try {
-      if (asset.fileType === 'image') {
+      if (asset.fileType === 'image' && isSvgExtension(asset.extension)) {
+        const target = asset.resolvedFilePath ?? asset.filePath
+        if (target) {
+          revokeSvgPreviewObjectUrl(previewBlobRef.current)
+          const href = await loadSvgPreviewObjectUrl(target)
+          previewBlobRef.current = href
+          setPreviewUrl(href)
+        } else {
+          setPreviewUrl(null)
+        }
+      } else if (asset.fileType === 'image') {
         const thumbData = await window.assetVaultAPI.assets.getThumbnail(asset.id)
         setPreviewUrl(thumbData as string ?? null)
       } else if (asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)) {

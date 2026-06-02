@@ -1,6 +1,6 @@
 import type { ApiRequestContext } from '../request'
 import { handleAppInfo } from '../handlers/app'
-import { handleLibraryInfo, handleLibraryState } from '../handlers/library'
+import { handleLibraryInfo, handleLibraryState, handleLibrarySwitch, handleLibraryImportFromLibrary } from '../handlers/library'
 import {
   handleAssetDelete,
   handleAssetGet,
@@ -49,6 +49,16 @@ const routes: RouteDef[] = [
   { method: 'GET', path: `${API_PREFIX}/app/info`, handler: () => handleAppInfo() },
   { method: 'GET', path: `${API_PREFIX}/library/info`, handler: () => handleLibraryInfo() },
   { method: 'GET', path: `${API_PREFIX}/library/state`, handler: () => handleLibraryState() },
+  {
+    method: 'POST',
+    path: `${API_PREFIX}/library/switch`,
+    handler: (ctx) => handleLibrarySwitch(ctx.body)
+  },
+  {
+    method: 'POST',
+    path: `${API_PREFIX}/library/importFromLibrary`,
+    handler: (ctx) => handleLibraryImportFromLibrary(ctx.body)
+  },
 
   { method: 'GET', path: `${API_PREFIX}/asset/get`, handler: (ctx) => handleAssetGet({ ...ctx.query }) },
   { method: 'POST', path: `${API_PREFIX}/asset/get`, handler: (ctx) => handleAssetGet(ctx.body) },

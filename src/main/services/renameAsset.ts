@@ -1,8 +1,8 @@
 import { existsSync, renameSync } from 'fs'
 import { eq } from 'drizzle-orm'
 import { getDatabase } from '../db'
-import { assets, assetsSearch } from '../db/schema'
-import { syncAssetSidecarFromDb } from './assetSidecar'
+import { assets } from '../db/schema'
+import { finalizeAssetRecords } from './assetSearchIndex'
 import {
   itemPackFileRelative,
   resolveLibraryPath,
@@ -50,22 +50,6 @@ export async function renameAsset(assetId: string, newNameInput: string): Promis
     })
     .where(eq(assets.id, assetId))
 
-  const searchRow = await database
-    .select({ assetId: assetsSearch.assetId })
-    .from(assetsSearch)
-    .where(eq(assetsSearch.assetId, assetId))
-    .get()
-
-  const searchText = `${base} ${originalName}`
-  if (searchRow) {
-    await database
-      .update(assetsSearch)
-      .set({ searchText })
-      .where(eq(assetsSearch.assetId, assetId))
-  } else {
-    await database.insert(assetsSearch).values({ assetId, searchText })
-  }
-
-  await syncAssetSidecarFromDb(database, assetId)
+  await finalizeAssetRecords(database, assetId)
   return { filename }
 }

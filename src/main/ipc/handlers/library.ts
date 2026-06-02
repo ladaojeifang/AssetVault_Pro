@@ -1,6 +1,6 @@
 import { ipcMain, dialog, app, BrowserWindow } from 'electron'
-import { join, basename } from 'path'
-import { existsSync, readdirSync, readFileSync } from 'fs'
+import { join } from 'path'
+import { existsSync, readdirSync } from 'fs'
 import { count } from 'drizzle-orm'
 import { getDatabase } from '../../db'
 import { assets } from '../../db/schema'
@@ -12,13 +12,14 @@ import {
   removeFromRecentList
 } from '../../services/libraryBundle'
 import type { LibraryMode } from '@/shared/libraryTypes'
-import { getLibraryMode, readLibraryManifestFile } from '../../services/libraryManifest'
+import { getLibraryMode } from '../../services/libraryManifest'
 import {
   getLibraryModeStats,
   upgradeCatalogLibraryToArchive,
   verifyReferencedSources
 } from '../../services/libraryUpgrade'
 import { getLibraryInfo, getLibraryState } from '../../services/libraryApiService'
+import { importLibraryFromPath } from '../../services/importLibraryFromPath'
 import {
   switchActiveLibrary,
   assertEmptyDirectoryForNewLibrary,
@@ -28,18 +29,6 @@ import { assertOptionalPlainObject, assertOptionalBoolean } from '../ipcGuards'
 
 function dialogParent(event: Electron.IpcMainInvokeEvent): BrowserWindow | undefined {
   return BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow() ?? undefined
-}
-
-function readLibraryDisplayName(root: string): string {
-  const mf = join(root, 'manifest.json')
-  if (!existsSync(mf)) return basename(root)
-  try {
-    const j = JSON.parse(readFileSync(mf, 'utf-8')) as { displayName?: unknown }
-    if (typeof j.displayName === 'string' && j.displayName.trim()) return j.displayName.trim()
-  } catch {
-    // ignore malformed manifest
-  }
-  return basename(root)
 }
 
 export function handleLibraryOperations(ipc: typeof ipcMain): void {
@@ -121,6 +110,26 @@ export function handleLibraryOperations(ipc: typeof ipcMain): void {
   })
 
   ipc.handle('library:verify-sources', async () => verifyReferencedSources())
+
+  ipc.handle('library:pick-source-library-root', async (event) => {
+    const parent = dialogParent(event)
+    const r = await dialog.showOpenDialog(parent, {
+      properties: ['openDirectory'],
+      title: '选择要导入的完整资料库（需包含 manifest.json 与 library.sqlite）'
+    })
+    if (r.canceled || !r.filePaths[0]) {
+      return { ok: false as const, error: 'cancelled' }
+    }
+    return { ok: true as const, path: r.filePaths[0] }
+  })
+
+  ipc.handle('library:import-from-library', async (event, sourceLibraryRoot: unknown) => {
+    if (typeof sourceLibraryRoot !== 'string' || !sourceLibraryRoot.trim()) {
+      return { ok: false as const, error: '无效路径' }
+    }
+    const win = dialogParent(event)
+    return importLibraryFromPath(sourceLibraryRoot.trim(), { win })
+  })
 
   /** DB row count vs `items/` subfolders — diagnose orphan packs or empty UI. */
   ipc.handle('library:get-storage-stats', async () => {

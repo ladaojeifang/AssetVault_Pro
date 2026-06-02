@@ -12,6 +12,8 @@ import { isAssetDragEvent } from '../../utils/assetDragDrop'
 import { addDraggedAssetsToFolder } from '../../utils/addAssetsToFolder'
 import { notify } from '../Common/notify'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import { isSvgExtension } from '@/shared/svgFormats'
+import { isExrExtension } from '@/shared/exrFormats'
 import MasonryGrid from './MasonryGrid'
 import { ListViewColumnHeader } from './ListViewColumnHeader'
 import { AssetListNoResults } from './AssetListNoResults'
@@ -36,6 +38,8 @@ const AssetGrid: React.FC = () => {
     setDetailPanelOpen,
     openFontPreview,
     openModelPreview,
+    openSvgPreview,
+    openExrPreview,
     loadMoreAssets,
     tagFilters,
     fileTypeFilter,
@@ -261,12 +265,22 @@ const AssetGrid: React.FC = () => {
         return
       }
 
+      if (asset.fileType === 'image' && isSvgExtension(asset.extension)) {
+        openSvgPreview(id)
+        return
+      }
+
+      if (asset.fileType === 'image' && isExrExtension(asset.extension)) {
+        openExrPreview(id)
+        return
+      }
+
       const p = asset.resolvedFilePath ?? asset.filePath
       if (p) {
         await window.assetVaultAPI.fs.openInExplorer(p)
       }
     },
-    [assets, openFontPreview, openModelPreview]
+    [assets, openFontPreview, openModelPreview, openSvgPreview, openExrPreview]
   )
 
   const handleDragStart = useCallback(
@@ -428,7 +442,7 @@ const AssetGrid: React.FC = () => {
               filters: [
                 {
                   name: 'Images',
-                  extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'avif']
+                    extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'avif', 'exr']
                 }
               ]
             })

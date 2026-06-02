@@ -30,6 +30,31 @@ V0.5 Alpha (W1-W8)     V0.8 Beta (W9-W14)       V1.0 GA (W15-W24)
     │   · Windows only        │                        │   · 性能优化达标
 ```
 
+### 2.1 近期功能：资料库整库导入（LIM）
+
+> 完整规格见 [library-import-from-library-spec.md](./library-import-from-library-spec.md)
+
+| ID | 任务 | 优先级 | 预估 |
+|----|------|--------|------|
+| LIM-01～06 | 主进程 `importLibraryFromPath`（标签/文件夹/资产/去重/收尾） | P0 | 30h |
+| LIM-07～08 | IPC + 资料库设置页入口 + 进度 | P0 | 7h |
+| LIM-09～10 | Web API `POST /library/importFromLibrary` + 文档 | P1 | 5h |
+| LIM-11 | 手动回归（整库/去重/源库 tag） | P0 | 2h |
+
+**交付物**：在完整库 B 中一键从 archive 源库 A 导入；重复内容跳过拷贝；自动打源库 `displayName` tag。
+
+### 2.2 EXR 预览修复批次（EXR-F）
+
+> 完整任务与验收见 [exr-preview-fix-plan.md](./exr-preview-fix-plan.md)
+
+| ID | 任务 | 优先级 | 预估 |
+|----|------|--------|------|
+| EXR-F1 | RGBA 层 exrs 失败时恢复 napi/ffmpeg fallback | P0 | 3h |
+| EXR-F2 | 默认图层统一 + header 失败时不伪造图层列表 | P0 | 4h |
+| EXR-F3 | `previewable` / channelControl 语义与 UI 文案 | P1 | 3h |
+| EXR-F4 | 取色与缩略图 exrs 对齐 + tonemap 去重 | P1 | 3h |
+| EXR-F5～F7 | IPC 错误模型、解码缓存、multipart 等 | P2–P3 | 18h+ |
+
 ---
 
 ## 三、Phase 1：V0.5 Alpha 详细任务分解 (W1-W8)
@@ -301,7 +326,8 @@ W1      W3      W5      W7      W9      W11     W13     W15     W17     W19     
 
 ## 九、下一步行动
 
-1. **确认团队资源**: 根据 Phase 1 需求确定具体参与人员和时间投入
+1. **资料库整库导入（LIM）**：按 [library-import-from-library-spec.md](./library-import-from-library-spec.md) 实现 `importLibraryFromPath` → 设置页 → IPC → Web API
+2. **确认团队资源**: 根据 Phase 1 需求确定具体参与人员和时间投入
 2. **技术 PoC 验证** (第 1 周并行进行):
    - Electron + SQLite + React 基础脚手架可行性验证
    - Sharp 缩略图生成性能基准测试

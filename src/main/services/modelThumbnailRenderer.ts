@@ -123,13 +123,19 @@ let pending: {
   timer: ReturnType<typeof setTimeout>
 } | null = null
 
+export function destroyModelThumbnailWindow(): void {
+  if (thumbWindow && !thumbWindow.isDestroyed()) {
+    thumbWindow.destroy()
+  }
+  thumbWindow = null
+  windowReady = null
+  readyResolve = null
+}
+
 export function initModelThumbnailRenderer(): void {
   setupIpcOnce()
   app.on('before-quit', () => {
-    if (thumbWindow && !thumbWindow.isDestroyed()) {
-      thumbWindow.destroy()
-    }
-    thumbWindow = null
+    destroyModelThumbnailWindow()
   })
 }
 

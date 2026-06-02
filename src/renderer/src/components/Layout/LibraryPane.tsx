@@ -5,6 +5,8 @@ import AssetGrid from '../Assets/AssetGrid'
 import DetailPanel from '../Detail/DetailPanel'
 import FontPreviewPage from '../FontPreview/FontPreviewPage'
 import ModelPreviewPage from '../ModelPreview/ModelPreviewPage'
+import SvgPreviewPage from '../SvgPreview/SvgPreviewPage'
+import ExrPreviewPage from '../ExrPreview/ExrPreviewPage'
 import StatusBar from './StatusBar'
 import { useApp } from '../../stores/AppContext'
 
@@ -15,6 +17,8 @@ const LibraryPane: React.FC = () => {
     detailPanelOpen,
     fontPreviewAssetId,
     modelPreviewAssetId,
+    svgPreviewAssetId,
+    exrPreviewAssetId,
     refreshFolders,
     refreshAssets,
     isImporting,
@@ -39,6 +43,24 @@ const LibraryPane: React.FC = () => {
     return (
       <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-av-bg-primary">
         <ModelPreviewPage assetId={modelPreviewAssetId} />
+        <StatusBar isImporting={isImporting} importProgress={importProgress} />
+      </div>
+    )
+  }
+
+  if (svgPreviewAssetId) {
+    return (
+      <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-av-bg-primary">
+        <SvgPreviewPage assetId={svgPreviewAssetId} />
+        <StatusBar isImporting={isImporting} importProgress={importProgress} />
+      </div>
+    )
+  }
+
+  if (exrPreviewAssetId) {
+    return (
+      <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-av-bg-primary">
+        <ExrPreviewPage assetId={exrPreviewAssetId} />
         <StatusBar isImporting={isImporting} importProgress={importProgress} />
       </div>
     )

@@ -46,3 +46,49 @@ export interface UpgradeLibraryProgress {
   status: 'processing' | 'done' | 'error'
   bytesCopied?: number
 }
+
+export type ImportLibraryPhase = 'validate' | 'tags' | 'folders' | 'assets' | 'finalize'
+
+export interface ImportLibraryProgress {
+  phase: ImportLibraryPhase
+  current: number
+  total: number
+  filename: string
+  status: 'processing' | 'done' | 'error'
+}
+
+export type ImportLibrarySuccess = {
+  ok: true
+  importMode?: 'archive_to_archive' | 'catalog_to_catalog_same_machine'
+  sourceDisplayName: string
+  sourceLibraryRoot: string
+  assetsAdded: number
+  assetsSkippedDuplicate: number
+  assetsFailed: number
+  foldersCreated: number
+  foldersMerged: number
+  tagsCreated: number
+  tagsMerged: number
+  sourceLibraryTagName: string
+  assetsAddedLocal?: number
+  assetsAddedReferenced?: number
+  assetsLocalizedOnImport?: number
+  assetsSkippedDuplicateLocal?: number
+  errors: Array<{ sourceAssetId: string; filename: string; reason: string }>
+}
+
+export type ImportLibraryFailure = {
+  ok: false
+  error: string
+  code?:
+    | 'INVALID_PATH'
+    | 'INVALID_SOURCE_MODE'
+    | 'SAME_LIBRARY'
+    | 'SOURCE_NOT_FOUND'
+    | 'SOURCE_DB_ERROR'
+    | 'TARGET_NOT_ARCHIVE'
+    | 'TARGET_NOT_CATALOG'
+    | 'LIBRARY_BUSY'
+}
+
+export type ImportLibraryResult = ImportLibrarySuccess | ImportLibraryFailure

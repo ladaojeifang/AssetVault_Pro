@@ -28,7 +28,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/preload/index.ts'),
-          modelThumbnail: resolve(__dirname, 'src/preload/modelThumbnail.ts')
+          modelThumbnail: resolve(__dirname, 'src/preload/modelThumbnail.ts'),
+          svgThumbnail: resolve(__dirname, 'src/preload/svgThumbnail.ts')
         }
       }
     }
@@ -40,7 +41,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
-          modelThumbnail: resolve(__dirname, 'src/renderer/model-thumbnail/index.html')
+          modelThumbnail: resolve(__dirname, 'src/renderer/model-thumbnail/index.html'),
+          svgThumbnail: resolve(__dirname, 'src/renderer/svg-thumbnail/index.html')
         }
       }
     },

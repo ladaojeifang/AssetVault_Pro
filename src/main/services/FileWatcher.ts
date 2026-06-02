@@ -7,7 +7,7 @@ import { eq } from 'drizzle-orm'
 import { importSingleAsset } from './importSingleAsset'
 import { notifyAllWindowsAssetsImported } from './importNotify'
 import { toCanonicalFilePath } from '../utils/pathUtils'
-import { removeItemPack } from './libraryBundle'
+import { syncAssetSidecarFromDb } from './assetSidecar'
 import { findAssetIdByCanonicalPath } from './assetLookup'
 
 /**
@@ -97,6 +97,11 @@ export class FileWatcher {
         const existingId = await findAssetIdByCanonicalPath(database, canonical)
 
         if (existingId) {
+          await database
+            .update(assets)
+            .set({ sourceMissingAt: null, updatedAt: new Date() })
+            .where(eq(assets.id, existingId))
+          await syncAssetSidecarFromDb(database, existingId)
           console.log(`[FileWatcher] File already exists in DB: ${basename(canonical)}`)
           return
         }
@@ -124,9 +129,11 @@ export class FileWatcher {
             .set({
               fileSize: stat.size,
               fileModifiedAt: stat.mtime,
+              sourceMissingAt: null,
               updatedAt: new Date()
             })
             .where(eq(assets.id, assetId))
+          await syncAssetSidecarFromDb(database, assetId)
         }
       } catch (error) {
         console.error(`[FileWatcher] Error handling change for ${filePath}:`, error)
@@ -142,9 +149,15 @@ export class FileWatcher {
         const assetId = await findAssetIdByCanonicalPath(database, canonical)
 
         if (assetId) {
-          removeItemPack(assetId)
-          await database.delete(assets).where(eq(assets.id, assetId))
-          console.log(`[FileWatcher] Removed deleted file from DB: ${basename(canonical)}`)
+          if (existsSync(canonical)) {
+            return
+          }
+          await database
+            .update(assets)
+            .set({ sourceMissingAt: new Date(), updatedAt: new Date() })
+            .where(eq(assets.id, assetId))
+          await syncAssetSidecarFromDb(database, assetId)
+          console.log(`[FileWatcher] Marked source missing (not deleted): ${basename(canonical)}`)
         }
       } catch (error) {
         console.error(`[FileWatcher] Error handling delete for ${filePath}:`, error)

@@ -121,7 +121,8 @@ export async function refreshAssetThumbnail(
     return false
   }
 
-  const relThumb = gen.usedOriginal ? row.filePath : itemThumbRelative(assetId)
+  const relThumb =
+    gen.usedOriginal && row.extension?.toLowerCase() !== '.exr' ? row.filePath : itemThumbRelative(assetId)
   await database
     .update(assets)
     .set({

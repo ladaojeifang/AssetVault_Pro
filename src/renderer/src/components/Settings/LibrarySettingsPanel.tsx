@@ -1,5 +1,10 @@
 import React, { useState, useCallback, useEffect } from 'react'
-import type { LibraryMode, LibraryModeStats } from '@/shared/libraryTypes'
+import type {
+  ImportLibraryProgress,
+  ImportLibrarySuccess,
+  LibraryMode,
+  LibraryModeStats
+} from '@/shared/libraryTypes'
 import { ContentHashScanButton } from './ContentHashScanButton'
 import { FontThumbRegenerateButton } from './FontThumbRegenerateButton'
 import { ModelThumbRegenerateButton } from './ModelThumbRegenerateButton'
@@ -22,6 +27,8 @@ export function LibrarySettingsPanel(): React.ReactElement {
   const [stats, setStats] = useState<LibraryModeStats | null>(null)
   const [busy, setBusy] = useState(false)
   const [upgradeProgress, setUpgradeProgress] = useState<string | null>(null)
+  const [importProgress, setImportProgress] = useState<string | null>(null)
+  const [importResult, setImportResult] = useState<ImportLibrarySuccess | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -45,9 +52,24 @@ export function LibrarySettingsPanel(): React.ReactElement {
     const unsubUpgrade = window.assetVaultAPI.library.onUpgradeProgress((p) => {
       setUpgradeProgress(`${p.current}/${p.total} · ${p.filename}`)
     })
+    const unsubImport = window.assetVaultAPI.library.onImportProgress((p: ImportLibraryProgress) => {
+      const phaseLabel: Record<ImportLibraryProgress['phase'], string> = {
+        validate: '校验',
+        tags: '标签',
+        folders: '文件夹',
+        assets: '资产',
+        finalize: '收尾'
+      }
+      if (p.phase === 'assets' && p.total > 0) {
+        setImportProgress(`${phaseLabel[p.phase]} ${p.current}/${p.total} · ${p.filename}`)
+      } else {
+        setImportProgress(phaseLabel[p.phase])
+      }
+    })
     return () => {
       unsubSwitch()
       unsubUpgrade()
+      unsubImport()
     }
   }, [load])
 
@@ -127,6 +149,39 @@ export function LibrarySettingsPanel(): React.ReactElement {
     }
   }
 
+  const handleImportFromLibrary = async () => {
+    const pick = await window.assetVaultAPI.library.pickSourceLibraryRoot()
+    if (!pick.ok) {
+      if (pick.error !== 'cancelled') setError(pick.error)
+      return
+    }
+    const isCatalog = state?.libraryMode === 'catalog'
+    const confirmMsg = isCatalog
+      ? `将从索引库「${pick.path}」合并到当前索引库：未本地化条目以引用方式合并；A 已本地化条目会在 B 中新建或补全本地副本（同 hash 且 B 已本地化则不重复占盘）。是否继续？`
+      : `将从完整库「${pick.path}」一次性导入标签、文件夹与资产（重复文件按内容指纹合并，并打上来源库标签）。是否继续？`
+    if (!confirm(confirmMsg)) {
+      return
+    }
+    setBusy(true)
+    setImportProgress('准备中…')
+    setError(null)
+    setImportResult(null)
+    try {
+      const res = await window.assetVaultAPI.library.importFromLibrary(pick.path)
+      if (!res.ok) {
+        setError(res.error)
+        return
+      }
+      setImportResult(res)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+      setImportProgress(null)
+    }
+  }
+
   const handleVerifySources = async () => {
     setBusy(true)
     setError(null)
@@ -186,6 +241,49 @@ export function LibrarySettingsPanel(): React.ReactElement {
         </div>
       )}
 
+      {importProgress && (
+        <div className="text-sm text-av-accent-blue bg-av-bg-elevated border border-av-border rounded-lg px-3 py-2">
+          正在从其它资料库导入：{importProgress}
+        </div>
+      )}
+
+      {importResult && (
+        <div className="text-sm text-av-text-secondary bg-av-bg-elevated border border-av-border rounded-lg px-3 py-2 space-y-1">
+          <div className="font-medium text-av-text-primary">导入完成：{importResult.sourceDisplayName}</div>
+          <div>
+            新增 {importResult.assetsAdded} · 重复跳过 {importResult.assetsSkippedDuplicate} · 失败{' '}
+            {importResult.assetsFailed}
+          </div>
+          {importResult.importMode === 'catalog_to_catalog_same_machine' && (
+            <div className="text-xs text-av-text-muted">
+              本地新增 {importResult.assetsAddedLocal ?? 0} · 引用新增 {importResult.assetsAddedReferenced ?? 0} ·
+              补本地化 {importResult.assetsLocalizedOnImport ?? 0} · 已本地化重复{' '}
+              {importResult.assetsSkippedDuplicateLocal ?? 0}
+            </div>
+          )}
+          <div>
+            文件夹 +{importResult.foldersCreated} / 合并 {importResult.foldersMerged} · 标签 +{importResult.tagsCreated} /
+            合并 {importResult.tagsMerged}
+          </div>
+          <div className="text-xs text-av-text-muted">来源库标签：{importResult.sourceLibraryTagName}</div>
+          {importResult.errors.length > 0 && (
+            <details className="text-xs text-amber-300/90">
+              <summary>{importResult.errors.length} 条失败详情</summary>
+              <ul className="mt-1 list-disc pl-4 max-h-32 overflow-y-auto">
+                {importResult.errors.map((e: ImportLibrarySuccess['errors'][number]) => (
+                  <li key={e.sourceAssetId}>
+                    {e.filename}: {e.reason}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          <button type="button" className="btn-secondary text-xs mt-2" onClick={() => setImportResult(null)}>
+            关闭
+          </button>
+        </div>
+      )}
+
       <div className="space-y-2">
         <div className="text-xs font-medium text-av-text-muted uppercase tracking-wide">当前</div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -221,6 +319,16 @@ export function LibrarySettingsPanel(): React.ReactElement {
           <button type="button" className="btn-primary text-xs" disabled={busy} onClick={() => void handlePick()}>
             打开其他资料库…
           </button>
+          {(state.libraryMode === 'archive' || state.libraryMode === 'catalog') && (
+            <button
+              type="button"
+              className="btn-primary text-xs"
+              disabled={busy}
+              onClick={() => void handleImportFromLibrary()}
+            >
+              从其它资料库导入…
+            </button>
+          )}
           {state.libraryMode === 'catalog' && (
             <>
               <button type="button" className="btn-primary text-xs" disabled={busy} onClick={() => void handleUpgrade()}>

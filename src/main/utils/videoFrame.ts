@@ -97,3 +97,79 @@ export function isGifFilePath(filePath: string): boolean {
 export function extractGifFramePngBestEffort(filePath: string): Promise<Buffer | null> {
   return extractVideoFramePng(filePath, 0).then((png) => png ?? extractVideoFramePng(filePath, 0.1))
 }
+
+/**
+ * Downscale one EXR frame to PNG via ffmpeg (stdout pipe).
+ * Used when @napi-rs/image hits memory limits on large HDR files.
+ */
+export function extractExrFramePng(filePath: string, maxEdge: number): Promise<Buffer | null> {
+  const ffmpeg = resolveFfmpegBinary()
+  if (!ffmpeg) {
+    console.warn('[ExrFrame] No ffmpeg binary: install dependency ffmpeg-static or set FFMPEG_PATH')
+    return Promise.resolve(null)
+  }
+
+  const edge = Math.max(64, Math.floor(maxEdge))
+
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = []
+    const stderr: string[] = []
+
+    const proc = spawn(
+      ffmpeg,
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-nostdin',
+        '-i',
+        filePath,
+        '-vf',
+        `scale=${edge}:${edge}:force_original_aspect_ratio=decrease`,
+        '-map',
+        '0:v:0?',
+        '-frames:v',
+        '1',
+        '-an',
+        '-f',
+        'image2pipe',
+        '-vcodec',
+        'png',
+        '-'
+      ],
+      { windowsHide: true }
+    )
+
+    const killTimer = setTimeout(() => {
+      proc.kill('SIGKILL')
+    }, EXTRACT_TIMEOUT_MS)
+
+    proc.stdout.on('data', (c: Buffer) => chunks.push(c))
+    proc.stderr.on('data', (c: Buffer) => stderr.push(c.toString()))
+
+    proc.on('error', (err) => {
+      clearTimeout(killTimer)
+      console.error('[ExrFrame] ffmpeg spawn error:', err)
+      resolve(null)
+    })
+
+    proc.on('close', (code) => {
+      clearTimeout(killTimer)
+      const errText = stderr.join('').trim()
+      if (code !== 0) {
+        if (errText) console.error('[ExrFrame] ffmpeg failed:', errText)
+        resolve(null)
+        return
+      }
+      const buf = Buffer.concat(chunks)
+      resolve(buf.length >= 32 ? buf : null)
+    })
+  })
+}
+
+export function extractExrFramePngBestEffort(
+  filePath: string,
+  maxEdge: number
+): Promise<Buffer | null> {
+  return extractExrFramePng(filePath, maxEdge)
+}

@@ -26,17 +26,28 @@
           console.error('[HTML] Script failed to load:', e.target.src || '(inline)', e.message);
         }
       }, true);
-      // Timeout detection
-      setTimeout(function() {
-        var root = document.getElementById('root');
-        if (!root || root.children.length === 0) {
-          console.warn('[HTML] #root is still empty after 3s — React likely failed to mount');
+      // Timeout detection — only show if React still has not mounted; remove once #root has children.
+      var root = document.getElementById('root');
+      if (!root) return;
+      var bannerId = 'av-react-mount-error';
+      var timer = setTimeout(function() {
+        if (root.children.length === 0) {
+          console.warn('[HTML] #root is still empty after 8s — React likely failed to mount');
+          if (document.getElementById(bannerId)) return;
           document.body.insertAdjacentHTML('beforeend',
-            '<div style="padding:20px;color:red;background:#111;font-size:14px;position:fixed;top:0;left:0;z-index:99999">' +
+            '<div id="' + bannerId + '" style="padding:20px;color:red;background:#111;font-size:14px;position:fixed;top:0;left:0;z-index:99999">' +
             'React did not mount. Check Console for errors.' +
             '</div>');
         }
-      }, 3000);
+      }, 8000);
+      var obs = new MutationObserver(function() {
+        if (root.children.length > 0) {
+          clearTimeout(timer);
+          var el = document.getElementById(bannerId);
+          if (el) el.remove();
+        }
+      });
+      obs.observe(root, { childList: true });
     </script>
   </body>
 </html>

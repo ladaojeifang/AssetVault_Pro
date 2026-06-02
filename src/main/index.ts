@@ -13,19 +13,25 @@ import { migrateOriginalExtToDisplayFilenames } from './services/migrateStorageF
 import { registerIpcHandlers } from './ipc'
 import { setupGlobalErrorHandlers } from './services/ErrorHandler'
 import { getHotkeyManager } from './services/HotkeyManager'
-import { getFileWatcher } from './services/FileWatcher'
 import { initModelThumbnailRenderer, warmHiddenThumbnailWindow } from './services/modelThumbnailRenderer'
+import { initSvgThumbnailRenderer, warmHiddenSvgThumbnailWindow } from './services/svgThumbnailRenderer'
+import { ensureExrsInitialized } from './services/exrExrsDecoder'
 import { setMainBrowserWindow } from './services/mainWindowRef'
 import { attachMainWindowLifecycle } from './services/aiCanvasWindow'
-import { stopApiServer } from './api/server'
+import { quitApplicationFromUserClose, performAppShutdown, isAppQuitting } from './services/appShutdown'
 import { applyWebApiFromPreferences } from './api/webApiRuntime'
 import {
   registerModelFileProtocol,
   setupModelFileProtocolHandler
 } from './services/modelFileProtocol'
+import {
+  registerExrPreviewProtocol,
+  setupExrPreviewProtocolHandler
+} from './services/exrPreviewCache'
 import { resolveAppIcon } from './appIcon'
 
 registerModelFileProtocol()
+registerExrPreviewProtocol()
 
 const isDev = !app.isPackaged
 
@@ -83,10 +89,8 @@ let signalShutdownStarted = false
 async function shutdownFromSignal(signal: string): Promise<void> {
   if (signalShutdownStarted) return
   signalShutdownStarted = true
-  console.log(`[Main] ${signal} — flushing database…`)
-  getHotkeyManager().unregisterAll()
-  getFileWatcher().stop()
-  await flushDatabase().catch((e) => console.error('[Main] flush on signal failed:', e))
+  console.log(`[Main] ${signal} — shutting down…`)
+  await performAppShutdown()
   process.exit(0)
 }
 
@@ -155,6 +159,12 @@ function createWindow(): BrowserWindow {
   attachMainWindowLifecycle(mainWindow)
   mainWindow.on('closed', () => setMainBrowserWindow(null))
 
+  mainWindow.on('close', (event) => {
+    if (isAppQuitting()) return
+    event.preventDefault()
+    void quitApplicationFromUserClose()
+  })
+
   return mainWindow
 }
 
@@ -169,6 +179,7 @@ app.on('second-instance', () => {
 if (gotSingleInstanceLock) {
   app.whenReady().then(async () => {
     setupModelFileProtocolHandler()
+    setupExrPreviewProtocolHandler()
 
     // Set app user model id for windows
     app.setAppUserModelId('com.assetvault.app')
@@ -214,6 +225,11 @@ if (gotSingleInstanceLock) {
 
     initModelThumbnailRenderer()
     warmHiddenThumbnailWindow()
+    initSvgThumbnailRenderer()
+    warmHiddenSvgThumbnailWindow()
+    void ensureExrsInitialized().catch((e) => {
+      console.warn('[Exr] WASM init deferred:', e)
+    })
 
     // Register IPC handlers
     registerIpcHandlers(ipcMain)
@@ -247,24 +263,17 @@ if (gotSingleInstanceLock) {
   })
 }
 
-app.on('window-all-closed', async () => {
-  // Cleanup: unregister shortcuts before quit
-  getHotkeyManager().unregisterAll()
-
-  getFileWatcher().stop()
-
-  await flushDatabase()
-
-  if (process.platform !== 'darwin') {
-    app.quit()
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin' && !isAppQuitting()) {
+    void quitApplicationFromUserClose()
   }
 })
 
-app.on('before-quit', async () => {
-  getHotkeyManager().unregisterAll()
-  getFileWatcher().stop()
-  await stopApiServer()
-  await flushDatabase()
+app.on('before-quit', (event) => {
+  if (!isAppQuitting()) {
+    event.preventDefault()
+    void quitApplicationFromUserClose()
+  }
 })
 
 // Security: prevent new window creation

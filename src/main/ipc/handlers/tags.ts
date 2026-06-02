@@ -3,9 +3,8 @@ import { v4 as uuidv4 } from 'uuid'
 import { getDatabase } from '../../db'
 import { tags, assetTags } from '../../db/schema'
 import { eq, and, count, asc } from 'drizzle-orm'
-import { syncAssetSidecarFromDb } from '../../services/assetSidecar'
 import {
-  rebuildAssetSearchText,
+  finalizeAssetRecords,
   rebuildSearchTextForTag
 } from '../../services/assetSearchIndex'
 import { assertPlainObject, assertString, assertStringArray } from '../ipcGuards'
@@ -80,8 +79,7 @@ export function handleTagOperations(ipc: typeof ipcMain): void {
         }
       }
 
-      await rebuildAssetSearchText(database, assetId)
-      await syncAssetSidecarFromDb(database, assetId)
+      await finalizeAssetRecords(database, assetId)
     }
 
     return true
@@ -99,8 +97,7 @@ export function handleTagOperations(ipc: typeof ipcMain): void {
           .where(and(eq(assetTags.assetId, assetId), eq(assetTags.tagId, tagId)))
       }
 
-      await rebuildAssetSearchText(database, assetId)
-      await syncAssetSidecarFromDb(database, assetId)
+      await finalizeAssetRecords(database, assetId)
     }
 
     return true

@@ -3,7 +3,7 @@ import { notify } from '../components/Common/notify'
 import { resolveAssetPreviewUrl } from './canvasAssetNodes'
 
 export const IMAGE_IMPORT_FILTERS = [
-  { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif'] }
+  { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'exr'] }
 ]
 
 export const VIDEO_IMPORT_FILTERS = [

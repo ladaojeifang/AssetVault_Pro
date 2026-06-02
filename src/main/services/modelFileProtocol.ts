@@ -12,6 +12,7 @@ const MIME_BY_EXT: Record<string, string> = {
   '.fbx': 'application/octet-stream',
   '.stl': 'model/stl',
   '.ply': 'application/octet-stream',
+  '.svg': 'image/svg+xml',
   '.ttf': 'font/ttf',
   '.otf': 'font/otf',
   '.woff': 'font/woff',

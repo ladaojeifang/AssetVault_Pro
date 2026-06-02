@@ -68,6 +68,7 @@ function resolveExtensionForDownload(url: URL, filenameHint: string | undefined,
   // Fallback by content-type (best-effort).
   if (contentType) {
     const ct = contentType.toLowerCase().trim()
+    if (ct.includes('exr')) return '.exr'
     if (ct.startsWith('image/')) return '.jpg'
     if (ct.startsWith('video/')) return '.mp4'
     if (ct.startsWith('audio/')) return '.mp3'

@@ -12,6 +12,7 @@ import { getThumbnailService } from '../../services/ThumbnailService'
 import { isModelThumbnailSkipped, clearModelThumbnailSkip } from '../../services/modelThumbnailSkip'
 import { waitForModelSnapshotBridge } from '../../services/modelThumbnailRenderer'
 import { ALL_SUPPORTED_IMPORT_EXTENSIONS } from '@/shared/supportedFormats'
+import { isSvgExtension } from '@/shared/svgFormats'
 import { resolveLibraryPath, itemThumbRelative } from '../../services/libraryBundle'
 import { resolveAssetContentPath } from '../../services/assetPathResolver'
 import { syncAssetSidecarFromDb } from '../../services/assetSidecar'
@@ -44,6 +45,23 @@ function normalizeImportOptions(
 ): ImportAssetOptions {
   if (typeof optionsOrFolderId === 'string') return { targetFolderId: optionsOrFolderId }
   return optionsOrFolderId ?? {}
+}
+
+function resolveThumbPathForColorAnalysis(asset: {
+  id: string
+  thumbnailPath: string | null
+  extension: string
+  fileType: string
+}): string | undefined {
+  if (asset.thumbnailPath) {
+    const abs = resolveLibraryPath(asset.thumbnailPath)
+    if (existsSync(abs)) return abs
+  }
+  if (asset.fileType === 'image' && isSvgExtension(asset.extension)) {
+    const abs = resolveLibraryPath(itemThumbRelative(asset.id))
+    if (existsSync(abs)) return abs
+  }
+  return undefined
 }
 
 function createImportSession(win: BrowserWindow | undefined) {
@@ -318,8 +336,8 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       const asset = await database.select().from(assets).where(eq(assets.id, id)).get()
       if (!asset) continue
       const absFile = resolveAssetContentPath(asset)
-      const absThumb = asset.thumbnailPath ? resolveLibraryPath(asset.thumbnailPath) : null
-      const result = await analyzeColorsFromFile(absFile, asset.fileType, absThumb ?? undefined)
+      const absThumb = resolveThumbPathForColorAnalysis(asset)
+      const result = await analyzeColorsFromFile(absFile, asset.fileType, absThumb, id)
       if (!result) continue
       await persistAssetColorAnalysis(database, id, result)
       updated++
@@ -342,8 +360,8 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     if (asset.fileType !== 'image' && asset.fileType !== 'video') return null
 
     const absFile = resolveAssetContentPath(asset)
-    const absThumb = asset.thumbnailPath ? resolveLibraryPath(asset.thumbnailPath) : null
-    const result = await analyzeColorsFromFile(absFile, asset.fileType, absThumb ?? undefined)
+    const absThumb = resolveThumbPathForColorAnalysis(asset)
+    const result = await analyzeColorsFromFile(absFile, asset.fileType, absThumb, id)
     if (!result) return null
 
     await persistAssetColorAnalysis(database, id, result)
@@ -409,7 +427,8 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       asset.fileType === 'image' &&
       absFile &&
       existsSync(absFile) &&
-      shouldUseOriginalImageDimensions(asset.width, asset.height)
+      shouldUseOriginalImageDimensions(asset.width, asset.height) &&
+      asset.extension?.toLowerCase() !== '.exr'
     ) {
       try {
         const buffer = readFileSync(absFile)
@@ -444,6 +463,8 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
           const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
           return `data:image/webp;base64,${buf.toString('base64')}`
         }
+        // EXR 不能直接作为原始位图直出给浏览器，否则会解析失败。
+        if (asset.extension?.toLowerCase() === '.exr') return null
         return bufferToImageDataUrl(gen.buffer, asset.mimeType || 'image/jpeg')
       }
     }

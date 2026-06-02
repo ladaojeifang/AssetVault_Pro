@@ -9,6 +9,8 @@
 | 产品范围与功能 | [doc/AssetVault_Pro_PRD_V1.0.md](doc/AssetVault_Pro_PRD_V1.0.md) |
 | 里程碑与待办 | [doc/DEVELOPMENT_PLAN.md](doc/DEVELOPMENT_PLAN.md) |
 | 本地 HTTP API | [doc/web-api-v1-guide.md](doc/web-api-v1-guide.md)、[doc/web-api-v1-design.md](doc/web-api-v1-design.md) |
+| 资料库合并 | [doc/library-import-from-library-spec.md](doc/library-import-from-library-spec.md) |
+| OpenEXR 预览 | [doc/exr-preview.md](doc/exr-preview.md)、修复计划 [doc/exr-preview-fix-plan.md](doc/exr-preview-fix-plan.md) |
 | 浏览器扩展 | [doc/browser-extension.md](doc/browser-extension.md)（独立仓库 `AssetVault_Browser_Extension`） |
 | AI 画布 / 网关 | [doc/node_type.md](doc/node_type.md)、[doc/AI_GATEWAY_SPEC.md](doc/AI_GATEWAY_SPEC.md) |
 
