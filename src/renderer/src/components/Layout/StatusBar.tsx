@@ -20,7 +20,10 @@ const StatusBar: React.FC<StatusBarProps> = ({ isImporting, importProgress }) =>
     colorBucketFilter,
     setColorBucketFilter,
     fontPreviewAssetId,
-    modelPreviewAssetId
+    modelPreviewAssetId,
+    svgPreviewAssetId,
+    exrPreviewAssetId,
+    markdownPreviewAssetId
   } = useApp()
 
   React.useEffect(() => {
@@ -33,7 +36,12 @@ const StatusBar: React.FC<StatusBarProps> = ({ isImporting, importProgress }) =>
       ? `导入中 ${importProgress.current}/${importProgress.total} · ${importProgress.filename}`
       : '导入中…'
 
-  const inAssetBrowse = !fontPreviewAssetId && !modelPreviewAssetId
+  const inAssetBrowse =
+    !fontPreviewAssetId &&
+    !modelPreviewAssetId &&
+    !svgPreviewAssetId &&
+    !exrPreviewAssetId &&
+    !markdownPreviewAssetId
 
   return (
     <div className="flex items-center gap-3 h-7 px-4 bg-av-bg-secondary border-t border-av-border text-xs text-av-text-muted select-none shrink-0 min-w-0">

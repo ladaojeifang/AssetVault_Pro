@@ -1,10 +1,18 @@
-import { join, extname } from 'path'
-import { statSync, renameSync, mkdirSync, copyFileSync } from 'fs'
-import { sanitizeStorageFileName } from '../libraryBundle'
+import { join, extname, basename } from 'path'
+import { statSync, mkdirSync, copyFileSync } from 'fs'
+import { v4 as uuidv4 } from 'uuid'
+import {
+  getLibraryRoot,
+  itemPackFileRelative,
+  removeItemPack,
+  sanitizeStorageFileName
+} from '../libraryBundle'
+import { posixRelToFsAbs } from '../importSingleAssetHelpers'
 import { importAssetFromPath } from '../assetImportService'
 import { patchAsset } from '../assetMutationService'
 import { getAssetById } from '../assetQueryService'
 import { assertBundlePathInSessionDir, removeDirRecursive } from './articleBundleSessionPathPolicy'
+import { writeBundleFileFromDataUrl } from './articleBundleSessionFileWrite'
 import {
   appendArticleBundleFile,
   abortSession,
@@ -15,7 +23,6 @@ import {
   sessionLimitsPayload,
   deleteSession
 } from './articleBundleSessionStore'
-import { getLibraryRoot } from '../libraryBundle'
 import { getDatabase } from '../../db'
 import { assets } from '../../db/schema'
 import { eq } from 'drizzle-orm'
@@ -88,20 +95,33 @@ export function articleBundleSessionStart(body: Record<string, unknown>) {
 export async function articleBundleSessionAppend(body: Record<string, unknown>) {
   const sessionId = typeof body.sessionId === 'string' ? body.sessionId : ''
   const relativePath = typeof body.relativePath === 'string' ? body.relativePath.trim() : ''
-  const filePath = typeof body.filePath === 'string' ? body.filePath : ''
+  const filePath = typeof body.filePath === 'string' ? body.filePath.trim() : ''
+  const fileDataUrl = typeof body.fileDataUrl === 'string' ? body.fileDataUrl.trim() : ''
 
-  if (!sessionId || !relativePath || !filePath) {
+  if (!sessionId || !relativePath) {
     throw new Error('INVALID_REQUEST')
   }
-  
+  if (!filePath && !fileDataUrl) {
+    throw new Error('INVALID_REQUEST')
+  }
+
   if (relativePath.includes('..') || relativePath.startsWith('/') || relativePath.startsWith('\\')) {
     throw new Error('ARTICLE_BUNDLE_PATH_DENIED')
   }
 
   const session = getArticleBundleSession(sessionId)
   if (!session) throw new Error('ARTICLE_BUNDLE_SESSION_NOT_FOUND')
+  if (session.state === 'expired' || session.expiresAt < new Date()) {
+    throw new Error('ARTICLE_BUNDLE_SESSION_EXPIRED')
+  }
+  if (session.state !== 'collecting') {
+    if (session.state === 'finishing') throw new Error('ARTICLE_BUNDLE_SESSION_BUSY')
+    throw new Error('ARTICLE_BUNDLE_SESSION_NOT_FOUND')
+  }
 
-  const safePath = assertBundlePathInSessionDir(filePath, session.tempDir)
+  const safePath = fileDataUrl
+    ? writeBundleFileFromDataUrl(session.tempDir, relativePath, fileDataUrl)
+    : assertBundlePathInSessionDir(filePath, session.tempDir)
   const st = statSync(safePath)
 
   const updated = appendArticleBundleFile(sessionId, {
@@ -142,19 +162,46 @@ export async function articleBundleSessionFinish(body: Record<string, unknown>) 
     throw new Error('ARTICLE_BUNDLE_INCOMPLETE')
   }
 
-  // Import the markdown file as the primary asset
+  const libraryRoot = getLibraryRoot()
+  const assetId = uuidv4()
+  const itemDirAbs = join(libraryRoot, 'items', assetId)
+  mkdirSync(itemDirAbs, { recursive: true })
+
+  const mdStorageName = sanitizeStorageFileName(basename(mdFile.relativePath))
+  const mdPackRel = itemPackFileRelative(assetId, mdStorageName)
+  const mdPackAbs = posixRelToFsAbs(libraryRoot, mdPackRel)
+
+  try {
+    for (const file of session.files) {
+      const destAbs =
+        file.relativePath === mdFile.relativePath
+          ? mdPackAbs
+          : join(itemDirAbs, file.relativePath)
+      mkdirSync(dirname(destAbs), { recursive: true })
+      copyFileSync(file.filePath, destAbs)
+    }
+  } catch (e) {
+    removeItemPack(assetId)
+    endSession(sessionId, 'aborted')
+    throw new Error('IMPORT_FAILED')
+  }
+
   let importResult
   try {
-    importResult = await importAssetFromPath(mdFile.filePath, {
+    importResult = await importAssetFromPath(mdPackAbs, {
       targetFolderId: session.output.targetFolderId ?? undefined,
-      duplicatePolicy: session.output.duplicatePolicy
+      duplicatePolicy: session.output.duplicatePolicy,
+      presetAssetId: assetId,
+      skipCopyIntoPack: true
     })
   } catch (e) {
+    removeItemPack(assetId)
     endSession(sessionId, 'aborted')
     throw new Error('IMPORT_FAILED')
   }
 
   if (importResult.skipped && importResult.existingAssetId) {
+    removeItemPack(assetId)
     endSession(sessionId, 'finished')
     removeDirRecursive(session.tempDir)
     deleteSession(sessionId)
@@ -166,44 +213,26 @@ export async function articleBundleSessionFinish(body: Record<string, unknown>) 
     }
   }
 
-  const assetId = importResult.assetId
-  if (!assetId) {
+  const registeredId = importResult.assetId
+  if (!registeredId || registeredId !== assetId) {
+    removeItemPack(assetId)
     endSession(sessionId, 'aborted')
     throw new Error('IMPORT_FAILED')
   }
 
-  // Now move all other files into the asset's directory
-  const libraryRoot = getLibraryRoot()
-  const itemDirAbs = join(libraryRoot, 'items', assetId)
-  
   try {
-    for (const file of session.files) {
-      if (file.relativePath === markdownReq) continue // Already imported
-      
-      const destAbs = join(itemDirAbs, file.relativePath)
-      mkdirSync(dirname(destAbs), { recursive: true })
-      
-      // Use rename to move, fallback to copy if cross-device
-      try {
-        renameSync(file.filePath, destAbs)
-      } catch {
-        copyFileSync(file.filePath, destAbs)
-      }
-      
-      if (file.relativePath === thumbnailReq) {
-        // Update thumbnail path in DB
-        const db = getDatabase()
-        await db.update(assets)
-          .set({ 
-            thumbnailPath: `items/${assetId}/${file.relativePath}`,
-            hasThumbnail: true 
-          })
-          .where(eq(assets.id, assetId))
-      }
-    }
+    const thumbRel = `items/${assetId}/${thumbnailReq.replace(/\\/g, '/')}`
+    const db = getDatabase()
+    await db
+      .update(assets)
+      .set({
+        thumbnailPath: thumbRel,
+        hasThumbnail: true
+      })
+      .where(eq(assets.id, assetId))
   } catch (e) {
-    console.warn('[ArticleBundle] Failed to move some bundle files:', e)
-    warnings.push({ code: 'BUNDLE_MOVE_FAILED', message: String(e) })
+    console.warn('[ArticleBundle] Failed to set bundle thumbnail:', e)
+    warnings.push({ code: 'BUNDLE_THUMB_FAILED', message: String(e) })
   }
 
   const pageUrl = safeHttpUrl(session.sourceMeta.pageUrl)

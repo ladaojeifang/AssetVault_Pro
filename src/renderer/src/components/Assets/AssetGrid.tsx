@@ -12,6 +12,7 @@ import { isAssetDragEvent } from '../../utils/assetDragDrop'
 import { addDraggedAssetsToFolder } from '../../utils/addAssetsToFolder'
 import { notify } from '../Common/notify'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import { isMarkdownPreviewAsset } from '../../utils/markdownPreview'
 import { isSvgExtension } from '@/shared/svgFormats'
 import { isExrExtension } from '@/shared/exrFormats'
 import MasonryGrid from './MasonryGrid'
@@ -40,6 +41,7 @@ const AssetGrid: React.FC = () => {
     openModelPreview,
     openSvgPreview,
     openExrPreview,
+    openMarkdownPreview,
     loadMoreAssets,
     tagFilters,
     fileTypeFilter,
@@ -275,12 +277,17 @@ const AssetGrid: React.FC = () => {
         return
       }
 
+      if (isMarkdownPreviewAsset(asset)) {
+        openMarkdownPreview(id)
+        return
+      }
+
       const p = asset.resolvedFilePath ?? asset.filePath
       if (p) {
         await window.assetVaultAPI.fs.openInExplorer(p)
       }
     },
-    [assets, openFontPreview, openModelPreview, openSvgPreview, openExrPreview]
+    [assets, openFontPreview, openModelPreview, openSvgPreview, openExrPreview, openMarkdownPreview]
   )
 
   const handleDragStart = useCallback(

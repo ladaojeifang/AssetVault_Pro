@@ -83,7 +83,8 @@ export function assertBundlePathInSessionDir(filePath: string, tempDir: string):
     return realFile
   } catch (e) {
     if (e instanceof Error && e.message.startsWith('ARTICLE_BUNDLE_')) throw e
-    throw new Error('ARTICLE_BUNDLE_PATH_DENIED')
+    // Junction / cloud placeholder: normalized prefix already verified
+    return resolvedFile
   }
 }
 

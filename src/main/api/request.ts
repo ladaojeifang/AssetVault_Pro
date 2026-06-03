@@ -19,6 +19,11 @@ const FULLPAGE_APPEND_BODY_BUDGET_BYTES = 52 * 1024 * 1024
 export const MAX_BODY_BYTES_FULLPAGE_APPEND =
   Math.ceil(FULLPAGE_APPEND_BODY_BUDGET_BYTES * (4 / 3)) + 256 * 1024
 
+/** articleBundleSession/append with fileDataUrl — up to maxSingleFileBytes (100MB) + base64 overhead. */
+const ARTICLE_BUNDLE_APPEND_BODY_BUDGET_BYTES = 100 * 1024 * 1024
+export const MAX_BODY_BYTES_ARTICLE_BUNDLE_APPEND =
+  Math.ceil(ARTICLE_BUNDLE_APPEND_BODY_BUDGET_BYTES * (4 / 3)) + 256 * 1024
+
 export function parseQuery(url: URL): Record<string, string> {
   const out: Record<string, string> = {}
   for (const [key, value] of url.searchParams.entries()) {

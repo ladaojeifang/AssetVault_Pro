@@ -116,7 +116,8 @@ export async function importSingleAsset(
   const filename = basename(filePathCanonical, extWithDot)
   const originalName = basename(filePathCanonical)
   const storageFileName = sanitizeStorageFileName(originalName)
-  const id = uuidv4()
+  const id = opts.presetAssetId ?? uuidv4()
+  const skipCopyIntoPack = opts.skipCopyIntoPack === true
 
   const libraryRoot = getLibraryRoot()
   const catalogMode = getLibraryMode() === 'catalog'
@@ -140,7 +141,11 @@ export async function importSingleAsset(
       // and mark it as local to keep localization semantics consistent.
       const relOriginal = itemPackFileRelative(id, storageFileName)
       const copyAbs = posixRelToFsAbs(libraryRoot, relOriginal)
-      if (fromManagedRemoteImport) {
+      if (skipCopyIntoPack) {
+        if (toCanonicalFilePath(copyAbs) !== filePathCanonical || !existsSync(copyAbs)) {
+          throw new Error('FILE_NOT_FOUND')
+        }
+      } else if (fromManagedRemoteImport) {
         try {
           renameSync(filePathCanonical, copyAbs)
         } catch {
@@ -162,7 +167,13 @@ export async function importSingleAsset(
     const relOriginal = itemPackFileRelative(id, storageFileName)
     storedFilePath = relOriginal
     destAbs = posixRelToFsAbs(libraryRoot, relOriginal)
-    copyOrHardlinkIntoLibrary(filePathCanonical, destAbs, true)
+    if (skipCopyIntoPack) {
+      if (toCanonicalFilePath(destAbs) !== filePathCanonical || !existsSync(destAbs)) {
+        throw new Error('FILE_NOT_FOUND')
+      }
+    } else {
+      copyOrHardlinkIntoLibrary(filePathCanonical, destAbs, true)
+    }
     if (extNoDot === 'obj') {
       copyObjCompanionMtlForImport(filePathCanonical, itemDirAbs)
     }

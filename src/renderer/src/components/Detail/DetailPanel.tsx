@@ -11,12 +11,13 @@ import { ColorPaletteStrip, parseAssetPaletteColors } from '../Common/ColorPalet
 import DetailContextPanel from './DetailContextPanel'
 import { ModelViewer } from '../Preview/ModelViewer'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import { isMarkdownPreviewAsset } from '../../utils/markdownPreview'
 import { isSvgExtension, isSvgOverRasterLimit } from '@/shared/svgFormats'
 import { isExrExtension } from '@/shared/exrFormats'
 import { FileTypePlaceholder } from '../Common/FileTypePlaceholder'
 
 const DetailPanel: React.FC = () => {
-  const { selectedAssetIds, assets, tags, folderTree, clearSelection, refreshAssets, refreshFolders, setDetailPanelOpen, refreshTags, openFontPreview, openModelPreview, openSvgPreview, openExrPreview } = useApp()
+  const { selectedAssetIds, assets, tags, folderTree, clearSelection, refreshAssets, refreshFolders, setDetailPanelOpen, refreshTags, openFontPreview, openModelPreview, openSvgPreview, openExrPreview, openMarkdownPreview } = useApp()
   const [assetTagIds, setAssetTagIds] = useState<string[]>([])
   const [assetFolderIds, setAssetFolderIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -319,6 +320,16 @@ const DetailPanel: React.FC = () => {
             onClick={() => openExrPreview(asset.id)}
           >
             EXR 预览
+          </button>
+        )}
+
+        {isMarkdownPreviewAsset(asset) && (
+          <button
+            type="button"
+            className="w-full btn-primary text-sm py-2"
+            onClick={() => openMarkdownPreview(asset.id)}
+          >
+            Markdown 编辑
           </button>
         )}
 

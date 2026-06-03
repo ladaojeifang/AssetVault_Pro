@@ -22,10 +22,12 @@ export type ApiImportOptions = ImportAssetOptions & {
   duplicatePolicy?: 'ask' | 'use_existing' | 'import_copy'
 }
 
-function buildImportOpts(targetFolderId?: string, duplicatePolicy: ApiImportOptions['duplicatePolicy'] = 'use_existing') {
+function buildImportOpts(options?: ApiImportOptions) {
   return {
-    targetFolderId,
-    duplicatePolicy: duplicatePolicy ?? 'use_existing'
+    targetFolderId: options?.targetFolderId,
+    duplicatePolicy: options?.duplicatePolicy ?? 'use_existing',
+    presetAssetId: options?.presetAssetId,
+    skipCopyIntoPack: options?.skipCopyIntoPack
   }
 }
 
@@ -60,8 +62,7 @@ export async function importAssetFromPath(
     .where(eq(assets.importSource, canonical))
     .get()
 
-  const policy = options?.duplicatePolicy ?? 'use_existing'
-  const assetId = await importSingleAsset(filePath, buildImportOpts(options?.targetFolderId, policy))
+  const assetId = await importSingleAsset(filePath, buildImportOpts(options))
 
   if (!assetId) {
     if (existing) {

@@ -29,6 +29,10 @@ export interface DuplicateImportPromptPayload {
 export interface ImportAssetOptions {
   targetFolderId?: string
   duplicatePolicy?: DuplicatePolicy
+  /** When set, use this UUID for `items/{id}/` instead of generating a new one. */
+  presetAssetId?: string
+  /** Primary file is already at the pack path under the library; do not copy/hardlink again. */
+  skipCopyIntoPack?: boolean
 }
 
 export interface ContentHashScanProgress {

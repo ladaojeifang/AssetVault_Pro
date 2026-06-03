@@ -54,6 +54,8 @@ interface AppState {
   svgPreviewAssetId: string | null
   /** Full-page EXR preview (double-click exr asset) */
   exrPreviewAssetId: string | null
+  /** Full-page Markdown editor (double-click .md asset) */
+  markdownPreviewAssetId: string | null
 }
 
 interface AppActions {
@@ -92,6 +94,8 @@ interface AppActions {
   closeSvgPreview: () => void
   openExrPreview: (assetId: string) => void
   closeExrPreview: () => void
+  openMarkdownPreview: (assetId: string) => void
+  closeMarkdownPreview: () => void
 }
 
 const defaultState: AppState = {
@@ -124,7 +128,8 @@ const defaultState: AppState = {
   fontPreviewAssetId: null,
   modelPreviewAssetId: null,
   svgPreviewAssetId: null,
-  exrPreviewAssetId: null
+  exrPreviewAssetId: null,
+  markdownPreviewAssetId: null
 }
 
 const AppContext = createContext<(AppState & AppActions) | null>(null)
@@ -549,6 +554,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         modelPreviewAssetId: null,
         svgPreviewAssetId: null,
         exrPreviewAssetId: null,
+        markdownPreviewAssetId: null,
         selectedAssetIds: new Set([assetId]),
         detailPanelOpen: true
       })),
@@ -560,6 +566,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         fontPreviewAssetId: null,
         svgPreviewAssetId: null,
         exrPreviewAssetId: null,
+        markdownPreviewAssetId: null,
         selectedAssetIds: new Set([assetId]),
         detailPanelOpen: true
       })),
@@ -571,6 +578,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         fontPreviewAssetId: null,
         modelPreviewAssetId: null,
         exrPreviewAssetId: null,
+        markdownPreviewAssetId: null,
         selectedAssetIds: new Set([assetId]),
         detailPanelOpen: true
       })),
@@ -582,10 +590,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         fontPreviewAssetId: null,
         modelPreviewAssetId: null,
         svgPreviewAssetId: null,
+        markdownPreviewAssetId: null,
         selectedAssetIds: new Set([assetId]),
         detailPanelOpen: true
       })),
-    closeExrPreview: () => setState((prev) => ({ ...prev, exrPreviewAssetId: null }))
+    closeExrPreview: () => setState((prev) => ({ ...prev, exrPreviewAssetId: null })),
+    openMarkdownPreview: (assetId) =>
+      setState((prev) => ({
+        ...prev,
+        markdownPreviewAssetId: assetId,
+        fontPreviewAssetId: null,
+        modelPreviewAssetId: null,
+        svgPreviewAssetId: null,
+        exrPreviewAssetId: null,
+        selectedAssetIds: new Set([assetId]),
+        detailPanelOpen: true
+      })),
+    closeMarkdownPreview: () => setState((prev) => ({ ...prev, markdownPreviewAssetId: null }))
   }
 
   return <AppContext.Provider value={{ ...state, ...actions }}>{children}</AppContext.Provider>

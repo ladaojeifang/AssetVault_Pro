@@ -1,13 +1,15 @@
 import { ipcMain, dialog, clipboard } from 'electron'
 import { shell } from 'electron'
 import { pathToFileURL } from 'url'
-import { dirname } from 'path'
+import { dirname, extname } from 'path'
 import { supportedExtensionsForDialog } from '@/shared/supportedFormats'
 import { existsSync, statSync } from 'fs'
-import { readFile } from 'fs/promises'
+import { readFile, writeFile } from 'fs/promises'
+import { isMarkdownExtension } from '@/shared/markdownFormats'
 import { eq, inArray } from 'drizzle-orm'
 import { resolveLibraryPath, isLibraryReady } from '../../services/libraryBundle'
 import { resolveAssetContentPath } from '../../services/assetPathResolver'
+import { syncAssetSidecarFromDb } from '../../services/assetSidecar'
 import { getDatabase } from '../../db'
 import { assets } from '../../db/schema'
 import { copyFilesToSystemClipboard } from '../../utils/clipboardFiles'
@@ -76,6 +78,51 @@ export function handleFsOperations(ipc: typeof ipcMain): void {
       return null
     }
   })
+
+  const MAX_MARKDOWN_TEXT_BYTES = 10 * 1024 * 1024
+
+  function resolveMarkdownTextAbs(filePath: string): string {
+    const abs = toShellPath(filePath)
+    if (!isMarkdownExtension(extname(abs))) {
+      throw new Error('只允许读写 Markdown 文件')
+    }
+    if (!existsSync(abs)) throw new Error('文件不存在')
+    if (!statSync(abs).isFile()) throw new Error('不是文件')
+    return abs
+  }
+
+  ipc.handle('fs:read-text-file', async (_event, filePath: string) => {
+    assertString('filePath', filePath)
+    const abs = resolveMarkdownTextAbs(filePath)
+    const st = statSync(abs)
+    if (st.size > MAX_MARKDOWN_TEXT_BYTES) {
+      throw new Error('Markdown 文件过大，无法在编辑器中打开')
+    }
+    return readFile(abs, 'utf8')
+  })
+
+  ipc.handle(
+    'fs:write-text-file',
+    async (_event, filePath: string, text: unknown, assetId?: unknown) => {
+      assertString('filePath', filePath)
+      if (typeof text !== 'string') throw new Error('无效的文本内容')
+      const abs = resolveMarkdownTextAbs(filePath)
+      const bytes = Buffer.byteLength(text, 'utf8')
+      if (bytes > MAX_MARKDOWN_TEXT_BYTES) {
+        throw new Error('Markdown 内容过大，无法保存')
+      }
+      await writeFile(abs, text, 'utf8')
+      if (typeof assetId === 'string' && assetId.trim()) {
+        const database = getDatabase()
+        await database
+          .update(assets)
+          .set({ fileSize: bytes, updatedAt: new Date() })
+          .where(eq(assets.id, assetId.trim()))
+        await syncAssetSidecarFromDb(database, assetId.trim())
+      }
+      return { bytes }
+    }
+  )
 
   /** Read library file bytes for renderer 3D loaders (file:// XHR is blocked in sandbox). */
   ipc.handle('fs:read-file-bytes', async (_event, filePath: string) => {

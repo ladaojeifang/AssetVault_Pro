@@ -8,6 +8,7 @@ import { matchRoute } from './routes'
 import {
   buildRequestContext,
   MAX_BODY_BYTES_FULLPAGE_APPEND,
+  MAX_BODY_BYTES_ARTICLE_BUNDLE_APPEND,
   readJsonBody,
   sendJson
 } from './request'
@@ -44,8 +45,16 @@ async function handleRequest(
     let body: Record<string, unknown> = {}
     if (method === 'POST' || method === 'DELETE' || method === 'PATCH' || method === 'PUT') {
       const largeBody =
-        method === 'POST' && pathname === '/api/v1/asset/fullPageSession/append'
-      body = await readJsonBody(req, largeBody ? MAX_BODY_BYTES_FULLPAGE_APPEND : undefined)
+        method === 'POST' &&
+        (pathname === '/api/v1/asset/fullPageSession/append' ||
+          pathname === '/api/v1/asset/articleBundleSession/append')
+      const maxBody =
+        pathname === '/api/v1/asset/fullPageSession/append'
+          ? MAX_BODY_BYTES_FULLPAGE_APPEND
+          : pathname === '/api/v1/asset/articleBundleSession/append'
+            ? MAX_BODY_BYTES_ARTICLE_BUNDLE_APPEND
+            : undefined
+      body = await readJsonBody(req, largeBody ? maxBody : undefined)
     }
     const ctx = buildRequestContext(req, body)
     assertAuthorized(config, ctx)

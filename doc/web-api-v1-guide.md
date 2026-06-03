@@ -564,7 +564,7 @@ curl -s -X POST http://127.0.0.1:41596/api/v1/asset/localize \
 | 步骤 | 方法 | 说明 |
 |------|------|------|
 | 1 | `POST /asset/articleBundleSession/start` | 返回 `sessionId`（`ab_*`）、`tempDir`（系统下载目录下的临时路径）、`limits` |
-| 2 | `POST /asset/articleBundleSession/append` | `filePath` 必须在 `tempDir` 内；`relativePath` 用于指定相对路径（如 `assets/img-001.jpg`） |
+| 2 | `POST /asset/articleBundleSession/append` | `filePath`（本机路径，须在 `tempDir` 内）或 `fileDataUrl`（base64，由 Pro 写入 `tempDir/relativePath`）；二选一 |
 | 3 | `POST /asset/articleBundleSession/finish` | 校验必备文件（`.md` 和 `_thumb.jpg`）后，将整个目录移入资料库并注册为单资产 |
 | 取消 | `DELETE /asset/articleBundleSession/{sessionId}` | 删除临时目录，不入库 |
 | 查询 | `GET /asset/articleBundleSession/{sessionId}` | `state`、`filesCount` 等 |

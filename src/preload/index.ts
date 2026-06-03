@@ -384,6 +384,10 @@ const api = {
       ipcRenderer.invoke('fs:path-to-file-url', filePath) as Promise<string | null>,
     readFileBytes: (filePath: string) =>
       ipcRenderer.invoke('fs:read-file-bytes', filePath) as Promise<Uint8Array>,
+    readTextFile: (filePath: string) =>
+      ipcRenderer.invoke('fs:read-text-file', filePath) as Promise<string>,
+    writeTextFile: (filePath: string, text: string, assetId?: string) =>
+      ipcRenderer.invoke('fs:write-text-file', filePath, text, assetId) as Promise<{ bytes: number }>,
     /** Required in sandboxed renderer when File.path is unavailable (drag/drop, file input). */
     getPathForFile: (file: File) => webUtils.getPathForFile(file),
     pathKind: (filePath: string) =>

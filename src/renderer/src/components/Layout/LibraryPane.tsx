@@ -7,6 +7,7 @@ import FontPreviewPage from '../FontPreview/FontPreviewPage'
 import ModelPreviewPage from '../ModelPreview/ModelPreviewPage'
 import SvgPreviewPage from '../SvgPreview/SvgPreviewPage'
 import ExrPreviewPage from '../ExrPreview/ExrPreviewPage'
+import MarkdownPreviewPage from '../MarkdownPreview/MarkdownPreviewPage'
 import StatusBar from './StatusBar'
 import { useApp } from '../../stores/AppContext'
 
@@ -19,6 +20,7 @@ const LibraryPane: React.FC = () => {
     modelPreviewAssetId,
     svgPreviewAssetId,
     exrPreviewAssetId,
+    markdownPreviewAssetId,
     refreshFolders,
     refreshAssets,
     isImporting,
@@ -61,6 +63,15 @@ const LibraryPane: React.FC = () => {
     return (
       <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-av-bg-primary">
         <ExrPreviewPage assetId={exrPreviewAssetId} />
+        <StatusBar isImporting={isImporting} importProgress={importProgress} />
+      </div>
+    )
+  }
+
+  if (markdownPreviewAssetId) {
+    return (
+      <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-av-bg-primary">
+        <MarkdownPreviewPage assetId={markdownPreviewAssetId} />
         <StatusBar isImporting={isImporting} importProgress={importProgress} />
       </div>
     )
