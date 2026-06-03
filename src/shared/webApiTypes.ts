@@ -56,6 +56,7 @@ export type AppInfoResponse = {
   apiVersion: 'v1'
   platform: NodeJS.Platform
   packaged: boolean
+  features?: string[]
 }
 
 export type LibraryInfoResponse = {

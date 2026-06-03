@@ -37,6 +37,7 @@
 | 文档 | 说明 |
 |------|------|
 | [web-api-v1-guide.md](./web-api-v1-guide.md) | **使用说明**（接口清单、curl 示例、Playground） |
+| 整页截图会话 API | 扩展规格 `AssetVault_Browser_Extension/docs/fullpage-stitch-session-api-spec.md`；Pro 实现见 guide §整页截图会话 |
 | [web-api-v1-design.md](./web-api-v1-design.md) | 技术设计稿与实现阶段 |
 | [web-api-v1-openapi.yaml](./web-api-v1-openapi.yaml) | OpenAPI 3.1 规范（可导入 Postman） |
 

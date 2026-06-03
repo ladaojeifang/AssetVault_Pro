@@ -8,7 +8,8 @@ export function getAppInfo(): AppInfoResponse {
     version: app.getVersion(),
     apiVersion: 'v1',
     platform: process.platform,
-    packaged: app.isPackaged
+    packaged: app.isPackaged,
+    features: ['fullPageSession', 'articleBundleSession']
   }
 }
 

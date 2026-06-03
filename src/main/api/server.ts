@@ -7,6 +7,7 @@ import { assertAuthorized } from './auth'
 import { matchRoute } from './routes'
 import {
   buildRequestContext,
+  MAX_BODY_BYTES_FULLPAGE_APPEND,
   readJsonBody,
   sendJson
 } from './request'
@@ -42,7 +43,9 @@ async function handleRequest(
     const method = (req.method ?? 'GET').toUpperCase()
     let body: Record<string, unknown> = {}
     if (method === 'POST' || method === 'DELETE' || method === 'PATCH' || method === 'PUT') {
-      body = await readJsonBody(req)
+      const largeBody =
+        method === 'POST' && pathname === '/api/v1/asset/fullPageSession/append'
+      body = await readJsonBody(req, largeBody ? MAX_BODY_BYTES_FULLPAGE_APPEND : undefined)
     }
     const ctx = buildRequestContext(req, body)
     assertAuthorized(config, ctx)

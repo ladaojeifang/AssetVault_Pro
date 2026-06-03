@@ -9,7 +9,15 @@ export type ApiRequestContext = {
   headers: IncomingMessage['headers']
 }
 
-const MAX_BODY_BYTES = 2 * 1024 * 1024
+/** Default JSON body cap (URL import, metadata, etc.). */
+export const MAX_BODY_BYTES_DEFAULT = 2 * 1024 * 1024
+
+/** Must cover FULLPAGE_SESSION_LIMITS.maxStripBytes + base64 + JSON fields. */
+const FULLPAGE_APPEND_BODY_BUDGET_BYTES = 52 * 1024 * 1024
+
+/** fullPageSession/append with stripDataUrl — up to ~50MB strip + base64 overhead. */
+export const MAX_BODY_BYTES_FULLPAGE_APPEND =
+  Math.ceil(FULLPAGE_APPEND_BODY_BUDGET_BYTES * (4 / 3)) + 256 * 1024
 
 export function parseQuery(url: URL): Record<string, string> {
   const out: Record<string, string> = {}
@@ -19,13 +27,16 @@ export function parseQuery(url: URL): Record<string, string> {
   return out
 }
 
-export async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+export async function readJsonBody(
+  req: IncomingMessage,
+  maxBytes: number = MAX_BODY_BYTES_DEFAULT
+): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of req) {
     const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
     size += buf.length
-    if (size > MAX_BODY_BYTES) {
+    if (size > maxBytes) {
       throw new Error('Request body too large')
     }
     chunks.push(buf)

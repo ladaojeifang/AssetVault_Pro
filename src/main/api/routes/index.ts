@@ -17,6 +17,20 @@ import {
   handleAssetUpdate
 } from '../handlers/asset'
 import {
+  handleFullPageSessionAbort,
+  handleFullPageSessionAppend,
+  handleFullPageSessionFinish,
+  handleFullPageSessionGet,
+  handleFullPageSessionStart
+} from '../handlers/fullPageSession'
+import {
+  handleArticleBundleSessionAbort,
+  handleArticleBundleSessionAppend,
+  handleArticleBundleSessionFinish,
+  handleArticleBundleSessionGet,
+  handleArticleBundleSessionStart
+} from '../handlers/articleBundleSession'
+import {
   handleFolderCreate,
   handleFolderDelete,
   handleFolderGet,
@@ -75,6 +89,14 @@ const routes: RouteDef[] = [
   { method: 'POST', path: `${API_PREFIX}/asset/relink`, handler: (ctx) => handleAssetRelink(ctx.body) },
   { method: 'POST', path: `${API_PREFIX}/asset/localize`, handler: (ctx) => handleAssetLocalize(ctx.body) },
 
+  { method: 'POST', path: `${API_PREFIX}/asset/fullPageSession/start`, handler: (ctx) => handleFullPageSessionStart(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/asset/fullPageSession/append`, handler: (ctx) => handleFullPageSessionAppend(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/asset/fullPageSession/finish`, handler: (ctx) => handleFullPageSessionFinish(ctx.body) },
+
+  { method: 'POST', path: `${API_PREFIX}/asset/articleBundleSession/start`, handler: (ctx) => handleArticleBundleSessionStart(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/asset/articleBundleSession/append`, handler: (ctx) => handleArticleBundleSessionAppend(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/asset/articleBundleSession/finish`, handler: (ctx) => handleArticleBundleSessionFinish(ctx.body) },
+
   { method: 'GET', path: `${API_PREFIX}/folder/get`, handler: () => handleFolderGet() },
   { method: 'GET', path: `${API_PREFIX}/folder/tree`, handler: () => handleFolderTree() },
   { method: 'GET', path: `${API_PREFIX}/folder/info`, handler: (ctx) => handleFolderInfo(ctx.query.id) },
@@ -92,9 +114,28 @@ const routes: RouteDef[] = [
   { method: 'POST', path: `${API_PREFIX}/tag/remove`, handler: (ctx) => handleTagRemove(ctx.body) }
 ]
 
+const FULLPAGE_SESSION_ID_RE = /^\/api\/v1\/asset\/fullPageSession\/([^/]+)$/
+const ARTICLE_BUNDLE_SESSION_ID_RE = /^\/api\/v1\/asset\/articleBundleSession\/([^/]+)$/
+
 export function matchRoute(ctx: ApiRequestContext): RouteHandler | null {
   const hit = routes.find((r) => r.method === ctx.method && r.path === ctx.pathname)
-  return hit?.handler ?? null
+  if (hit) return hit.handler
+
+  const m = ctx.pathname.match(FULLPAGE_SESSION_ID_RE)
+  if (m) {
+    const sessionId = decodeURIComponent(m[1]!)
+    if (ctx.method === 'DELETE') return () => handleFullPageSessionAbort(sessionId)
+    if (ctx.method === 'GET') return () => handleFullPageSessionGet(sessionId)
+  }
+
+  const m2 = ctx.pathname.match(ARTICLE_BUNDLE_SESSION_ID_RE)
+  if (m2) {
+    const sessionId = decodeURIComponent(m2[1]!)
+    if (ctx.method === 'DELETE') return () => handleArticleBundleSessionAbort(sessionId)
+    if (ctx.method === 'GET') return () => handleArticleBundleSessionGet(sessionId)
+  }
+
+  return null
 }
 
 export function listApiRoutes(): Array<{ method: string; path: string }> {

@@ -29,6 +29,8 @@ import {
   setupExrPreviewProtocolHandler
 } from './services/exrPreviewCache'
 import { resolveAppIcon } from './appIcon'
+import { purgeExpiredFullPageSessions } from './services/fullPageSession/fullPageSessionStore'
+import { purgeExpiredArticleBundleSessions } from './services/articleBundleSession/articleBundleSessionStore'
 
 registerModelFileProtocol()
 registerExrPreviewProtocol()
@@ -222,6 +224,15 @@ if (gotSingleInstanceLock) {
     await flushDatabase()
 
     console.log('[Library] Active library root:', libraryRoot)
+
+    const purgedFp = purgeExpiredFullPageSessions()
+    if (purgedFp > 0) {
+      console.log(`[FullPageSession] Purged ${purgedFp} expired session(s) on startup`)
+    }
+    const purgedAb = purgeExpiredArticleBundleSessions()
+    if (purgedAb > 0) {
+      console.log(`[ArticleBundleSession] Purged ${purgedAb} expired session(s) on startup`)
+    }
 
     initModelThumbnailRenderer()
     warmHiddenThumbnailWindow()

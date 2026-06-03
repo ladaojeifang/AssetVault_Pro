@@ -58,6 +58,9 @@ components:
         apiVersion: { type: string, enum: [v1] }
         platform: { type: string }
         packaged: { type: boolean }
+        features:
+          type: array
+          items: { type: string }
     AssetDto:
       type: object
       properties:
@@ -236,6 +239,134 @@ paths:
                   type: object
                   additionalProperties: { type: string }
                   description: Optional download headers (Referer, User-Agent, Accept, Accept-Language)
+      responses:
+        '200': { description: OK }
+
+  /asset/fullPageSession/start:
+    post:
+      tags: [asset, fullPageSession]
+      summary: 创建整页截图拼接会话
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [layout, output]
+      responses:
+        '200': { description: OK }
+
+  /asset/fullPageSession/append:
+    post:
+      tags: [asset, fullPageSession]
+      summary: 登记条带图片（本机路径，须在会话 tempDir 内）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, stripIndex, filePath, stripHeightPx]
+      responses:
+        '200': { description: OK }
+
+  /asset/fullPageSession/finish:
+    post:
+      tags: [asset, fullPageSession]
+      summary: 纵向拼接条带并导入为单个资产
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+      responses:
+        '200': { description: OK }
+
+  /asset/fullPageSession/{sessionId}:
+    get:
+      tags: [asset, fullPageSession]
+      summary: 查询整页截图会话状态
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+    delete:
+      tags: [asset, fullPageSession]
+      summary: 取消会话并删除临时文件
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /asset/articleBundleSession/start:
+    post:
+      tags: [asset, articleBundleSession]
+      summary: 开启 Markdown 资料包导入会话
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [output]
+      responses:
+        '200': { description: OK }
+
+  /asset/articleBundleSession/append:
+    post:
+      tags: [asset, articleBundleSession]
+      summary: 登记资料包文件（本机路径，须在会话 tempDir 内）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, relativePath, filePath]
+      responses:
+        '200': { description: OK }
+
+  /asset/articleBundleSession/finish:
+    post:
+      tags: [asset, articleBundleSession]
+      summary: 校验资料包并导入为单个资产
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, requiredFiles]
+      responses:
+        '200': { description: OK }
+
+  /asset/articleBundleSession/{sessionId}:
+    get:
+      tags: [asset, articleBundleSession]
+      summary: 查询资料包会话状态
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+    delete:
+      tags: [asset, articleBundleSession]
+      summary: 取消资料包会话并删除临时文件
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
       responses:
         '200': { description: OK }
 
