@@ -83,7 +83,7 @@ export function FolderContextMenu({
     <div
       ref={menuRef}
       role="menu"
-      className="fixed z-[10000] min-w-[184px] py-1 rounded-lg border border-av-border bg-[#1e2030] shadow-2xl"
+      className="av-context-menu fixed z-[10000] min-w-[184px]"
       style={{
         left: pos?.left ?? state.x,
         top: pos?.top ?? state.y

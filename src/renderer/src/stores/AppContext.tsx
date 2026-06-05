@@ -4,6 +4,7 @@ import type { ColorBucket } from '@/shared/colorBucket'
 import type { DatePreset, SizePreset } from '@/shared/assetFilters'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/assetFilters'
 import { DEFAULT_APP_PREFERENCES } from '@/shared/appPreferences'
+import { getActiveSpecialPreview, type SpecialPreviewKind } from '../utils/specialPreview'
 
 const ASSET_CHUNK_SIZE = 80
 
@@ -96,7 +97,17 @@ interface AppActions {
   closeExrPreview: () => void
   openMarkdownPreview: (assetId: string) => void
   closeMarkdownPreview: () => void
+  /** 关闭当前专有预览并返回资源库；无预览时不做任何事 */
+  closeActiveSpecialPreview: () => void
+  /** Markdown 全页预览注册关闭逻辑（含未保存确认） */
+  registerMarkdownPreviewCloser: (fn: (() => void) | null) => void
 }
+
+type AppContextValue = AppState &
+  AppActions & {
+    /** 当前是否处于全页专有预览（字体/3D/SVG/EXR/Markdown） */
+    activeSpecialPreview: SpecialPreviewKind | null
+  }
 
 const defaultState: AppState = {
   viewMode: 'grid',
@@ -132,7 +143,7 @@ const defaultState: AppState = {
   markdownPreviewAssetId: null
 }
 
-const AppContext = createContext<(AppState & AppActions) | null>(null)
+const AppContext = createContext<AppContextValue | null>(null)
 
 function buildAssetQuery(
   snapshot: AppState,
@@ -178,7 +189,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const searchDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchDebounceGenRef = useRef(0)
   const skipDebouncedSearchFetchRef = useRef(true)
+  const markdownPreviewCloseRef = useRef<(() => void) | null>(null)
   const [searchDebounceMs, setSearchDebounceMs] = useState(DEFAULT_APP_PREFERENCES.searchDebounceMs)
+
+  const registerMarkdownPreviewCloser = useCallback((fn: (() => void) | null) => {
+    markdownPreviewCloseRef.current = fn
+  }, [])
+
+  const closeActiveSpecialPreview = useCallback(() => {
+    const prev = stateRef.current
+    if (prev.markdownPreviewAssetId) {
+      const closer = markdownPreviewCloseRef.current
+      if (closer) closer()
+      else setState((s) => ({ ...s, markdownPreviewAssetId: null }))
+      return
+    }
+    if (prev.fontPreviewAssetId) {
+      setState((s) => ({ ...s, fontPreviewAssetId: null }))
+      return
+    }
+    if (prev.modelPreviewAssetId) {
+      setState((s) => ({ ...s, modelPreviewAssetId: null }))
+      return
+    }
+    if (prev.svgPreviewAssetId) {
+      setState((s) => ({ ...s, svgPreviewAssetId: null }))
+      return
+    }
+    if (prev.exrPreviewAssetId) {
+      setState((s) => ({ ...s, exrPreviewAssetId: null }))
+    }
+  }, [])
 
   useEffect(() => {
     void window.assetVaultAPI.settings.getAppPreferences().then((p) => {
@@ -606,10 +647,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         selectedAssetIds: new Set([assetId]),
         detailPanelOpen: true
       })),
-    closeMarkdownPreview: () => setState((prev) => ({ ...prev, markdownPreviewAssetId: null }))
+    closeMarkdownPreview: () => setState((prev) => ({ ...prev, markdownPreviewAssetId: null })),
+    closeActiveSpecialPreview,
+    registerMarkdownPreviewCloser
   }
 
-  return <AppContext.Provider value={{ ...state, ...actions }}>{children}</AppContext.Provider>
+  const activeSpecialPreview = getActiveSpecialPreview(state)
+
+  return (
+    <AppContext.Provider value={{ ...state, ...actions, activeSpecialPreview }}>
+      {children}
+    </AppContext.Provider>
+  )
 }
 
 export function useApp() {

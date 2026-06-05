@@ -11,7 +11,6 @@ import {
   markdownContentPath,
   revokeMarkdownImageObjectUrl
 } from '../../utils/markdownPreview'
-
 interface MarkdownPreviewPageProps {
   assetId: string
 }
@@ -19,7 +18,7 @@ interface MarkdownPreviewPageProps {
 type ViewMode = 'split' | 'edit' | 'preview'
 
 const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) => {
-  const { assets, closeMarkdownPreview, refreshAssets } = useApp()
+  const { assets, closeMarkdownPreview, refreshAssets, registerMarkdownPreviewCloser } = useApp()
   const [asset, setAsset] = useState<AssetItem | null>(() => assets.find((a) => a.id === assetId) ?? null)
   const [loadingAsset, setLoadingAsset] = useState(!asset)
   const [loadingText, setLoadingText] = useState(true)
@@ -124,6 +123,11 @@ const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) =>
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [handleBack, handleSave])
+
+  useEffect(() => {
+    registerMarkdownPreviewCloser(handleBack)
+    return () => registerMarkdownPreviewCloser(null)
+  }, [handleBack, registerMarkdownPreviewCloser])
 
   const markdownComponents = useMemo(
     () => ({

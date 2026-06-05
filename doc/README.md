@@ -40,6 +40,7 @@
 | 整页截图会话 API | 扩展规格 `AssetVault_Browser_Extension/docs/fullpage-stitch-session-api-spec.md`；Pro 实现见 guide §整页截图会话 |
 | [web-api-v1-design.md](./web-api-v1-design.md) | 技术设计稿与实现阶段 |
 | [web-api-v1-openapi.yaml](./web-api-v1-openapi.yaml) | OpenAPI 3.1 规范（可导入 Postman） |
+| [page-video-import-fix-plan.md](./page-video-import-fix-plan.md) | 作品页视频导入（yt-dlp Job API）审阅后修复计划（PVI-F1–F10） |
 
 运行时访问（应用已启动、默认端口 41596）：
 

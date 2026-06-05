@@ -34,6 +34,21 @@ pnpm run package
 
 扩展侧摘要：[AssetVault_Browser_Extension/docs/WEB_API.md](../AssetVault_Browser_Extension/docs/WEB_API.md)（并列克隆时）。
 
+## 契约同步（防两端漂移）
+
+1. 在本仓库修改 API 时，同步 `doc/web-api-v1-guide.md` 与 `doc/web-api-v1-openapi.yaml`。
+2. 在扩展仓库执行：
+
+```bash
+cd ../AssetVault_Browser_Extension
+pnpm run contract:sync    # 复制 OpenAPI → contracts/
+pnpm run contract:check   # 校验扩展调用的路径仍在 OpenAPI 中
+```
+
+扩展维护 `contracts/extension-api-surface.json`（实际 `apiRequest` 路径列表）。详见扩展 [docs/cross-repo-workflow.md](../AssetVault_Browser_Extension/docs/cross-repo-workflow.md)。
+
+可选：父目录 [AssetVault.code-workspace](../AssetVault.code-workspace) 多根打开两个仓库。
+
 ## 迁移说明
 
 若仍看到 `AssetVault_Pro/AssetVault_extension/`，为迁出前的残留目录；关闭占用进程后可删除，以扩展独立仓库为准。

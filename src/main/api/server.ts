@@ -4,6 +4,7 @@ import { ApiError, internalError, invalidRequest } from './errors'
 import type { ApiServerConfig } from './config'
 import { resolveApiServerConfig } from './config'
 import { assertAuthorized } from './auth'
+import { assertPageVideoWriteOrigin } from './pageVideoSecurity'
 import { matchRoute } from './routes'
 import {
   buildRequestContext,
@@ -56,6 +57,7 @@ async function handleRequest(
             : undefined
       body = await readJsonBody(req, largeBody ? maxBody : undefined)
     }
+    assertPageVideoWriteOrigin(req, pathname)
     const ctx = buildRequestContext(req, body)
     assertAuthorized(config, ctx)
 

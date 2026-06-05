@@ -61,6 +61,25 @@ components:
         features:
           type: array
           items: { type: string }
+        ytdlp:
+          type: object
+          properties:
+            version: { type: string, nullable: true }
+            ffmpegPresent: { type: boolean }
+        limits:
+          type: object
+          properties:
+            pageVideoImport:
+              type: object
+              properties:
+                maxBatchItems: { type: integer }
+                maxConcurrentJobs:
+                  type: integer
+                  description: Config cap 2; implementation currently runs one yt-dlp child at a time
+                maxActiveJobs: { type: integer, description: queued + running cap (default 100) }
+                jobTimeoutMs: { type: integer }
+                stallTimeoutMs: { type: integer }
+                pollIntervalMsRecommended: { type: integer }
     AssetDto:
       type: object
       properties:
@@ -219,7 +238,7 @@ paths:
   /asset/importFromURL:
     post:
       tags: [asset]
-      summary: 从 URL 导入（主进程下载）
+      summary: 从 URL 导入直链媒体（主进程下载；作品页 URL 返回 400 并提示 pageVideoImport）
       requestBody:
         required: true
         content:
@@ -241,6 +260,39 @@ paths:
                   description: Optional download headers (Referer, User-Agent, Accept, Accept-Language)
       responses:
         '200': { description: OK }
+
+  /asset/fetchRemoteBody:
+    post:
+      tags: [asset]
+      summary: 主进程下载 URL 并返回 dataUrl（不入库；Markdown 资料包）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, example: 'https://cdn.example.com/photo.jpg' }
+                headers:
+                  type: object
+                  additionalProperties: { type: string }
+                  description: Optional download headers (Referer, User-Agent, Accept, Accept-Language)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [success] }
+                  data:
+                    type: object
+                    properties:
+                      dataUrl: { type: string }
+                      bytes: { type: integer }
+                      contentType: { type: string, nullable: true }
 
   /asset/fullPageSession/start:
     post:
@@ -369,6 +421,135 @@ paths:
           schema: { type: string }
       responses:
         '200': { description: OK }
+
+  /asset/pageVideoImport:
+    post:
+      tags: [asset, pageVideoImport]
+      summary: 创建作品页视频导入任务（yt-dlp 异步 Job，无 300MB 上限）
+      description: |
+        Requires open library (LIBRARY_NOT_READY 503). Rejects direct CDN/media URLs (PAGE_VIDEO_NOT_SUPPORTED).
+        Jobs persisted to userData/AssetVault/page-video-jobs.json (may contain cookieHeader plaintext).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string }
+                platform: { type: string }
+                format: { type: string, description: '省略时按 platform 选择预设（如 bilibili 1080p DASH）' }
+                cookiesFromBrowser:
+                  type: string
+                  enum: [edge, chrome, firefox, none]
+                  default: none
+                cookiesFile:
+                  type: string
+                  description: Netscape cookies.txt 本机路径
+                cookieHeader:
+                  type: string
+                  description: 'DevTools 复制的 Cookie 值（不含 Cookie: 前缀）'
+                duplicatePolicy:
+                  type: string
+                  enum: [import_copy, use_existing, replace]
+                  description: replace 视为 import_copy，warnings 含 REPLACE_NOT_IMPLEMENTED
+                options:
+                  type: object
+                  properties:
+                    writeSubs:
+                      type: boolean
+                      description: Passes --write-subs to yt-dlp; subtitle files stay in temp only and are not imported as assets
+                    subtitleLangs: { type: array, items: { type: string } }
+                    noPlaylist: { type: boolean, default: true }
+                sourceMeta:
+                  type: object
+                  properties:
+                    pageUrl: { type: string }
+                    pageTitle: { type: string }
+      responses:
+        '200': { description: OK }
+        '503': { description: YTDLP_NOT_INSTALLED or LIBRARY_NOT_READY }
+
+  /asset/pageVideoImport/batch:
+    post:
+      tags: [asset, pageVideoImport]
+      summary: 批量创建作品页视频导入任务
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                platform: { type: string }
+                format: { type: string }
+                cookiesFromBrowser:
+                  type: string
+                  enum: [edge, chrome, firefox, none]
+                cookiesFile: { type: string }
+                cookieHeader: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [import_copy, use_existing, replace]
+                targetFolderId: { type: string, nullable: true }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [url]
+                    properties:
+                      url: { type: string }
+                      platform: { type: string }
+                      format: { type: string }
+                      cookieHeader: { type: string }
+                      cookiesFile: { type: string }
+                      cookiesFromBrowser:
+                        type: string
+                        enum: [edge, chrome, firefox, none]
+      responses:
+        '200': { description: OK }
+
+  /asset/pageVideoImport/batch/{batchId}:
+    get:
+      tags: [asset, pageVideoImport]
+      summary: 查询批量作品页视频导入任务（全部 job 公开状态）
+      description: Returns 404 BATCH_NOT_FOUND when no jobs remain for this batchId (e.g. after 24h retention purge).
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+        '404': { description: BATCH_NOT_FOUND }
+
+  /asset/pageVideoImport/jobs/{jobId}:
+    get:
+      tags: [asset, pageVideoImport]
+      summary: 查询作品页视频导入任务
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+    delete:
+      tags: [asset, pageVideoImport]
+      summary: 取消作品页视频导入任务
+      description: |
+        Queued jobs cancel immediately with filesRemoved true. Running jobs set cancelRequested and kill yt-dlp;
+        response may still show running with filesRemoved false until polled as cancelled.
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+        '404': { description: JOB_NOT_FOUND }
 
   /asset/importFromDataUrl:
     post:

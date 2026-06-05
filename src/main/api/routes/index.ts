@@ -10,6 +10,7 @@ import {
   handleAssetImportFolder,
   handleAssetImportFromUrlBatch,
   handleAssetImportFromDataUrl,
+  handleAssetFetchRemoteBody,
   handleAssetInfo,
   handleAssetLocalize,
   handleAssetRelink,
@@ -30,6 +31,13 @@ import {
   handleArticleBundleSessionGet,
   handleArticleBundleSessionStart
 } from '../handlers/articleBundleSession'
+import {
+  handlePageVideoImportBatch,
+  handlePageVideoImportCancel,
+  handlePageVideoImportCreate,
+  handlePageVideoImportGetBatch,
+  handlePageVideoImportGetJob
+} from '../handlers/pageVideoImport'
 import {
   handleFolderCreate,
   handleFolderDelete,
@@ -83,6 +91,7 @@ const routes: RouteDef[] = [
   { method: 'POST', path: `${API_PREFIX}/asset/importBatch`, handler: (ctx) => handleAssetImportBatch(ctx.body) },
   { method: 'POST', path: `${API_PREFIX}/asset/importFolder`, handler: (ctx) => handleAssetImportFolder(ctx.body) },
   { method: 'POST', path: `${API_PREFIX}/asset/importFromURLBatch`, handler: (ctx) => handleAssetImportFromUrlBatch(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/asset/fetchRemoteBody`, handler: (ctx) => handleAssetFetchRemoteBody(ctx.body) },
   { method: 'DELETE', path: `${API_PREFIX}/asset/delete`, handler: (ctx) => handleAssetDelete(ctx.body) },
   { method: 'PATCH', path: `${API_PREFIX}/asset/update`, handler: (ctx) => handleAssetUpdate(ctx.body) },
   { method: 'POST', path: `${API_PREFIX}/asset/rename`, handler: (ctx) => handleAssetRename(ctx.body) },
@@ -96,6 +105,9 @@ const routes: RouteDef[] = [
   { method: 'POST', path: `${API_PREFIX}/asset/articleBundleSession/start`, handler: (ctx) => handleArticleBundleSessionStart(ctx.body) },
   { method: 'POST', path: `${API_PREFIX}/asset/articleBundleSession/append`, handler: (ctx) => handleArticleBundleSessionAppend(ctx.body) },
   { method: 'POST', path: `${API_PREFIX}/asset/articleBundleSession/finish`, handler: (ctx) => handleArticleBundleSessionFinish(ctx.body) },
+
+  { method: 'POST', path: `${API_PREFIX}/asset/pageVideoImport`, handler: (ctx) => handlePageVideoImportCreate(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/asset/pageVideoImport/batch`, handler: (ctx) => handlePageVideoImportBatch(ctx.body) },
 
   { method: 'GET', path: `${API_PREFIX}/folder/get`, handler: () => handleFolderGet() },
   { method: 'GET', path: `${API_PREFIX}/folder/tree`, handler: () => handleFolderTree() },
@@ -116,6 +128,8 @@ const routes: RouteDef[] = [
 
 const FULLPAGE_SESSION_ID_RE = /^\/api\/v1\/asset\/fullPageSession\/([^/]+)$/
 const ARTICLE_BUNDLE_SESSION_ID_RE = /^\/api\/v1\/asset\/articleBundleSession\/([^/]+)$/
+const PAGE_VIDEO_BATCH_ID_RE = /^\/api\/v1\/asset\/pageVideoImport\/batch\/([^/]+)$/
+const PAGE_VIDEO_JOB_ID_RE = /^\/api\/v1\/asset\/pageVideoImport\/jobs\/([^/]+)$/
 
 export function matchRoute(ctx: ApiRequestContext): RouteHandler | null {
   const hit = routes.find((r) => r.method === ctx.method && r.path === ctx.pathname)
@@ -133,6 +147,19 @@ export function matchRoute(ctx: ApiRequestContext): RouteHandler | null {
     const sessionId = decodeURIComponent(m2[1]!)
     if (ctx.method === 'DELETE') return () => handleArticleBundleSessionAbort(sessionId)
     if (ctx.method === 'GET') return () => handleArticleBundleSessionGet(sessionId)
+  }
+
+  const mBatch = ctx.pathname.match(PAGE_VIDEO_BATCH_ID_RE)
+  if (mBatch) {
+    const batchId = decodeURIComponent(mBatch[1]!)
+    if (ctx.method === 'GET') return () => handlePageVideoImportGetBatch(batchId)
+  }
+
+  const m3 = ctx.pathname.match(PAGE_VIDEO_JOB_ID_RE)
+  if (m3) {
+    const jobId = decodeURIComponent(m3[1]!)
+    if (ctx.method === 'DELETE') return () => handlePageVideoImportCancel(jobId)
+    if (ctx.method === 'GET') return () => handlePageVideoImportGetJob(jobId)
   }
 
   return null

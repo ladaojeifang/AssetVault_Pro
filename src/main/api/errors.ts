@@ -21,6 +21,10 @@ export function invalidRequest(message: string, details?: Record<string, unknown
   return new ApiError('INVALID_REQUEST', message, 400, details)
 }
 
+export function forbidden(message: string, details?: Record<string, unknown>): ApiError {
+  return new ApiError('FORBIDDEN', message, 403, details)
+}
+
 export function assetNotFound(id?: string): ApiError {
   return new ApiError('ASSET_NOT_FOUND', id ? `资产不存在: ${id}` : '资产不存在', 404)
 }
@@ -129,6 +133,66 @@ export function mapArticleBundleThrown(err: unknown): ApiError {
   const code = err instanceof Error ? err.message : String(err)
   if (code.startsWith('ARTICLE_BUNDLE_') || code === 'IMPORT_FAILED' || code === 'INVALID_REQUEST') {
     return articleBundleApiError(code)
+  }
+  return internalError(err instanceof Error ? err.message : String(err))
+}
+
+export function pageVideoApiError(code: string, message?: string): ApiError {
+  const status =
+    code === 'JOB_NOT_FOUND' || code === 'FOLDER_NOT_FOUND' || code === 'BATCH_NOT_FOUND'
+      ? 404
+      : code === 'PAGE_VIDEO_QUEUE_FULL'
+        ? 429
+        : code === 'YTDLP_NOT_INSTALLED'
+          ? 503
+          : code === 'LIBRARY_NOT_OPEN' || code === 'LIBRARY_NOT_READY'
+            ? 503
+            : code.startsWith('YTDLP_')
+              ? 422
+              : code === 'IMPORT_FAILED'
+                ? 500
+                : 400
+  const defaults: Record<string, string> = {
+    JOB_NOT_FOUND: '作品页视频导入任务不存在',
+    BATCH_NOT_FOUND: '作品页视频批量任务不存在',
+    YTDLP_INTERRUPTED: '应用重启导致任务中断',
+    PAGE_VIDEO_NOT_SUPPORTED: '该 URL 不适合作品页导入，请使用 importFromURL',
+    PAGE_VIDEO_QUEUE_FULL: '作品页视频导入队列已满',
+    BATCH_TOO_LARGE: '批量条数超过上限',
+    BATCH_EMPTY: '批量列表为空',
+    YTDLP_NOT_INSTALLED: '未检测到 yt-dlp，请安装并加入 PATH',
+    YTDLP_AUTH_REQUIRED: '该站点需要登录；请在 Edge/Chrome 登录后重试，或关闭浏览器后再导入',
+    YTDLP_COOKIE_COPY_FAILED:
+      '无法读取浏览器 Cookie（Chrome/Edge 运行时数据库被锁定）。可关闭浏览器后重试，或对公开视频使用 cookiesFromBrowser: none',
+    YTDLP_EXTRACTOR_FAILED: '无法解析该页面视频',
+    YTDLP_FORMAT_UNAVAILABLE: '当前清晰度/格式不可用，请改用「最佳」预设或降低分辨率',
+    YTDLP_DOWNLOAD_FAILED: '视频下载失败',
+    YTDLP_POSTPROCESS_FAILED: '视频合并或后处理失败',
+    YTDLP_STALLED: '下载长时间无进度',
+    YTDLP_JOB_TIMEOUT: '下载总时长超过限制',
+    IMPORT_FAILED: '下载成功但入库失败',
+    INVALID_REQUEST: '请求参数无效',
+    FOLDER_NOT_FOUND: '文件夹不存在',
+    COOKIES_FILE_NOT_FOUND: 'cookies 文件路径不存在'
+  }
+  return new ApiError(code, message ?? defaults[code] ?? code, status)
+}
+
+export function mapPageVideoThrown(err: unknown): ApiError {
+  if (err instanceof ApiError) return err
+  const code = err instanceof Error ? err.message : String(err)
+  if (
+    code.startsWith('PAGE_VIDEO_') ||
+    code.startsWith('YTDLP_') ||
+    code.startsWith('BATCH_') ||
+    code === 'JOB_NOT_FOUND' ||
+    code === 'BATCH_NOT_FOUND' ||
+    code === 'IMPORT_FAILED' ||
+    code === 'INVALID_REQUEST' ||
+    code === 'FOLDER_NOT_FOUND' ||
+    code === 'COOKIES_FILE_NOT_FOUND'
+  ) {
+    return pageVideoApiError(code)
   }
   return internalError(err instanceof Error ? err.message : String(err))
 }

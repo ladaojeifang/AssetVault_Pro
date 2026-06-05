@@ -10,7 +10,6 @@
     "build": "pnpm exec electron-vite build",
     "preview": "pnpm exec electron-vite preview",
     "postinstall": "node scripts/postinstall.mjs",
-    "prepackage": "node scripts/prepackage-clean.mjs",
     "package": "pnpm exec electron-vite build && pnpm exec electron-builder --win",
     "package:mac": "pnpm exec electron-vite build && pnpm exec electron-builder --mac",
     "package:linux": "pnpm exec electron-vite build && pnpm exec electron-builder --linux",
@@ -20,6 +19,8 @@
     "test": "pnpm exec vitest run",
     "test:watch": "pnpm exec vitest",
     "rebuild:native": "node scripts/rebuild-native.mjs",
+    "fetch:ytdlp": "node scripts/fetch-ytdlp.mjs",
+    "prepackage": "node scripts/fetch-ytdlp.mjs && node scripts/prepackage-clean.mjs",
     "db:generate": "pnpm exec drizzle-kit generate",
     "db:migrate": "pnpm exec drizzle-kit migrate",
     "db:studio": "pnpm exec drizzle-kit studio",
@@ -125,6 +126,7 @@
     "files": [
       "out/**/*",
       "resources/**/*",
+      "!resources/bin/*.zip",
       "node_modules/better-sqlite3/**/*",
       "node_modules/ffmpeg-static/**/*",
       "node_modules/@napi-rs/canvas/**/*",
@@ -143,7 +145,13 @@
       "icon": "resources/icon.ico",
       "sign": false,
       "signAndEditExecutable": false,
-      "verifyUpdateCodeSignature": false
+      "verifyUpdateCodeSignature": false,
+      "extraResources": [
+        {
+          "from": "resources/bin/yt-dlp.exe",
+          "to": "bin/yt-dlp.exe"
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -160,6 +168,20 @@
           "arch": [
             "universal"
           ]
+        }
+      ],
+      "extraResources": [
+        {
+          "from": "resources/bin/yt-dlp",
+          "to": "bin/yt-dlp"
+        }
+      ]
+    },
+    "linux": {
+      "extraResources": [
+        {
+          "from": "resources/bin/yt-dlp",
+          "to": "bin/yt-dlp"
         }
       ]
     }

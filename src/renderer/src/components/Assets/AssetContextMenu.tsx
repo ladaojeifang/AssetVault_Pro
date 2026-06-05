@@ -164,7 +164,7 @@ export function AssetContextMenu({
     <div
       ref={menuRef}
       role="menu"
-      className="fixed z-[10000] min-w-[200px] py-1 rounded-lg border border-av-border bg-[#1e2030] shadow-2xl"
+      className="av-context-menu fixed z-[10000] min-w-[200px]"
       style={{ left: pos?.left ?? state.x, top: pos?.top ?? state.y }}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -207,7 +207,7 @@ export function AssetContextMenu({
 
           {item.submenu === 'folders' && openSubmenu === 'folders' && submenuPos ? (
             <div
-              className="fixed z-[10001] py-1 rounded-lg border border-av-border bg-[#1e2030] shadow-2xl overflow-y-auto"
+              className="av-context-menu-submenu fixed z-[10001]"
               style={{
                 left: submenuPos.left,
                 top: submenuPos.top,
@@ -238,7 +238,7 @@ export function AssetContextMenu({
 
           {item.submenu === 'libraries' && openSubmenu === 'libraries' && submenuPos ? (
             <div
-              className="fixed z-[10001] py-1 rounded-lg border border-av-border bg-[#1e2030] shadow-2xl overflow-y-auto"
+              className="av-context-menu-submenu fixed z-[10001]"
               style={{
                 left: submenuPos.left,
                 top: submenuPos.top,

@@ -12,7 +12,7 @@ import { importAssetFromPath } from '../assetImportService'
 import { patchAsset } from '../assetMutationService'
 import { getAssetById } from '../assetQueryService'
 import { assertBundlePathInSessionDir, removeDirRecursive } from './articleBundleSessionPathPolicy'
-import { writeBundleFileFromDataUrl } from './articleBundleSessionFileWrite'
+import { writeBundleFileFromDataUrl, writeBundleFileFromRemoteUrl } from './articleBundleSessionFileWrite'
 import {
   appendArticleBundleFile,
   abortSession,
@@ -97,11 +97,22 @@ export async function articleBundleSessionAppend(body: Record<string, unknown>) 
   const relativePath = typeof body.relativePath === 'string' ? body.relativePath.trim() : ''
   const filePath = typeof body.filePath === 'string' ? body.filePath.trim() : ''
   const fileDataUrl = typeof body.fileDataUrl === 'string' ? body.fileDataUrl.trim() : ''
+  const sourceUrl = typeof body.sourceUrl === 'string' ? body.sourceUrl.trim() : ''
+  const rawHeaders = body.headers
+  const headers =
+    rawHeaders && typeof rawHeaders === 'object' && !Array.isArray(rawHeaders)
+      ? Object.fromEntries(
+          Object.entries(rawHeaders as Record<string, unknown>).filter(
+            (e): e is [string, string] => typeof e[0] === 'string' && typeof e[1] === 'string' && !!e[0].trim() && !!e[1].trim()
+          )
+        )
+      : undefined
 
   if (!sessionId || !relativePath) {
     throw new Error('INVALID_REQUEST')
   }
-  if (!filePath && !fileDataUrl) {
+  const payloadCount = [filePath, fileDataUrl, sourceUrl].filter(Boolean).length
+  if (payloadCount !== 1) {
     throw new Error('INVALID_REQUEST')
   }
 
@@ -121,7 +132,9 @@ export async function articleBundleSessionAppend(body: Record<string, unknown>) 
 
   const safePath = fileDataUrl
     ? writeBundleFileFromDataUrl(session.tempDir, relativePath, fileDataUrl)
-    : assertBundlePathInSessionDir(filePath, session.tempDir)
+    : sourceUrl
+      ? await writeBundleFileFromRemoteUrl(session.tempDir, relativePath, sourceUrl, headers)
+      : assertBundlePathInSessionDir(filePath, session.tempDir)
   const st = statSync(safePath)
 
   const updated = appendArticleBundleFile(sessionId, {

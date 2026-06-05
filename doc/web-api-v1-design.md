@@ -396,14 +396,17 @@ interface AssetImportFolderResponse {
 
 #### `POST /asset/importFromURL`
 
-由**主进程**下载 `http`/`https` URL 后导入（浏览器扩展、网页采集）。不在 HTTP 层传 `tagIds`；打标签见 `POST /tag/assign`。
+由**主进程**下载 `http`/`https` **直链媒体** URL 后导入（浏览器扩展图片/视频 CDN；路径含 `.jpg`/`.png` 等视为直链）。**作品页**（YouTube watch、B 站 BV 等，见 `isPageVideoWorkUrl` **正向规则**）在下载前拒绝 → `400 INVALID_REQUEST`，`details.useEndpoint` = `/api/v1/asset/pageVideoImport`。不在 HTTP 层传 `tagIds`；打标签见 `POST /tag/assign`。
+
+**`POST /asset/fetchRemoteBody`**：与上相同下载栈，返回 `{ dataUrl, bytes, contentType }`，不入库；供 Markdown 资料包 `articleBundleSession` 使用。
 
 **Body:**
 
 ```typescript
 interface AssetImportFromUrlRequest {
-  url: string                    // 必填
+  url: string                    // 必填；直链或 CDN，非作品页
   filename?: string              // 可选，推断扩展名/原始文件名，如 photo.jpg
+  headers?: Record<string, string>  // Referer, User-Agent, Accept, Accept-Language
   targetFolderId?: string
   duplicatePolicy?: DuplicatePolicy
 }
@@ -414,6 +417,32 @@ interface AssetImportFromUrlRequest {
 **落盘：** `libraryRoot/remote-imports/<sha256>/<safeFileName>`，再 `importSingleAsset`（catalog 引用该路径，archive 拷贝进 items）。
 
 **映射：** `urlAssetImportService.importAssetFromUrl` → `importAssetFromPath`。
+
+---
+
+#### 作品页视频 `pageVideoImport`（yt-dlp Job API）
+
+与 `importFromURL` 并列的第二套视频管线：扩展提交**作品页 URL**，由 `pageVideoImportService` 排队 spawn **yt-dlp**，下载合并后的视频再 `importAssetFromPath`。**无** 300MB 下载上限。
+
+| 路由 | 说明 |
+|------|------|
+| `POST /asset/pageVideoImport` | 创建 job（`pvi_*`） |
+| `POST /asset/pageVideoImport/batch` | 批量（`pvb_*`），`buildBatchItemBody` 合并顶层与 items 字段 |
+| `GET /asset/pageVideoImport/jobs/{jobId}` | 轮询 |
+| `DELETE /asset/pageVideoImport/jobs/{jobId}` | 取消；running 时 kill 子进程 |
+| `GET /asset/pageVideoImport/batch/{batchId}` | 批次聚合查询 |
+
+**实现要点（以代码为准）：**
+
+- 队列：`pumpQueue` 每次启动至多一个 job；`maxConcurrentJobs: 2` 为配置上限，当前实现通常 **串行** 执行 yt-dlp。
+- 活跃数上限：`maxQueuedJobs`（100）= queued + running → `PAGE_VIDEO_QUEUE_FULL`。
+- 持久化：`userData/AssetVault/page-video-jobs.json`；重启 `running` → `YTDLP_INTERRUPTED`；`queued` 重建 temp 再排队。
+- Cookie：`cookiesFile` > `cookieHeader` > `cookiesFromBrowser`；默认 `none`。DPAPI 失败时仅 youtube/vimeo/twitter 可 `COOKIE_FALLBACK_NONE`。
+- `replace` duplicatePolicy → `import_copy` + warning `REPLACE_NOT_IMPLEMENTED`。
+- `writeSubs`：yt-dlp 写 temp，入库仅最大视频文件，字幕不进库。
+- 资料库：`assertLibraryReady` → `LIBRARY_NOT_READY`（503）。
+
+**映射：** `src/main/services/pageVideoImport/*`，`src/main/api/handlers/pageVideoImport.ts`。详见 [web-api-v1-guide.md](./web-api-v1-guide.md) §作品页视频导入。
 
 ---
 
@@ -657,6 +686,7 @@ interface WebApiPreferences {
 - [x] 路由：`app/info`、`library/info`、`library/state`
 - [x] 路由：`asset/get`、`asset/info`、`asset/import`、`importBatch`、`importFolder`、`asset/delete`
 - [x] 路由：`asset/importFromURL`、`asset/importFromURLBatch`（主进程下载，浏览器扩展）
+- [x] 路由：`asset/pageVideoImport`（yt-dlp Job）、batch、jobs/{id}、batch/{id}（作品页视频）
 - [x] `shared/webApiTypes.ts`
 - [ ] 单元测试（supertest）
 - [ ] README 链接本文档
@@ -683,13 +713,13 @@ interface WebApiPreferences {
 |-------|----------------|
 | `http://localhost:41595/api/v2/` | `http://127.0.0.1:41596/api/v1/` |
 | `item/get` | `asset/get` |
-| `item/addFromURL` / 41593 表单 | `asset/importFromURL`（主进程下载） |
+| `item/addFromURL` / 41593 表单 | `asset/importFromURL`（直链 CDN）；作品页视频 → `asset/pageVideoImport` |
 | `item/add`（本机/扩展下载） | `asset/import`（本机绝对路径） |
 | `library/info` | `library/info` |
 | localhost 免 token | 同左；远程需 token |
 | JSend + offset/limit | 同左 |
 
-差异：**v1 不提供 multipart 直传**；浏览器扩展应使用 `importFromURL`，由应用下载并入库。标签在 Eagle 扩展侧可随单条请求携带；AssetVault v1 为 **导入 + `tag/assign` 两步**。
+差异：**v1 不提供 multipart 直传**；浏览器扩展对**直链**用 `importFromURL`，对**作品页视频**用 `pageVideoImport`（yt-dlp）。标签在 Eagle 扩展侧可随单条请求携带；AssetVault v1 为 **导入 + `tag/assign` 两步**。
 
 ---
 

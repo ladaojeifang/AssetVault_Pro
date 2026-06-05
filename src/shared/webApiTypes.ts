@@ -57,6 +57,24 @@ export type AppInfoResponse = {
   platform: NodeJS.Platform
   packaged: boolean
   features?: string[]
+  ytdlp?: {
+    version: string | null
+    ffmpegPresent: boolean
+    ready?: boolean
+  }
+  limits?: {
+    pageVideoImport?: {
+      maxBatchItems: number
+      maxConcurrentJobs: number
+      /** Queued + running jobs cap (same as `PAGE_VIDEO_IMPORT_LIMITS.maxQueuedJobs`). */
+      maxActiveJobs: number
+      jobTimeoutMs: number
+      stallTimeoutMs: number
+      pollIntervalMsRecommended: number
+      defaultFormatPreset?: string
+      defaultMaxVideoHeight?: number
+    }
+  }
 }
 
 export type LibraryInfoResponse = {

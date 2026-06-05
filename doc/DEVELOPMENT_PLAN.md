@@ -43,7 +43,22 @@ V0.5 Alpha (W1-W8)     V0.8 Beta (W9-W14)       V1.0 GA (W15-W24)
 
 **交付物**：在完整库 B 中一键从 archive 源库 A 导入；重复内容跳过拷贝；自动打源库 `displayName` tag。
 
-### 2.2 EXR 预览修复批次（EXR-F）
+### 2.2 作品页视频导入修复批次（PVI）
+
+> 完整任务与验收见 [page-video-import-fix-plan.md](./page-video-import-fix-plan.md)
+
+| ID | 任务 | 优先级 | 预估 |
+|----|------|--------|------|
+| PVI-F1 | 批量 API：`cookieHeader`/`cookiesFile` 与 per-platform `format` | P0 | 2h |
+| PVI-F2 | `duplicatePolicy: replace` 决策与文档 | P0 | 3h |
+| PVI-F3 | running 取消：子进程 kill + temp 清理 | P0 | 4h |
+| PVI-F4～F7 | 超时码、类型卫生、文档/OpenAPI、vitest + 冒烟 | P1 | 9h |
+| PVI-F8～F10 | Job 持久化、importFromURL 分流、字幕、batch GET（已完成） | P2–P3 | — |
+| PVI-F10b | B 站 extractor-args / 会员清晰度（待 Cookie 回归） | P3 | 4h |
+
+**交付物**：扩展联调 batch B 站与单条行为一致；取消 running 可预期；guide/openapi 与实现一致。
+
+### 2.3 EXR 预览修复批次（EXR-F）
 
 > 完整任务与验收见 [exr-preview-fix-plan.md](./exr-preview-fix-plan.md)
 

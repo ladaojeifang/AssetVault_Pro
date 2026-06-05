@@ -1,10 +1,11 @@
-import { existsSync, mkdirSync, renameSync, copyFileSync, unlinkSync, createWriteStream } from 'fs'
-import { join, extname, basename } from 'path'
+import { existsSync, mkdirSync, readFileSync, renameSync, copyFileSync, unlinkSync, createWriteStream } from 'fs'
+import { join, extname, basename, dirname } from 'path'
 import { tmpdir } from 'os'
 import http from 'http'
 import https from 'https'
 import { v4 as uuidv4 } from 'uuid'
 import { ALL_SUPPORTED_IMPORT_EXTENSIONS } from '@/shared/supportedFormats'
+import { isPageVideoWorkUrl } from '@/shared/pageVideoUrlPolicy'
 import type { AssetImportFromUrlBatchResponse, AssetImportResult } from '@/shared/webApiTypes'
 import { getLibraryRoot, sanitizeStorageFileName } from './libraryBundle'
 import { computeFileSha256 } from '../utils/contentHash'
@@ -305,6 +306,70 @@ function sanitizeDownloadHeaders(headers?: Record<string, string>): Record<strin
   return Object.keys(out).length ? out : undefined
 }
 
+/** Reject anti-hotlink placeholder responses (e.g. pc520 GIF watermark for .jpg URLs). */
+export function assertRemoteImageNotHotlinkPlaceholder(
+  sourceUrl: string,
+  bytes: number,
+  contentType: string | null
+): void {
+  const ct = (contentType || '').toLowerCase()
+  const expectRaster = /\.(?:jpe?g|png|webp|avif)$/i.test(sourceUrl)
+  if (!expectRaster) return
+  if (ct.includes('gif') && bytes < 96 * 1024) {
+    throw new Error('DOWNLOAD_HOTLINK_PLACEHOLDER')
+  }
+  if (bytes < 12_288) {
+    throw new Error('DOWNLOAD_HOTLINK_PLACEHOLDER')
+  }
+}
+
+/** Download URL in main-process and return a data URL (for bundle / preview; does not import). */
+export async function fetchRemoteUrlBody(
+  url: string,
+  options?: { headers?: Record<string, string> }
+): Promise<{ dataUrl: string; bytes: number; contentType: string | null }> {
+  const tempPath = join(tmpdir(), `assetvault-fetch-${uuidv4()}.bin`)
+  try {
+    const { contentType } = await downloadRemoteUrlToFile(url, tempPath, options)
+    const buf = readFileSync(tempPath)
+    assertRemoteImageNotHotlinkPlaceholder(url, buf.length, contentType)
+    const mime = contentType?.split(';')[0]?.trim() || 'application/octet-stream'
+    return {
+      dataUrl: `data:${mime};base64,${buf.toString('base64')}`,
+      bytes: buf.length,
+      contentType
+    }
+  } finally {
+    try {
+      if (existsSync(tempPath)) unlinkSync(tempPath)
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/** Download http(s) URL to an existing destination path (creates parent dirs). */
+export async function downloadRemoteUrlToFile(
+  url: string,
+  destPath: string,
+  options?: { filename?: string; headers?: Record<string, string> }
+): Promise<{ contentType: string | null; contentLength: number | null }> {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    throw new Error('INVALID_URL')
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('UNSUPPORTED_URL_SCHEME')
+  }
+  if (isPageVideoWorkUrl(url)) {
+    throw new Error('PAGE_VIDEO_USE_PAGE_VIDEO_IMPORT')
+  }
+  mkdirSync(dirname(destPath), { recursive: true })
+  return downloadUrlToTempFile(parsed, destPath, options)
+}
+
 async function downloadUrlToTempFile(
   url: URL,
   tempPath: string,
@@ -396,6 +461,10 @@ export async function importAssetFromUrl(
     throw new Error('UNSUPPORTED_URL_SCHEME')
   }
 
+  if (isPageVideoWorkUrl(url)) {
+    throw new Error('PAGE_VIDEO_USE_PAGE_VIDEO_IMPORT')
+  }
+
   // Resolve extension before download (best-effort from hint/url).
   const extFromHint = resolveExtensionForDownload(parsed, options?.filename, null)
   if (!extFromHint) {
@@ -471,11 +540,13 @@ export async function importAssetFromUrlBatch(
       errors.push({
         url: item.url,
         message:
-          msg === 'DOWNLOAD_SIZE_EXCEEDED'
-            ? '下载文件超过最大限制'
-            : msg === 'UNSUPPORTED_FILE_EXTENSION'
-              ? '不支持的文件扩展名'
-              : msg
+          msg === 'PAGE_VIDEO_USE_PAGE_VIDEO_IMPORT'
+            ? '作品页视频请使用 POST /asset/pageVideoImport'
+            : msg === 'DOWNLOAD_SIZE_EXCEEDED'
+              ? '下载文件超过最大限制'
+              : msg === 'UNSUPPORTED_FILE_EXTENSION'
+                ? '不支持的文件扩展名'
+                : msg
       })
     }
   }

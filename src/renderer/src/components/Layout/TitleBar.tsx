@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useApp } from '../../stores/AppContext'
 
 const TitleBar: React.FC = () => {
-  const { sidebarOpen, toggleSidebar } = useApp()
+  const { sidebarOpen, toggleSidebar, activeSpecialPreview, closeActiveSpecialPreview } = useApp()
   const [isMaximized, setIsMaximized] = useState(false)
   const [isWinFocused, setIsWinFocused] = useState(true)
 
@@ -32,6 +32,10 @@ const TitleBar: React.FC = () => {
   }
 
   async function handleClose() {
+    if (activeSpecialPreview) {
+      closeActiveSpecialPreview()
+      return
+    }
     await window.assetVaultAPI.window.close()
   }
 
@@ -109,7 +113,7 @@ const TitleBar: React.FC = () => {
         <button
           onClick={handleClose}
           className="w-[46px] h-[32px] flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors"
-          title="Close"
+          title={activeSpecialPreview ? '关闭预览并返回资源库' : '关闭应用'}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" opacity="0.8">
             <path d="M1 1l8 8M9 1l-8 8" />

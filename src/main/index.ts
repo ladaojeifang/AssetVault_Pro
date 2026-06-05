@@ -31,6 +31,8 @@ import {
 import { resolveAppIcon } from './appIcon'
 import { purgeExpiredFullPageSessions } from './services/fullPageSession/fullPageSessionStore'
 import { purgeExpiredArticleBundleSessions } from './services/articleBundleSession/articleBundleSessionStore'
+import { probeYtdlpOnStartup } from './services/pageVideoImport/ytdlpBinary'
+import { initPageVideoImportOnStartup } from './services/pageVideoImport/pageVideoImportService'
 
 registerModelFileProtocol()
 registerExrPreviewProtocol()
@@ -233,6 +235,9 @@ if (gotSingleInstanceLock) {
     if (purgedAb > 0) {
       console.log(`[ArticleBundleSession] Purged ${purgedAb} expired session(s) on startup`)
     }
+
+    probeYtdlpOnStartup()
+    initPageVideoImportOnStartup()
 
     initModelThumbnailRenderer()
     warmHiddenThumbnailWindow()

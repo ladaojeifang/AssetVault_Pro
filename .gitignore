@@ -7,6 +7,8 @@ dist/
 .DS_Store
 Thumbs.db
 resources/thumbnails/
+resources/bin/*
+!resources/bin/.gitkeep
 data/
 *.db
 *.db-journal

@@ -23,7 +23,11 @@ import {
   invalidRequest
 } from '../errors'
 import { assertLibraryReady, requireString, requireStringArray, optionalString } from './common'
-import { importAssetFromUrl, importAssetFromUrlBatch } from '../../services/urlAssetImportService'
+import {
+  fetchRemoteUrlBody,
+  importAssetFromUrl,
+  importAssetFromUrlBatch
+} from '../../services/urlAssetImportService'
 import { importAssetFromDataUrl } from '../../services/dataUrlAssetImportService'
 
 function parseIntParam(value: unknown, fallback: number): number {
@@ -218,6 +222,11 @@ export async function handleAssetImportFromUrl(body: Record<string, unknown>) {
     if (e instanceof Error) {
       const msg = e.message
       if (msg === 'INVALID_URL') throw invalidRequest('无效的 url')
+      if (msg === 'PAGE_VIDEO_USE_PAGE_VIDEO_IMPORT') {
+        throw invalidRequest('该 URL 为作品页视频，请使用 POST /api/v1/asset/pageVideoImport', {
+          useEndpoint: '/api/v1/asset/pageVideoImport'
+        })
+      }
       if (msg === 'UNSUPPORTED_URL_SCHEME') throw invalidRequest('只支持 http/https url')
       if (msg === 'UNSUPPORTED_FILE_EXTENSION') throw invalidRequest('不支持的文件扩展名')
       if (msg === 'DOWNLOAD_SIZE_EXCEEDED') throw invalidRequest('下载文件超过最大限制', { maxBytes: 300 * 1024 * 1024 })
@@ -366,6 +375,37 @@ export async function handleAssetRelink(body: Record<string, unknown>) {
   }
   const item = await getAssetById(assetId, { incrementViewCount: false })
   return jsendSuccess(item ? serializeAsset(item) : { relinked: true })
+}
+
+export async function handleAssetFetchRemoteBody(body: Record<string, unknown>) {
+  assertLibraryReady()
+  const url = requireString(body.url, 'url')
+  const headers = parseOptionalHeaders(body)
+  try {
+    const result = await fetchRemoteUrlBody(url, { headers })
+    return jsendSuccess(result)
+  } catch (e) {
+    if (e instanceof Error) {
+      const msg = e.message
+      if (msg === 'INVALID_URL') throw invalidRequest('无效的 url')
+      if (msg === 'UNSUPPORTED_URL_SCHEME') throw invalidRequest('只支持 http/https url')
+      if (msg === 'PAGE_VIDEO_USE_PAGE_VIDEO_IMPORT') {
+        throw invalidRequest('该 URL 为作品页视频，请使用 POST /api/v1/asset/pageVideoImport')
+      }
+      if (msg === 'DOWNLOAD_HOTLINK_PLACEHOLDER') {
+        throw invalidRequest('下载到防盗链占位图，请确认 Referer 请求头')
+      }
+      if (msg.startsWith('DOWNLOAD_FAILED_')) {
+        throw invalidRequest(`下载失败: ${msg.replace('DOWNLOAD_FAILED_', '')}`)
+      }
+      if (msg === 'DOWNLOAD_SIZE_EXCEEDED') throw invalidRequest('下载文件超过最大限制')
+      if (msg === 'DOWNLOAD_EMPTY_BODY') throw invalidRequest('下载响应体为空')
+      if (msg.startsWith('DOWNLOAD_NETWORK_ERROR:')) {
+        throw invalidRequest(`网络下载失败: ${msg.replace('DOWNLOAD_NETWORK_ERROR:', '')}`)
+      }
+    }
+    throw e
+  }
 }
 
 export async function handleAssetLocalize(body: Record<string, unknown>) {
