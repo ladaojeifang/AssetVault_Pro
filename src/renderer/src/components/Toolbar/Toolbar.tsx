@@ -1,8 +1,10 @@
 import React, { useState, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useApp } from '../../stores/AppContext'
 import { openAiCanvasWindow } from '../../stores/AiCanvasNavContext'
 
 const Toolbar: React.FC = () => {
+  const { t } = useTranslation('toolbar')
   const {
     viewMode,
     setViewMode,
@@ -60,7 +62,7 @@ const Toolbar: React.FC = () => {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
           </svg>
-          Import
+          {t('importFiles')}
         </button>
 
         <button
@@ -68,12 +70,12 @@ const Toolbar: React.FC = () => {
           onClick={() => void handleImportFolder()}
           className="btn-secondary text-xs"
           disabled={isImporting}
-          title="导入整个文件夹（Ctrl+Shift+O）"
+          title={t('importFolderTitle')}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
           </svg>
-          Folder
+          {t('importFolder')}
         </button>
       </div>
 
@@ -81,14 +83,14 @@ const Toolbar: React.FC = () => {
         type="button"
         className="btn-secondary text-xs"
         onClick={() => openAiCanvasWindow()}
-        title="打开 AI 画布窗口（可与资源库叠放，拖素材到画布）"
+        title={t('aiCanvasTitle')}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="6" cy="6" r="2" />
           <circle cx="18" cy="18" r="2" />
           <path d="M8 6h8a4 4 0 014 4v2M6 18V10a4 4 0 014-4h2" />
         </svg>
-        AI 画布
+        {t('aiCanvas')}
       </button>
 
       {/* Divider */}
@@ -115,7 +117,7 @@ const Toolbar: React.FC = () => {
         <input
           ref={searchInputRef}
           type="text"
-          placeholder="Search assets... (Ctrl+K)"
+          placeholder={t('searchPlaceholder')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onFocus={() => setSearchFocused(true)}
@@ -142,7 +144,7 @@ const Toolbar: React.FC = () => {
         <button
           onClick={() => setViewMode('grid')}
           className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-av-bg-active text-av-accent-blue' : 'text-av-text-muted hover:text-av-text-primary'}`}
-          title="Grid View"
+          title={t('viewGrid')}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -154,7 +156,7 @@ const Toolbar: React.FC = () => {
         <button
           onClick={() => setViewMode('list')}
           className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-av-bg-active text-av-accent-blue' : 'text-av-text-muted hover:text-av-text-primary'}`}
-          title="List View"
+          title={t('viewList')}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <rect x="3" y="5" width="18" height="3" rx="1" />

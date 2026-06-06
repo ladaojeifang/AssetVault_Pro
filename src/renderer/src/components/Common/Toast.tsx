@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, createContext, useContext } from 'react'
+import { useTranslation } from 'react-i18next'
 import { registerNotifyHandler, unregisterNotifyHandler } from './notify'
 
 export interface ToastMessage {
@@ -98,6 +99,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 }
 
 function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: () => void }) {
+  const { t } = useTranslation('common')
   const [visible, setVisible] = useState(false)
   const [progress, setProgress] = useState(100)
   const duration = toast.duration ?? 3200
@@ -146,7 +148,7 @@ function ToastItem({ toast, onClose }: { toast: ToastMessage; onClose: () => voi
         type="button"
         onClick={onClose}
         className="shrink-0 mt-0.5 p-1 rounded-md text-av-text-muted hover:text-av-text-primary hover:bg-white/5 transition-colors"
-        aria-label="关闭"
+        aria-label={t('close')}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M18 6L6 18M6 6l12 12" />

@@ -1,0 +1,18 @@
+{
+  "appName": "AssetVault Pro",
+  "alpha": "Alpha",
+  "cancel": "Cancel",
+  "save": "Save",
+  "saveChanges": "Save Changes",
+  "saving": "Saving…",
+  "close": "Close",
+  "delete": "Delete",
+  "rename": "Rename",
+  "confirm": "OK",
+  "preview": "Preview",
+  "loading": "Loading…",
+  "error": "Error",
+  "success": "Success",
+  "none": "None",
+  "optional": "Optional"
+}

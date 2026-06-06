@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FONT_THUMB_SAMPLE_VERSION } from '@/shared/fontSettings'
 import type { FontAppSettings } from '@/shared/fontSettings'
 import { notify } from '../Common/notify'
 
 export function FontSettingsSection(): React.ReactElement {
+  const { t } = useTranslation('settings')
   const [settings, setSettings] = useState<FontAppSettings | null>(null)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
@@ -30,9 +32,9 @@ export function FontSettingsSection(): React.ReactElement {
         thumbSampleVersion: nextVersion
       })
       setSettings(next)
-      notify.success('字体设置已保存；可重建缩略图以应用新样例文字')
+      notify.success(t('fontSettings.saved'))
     } catch (e) {
-      notify.error(e instanceof Error ? e.message : '保存失败')
+      notify.error(e instanceof Error ? e.message : t('fontSettings.saveFailed'))
     } finally {
       setBusy(false)
     }
@@ -40,10 +42,11 @@ export function FontSettingsSection(): React.ReactElement {
 
   return (
     <div className="space-y-3 pt-4 border-t border-av-border">
-      <h4 className="text-sm font-semibold text-av-text-primary">字体</h4>
+      <h4 className="text-sm font-semibold text-av-text-primary">{t('fontSettings.title')}</h4>
       <p className="text-xs text-av-text-muted leading-relaxed">
-        缩略图样例文字（支持换行）。修改后请使用下方「重建字体缩略图」。品牌字体包建议为文件夹添加标签{' '}
-        <code className="px-1 rounded bg-av-bg-elevated">brand-font-pack</code>。
+        {t('fontSettings.intro')}{' '}
+        <code className="px-1 rounded bg-av-bg-elevated">brand-font-pack</code>
+        {t('fontSettings.introEnd')}
       </p>
       <textarea
         value={draft}
@@ -54,10 +57,12 @@ export function FontSettingsSection(): React.ReactElement {
       />
       <div className="flex items-center gap-2">
         <button type="button" className="btn-primary text-xs" disabled={busy} onClick={() => void save()}>
-          保存字体设置
+          {t('fontSettings.save')}
         </button>
         {settings ? (
-          <span className="text-[11px] text-av-text-muted">版本 v{settings.thumbSampleVersion}</span>
+          <span className="text-[11px] text-av-text-muted">
+            {t('fontSettings.version', { version: settings.thumbSampleVersion })}
+          </span>
         ) : null}
       </div>
     </div>

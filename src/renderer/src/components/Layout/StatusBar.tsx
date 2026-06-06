@@ -1,7 +1,8 @@
-import React from 'react'
+import React, { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ImportProgress } from '@/shared/types'
-import { COLOR_BUCKET_OPTIONS } from '@/shared/colorBucket'
 import { useApp } from '../../stores/AppContext'
+import { getColorBucketOptions } from '../../utils/colorBucketLabels'
 
 interface StatusBarProps {
   isImporting: boolean
@@ -9,6 +10,9 @@ interface StatusBarProps {
 }
 
 const StatusBar: React.FC<StatusBarProps> = ({ isImporting, importProgress }) => {
+  const { t } = useTranslation(['layout', 'common'])
+  const { t: tAssets } = useTranslation('assets')
+  const colorBucketOptions = useMemo(() => getColorBucketOptions(tAssets), [tAssets])
   const [currentTime, setCurrentTime] = React.useState(new Date())
   const {
     assets,
@@ -33,8 +37,12 @@ const StatusBar: React.FC<StatusBarProps> = ({ isImporting, importProgress }) =>
 
   const progressLabel =
     importProgress && importProgress.total > 0
-      ? `导入中 ${importProgress.current}/${importProgress.total} · ${importProgress.filename}`
-      : '导入中…'
+      ? t('layout:importingProgress', {
+          current: importProgress.current,
+          total: importProgress.total,
+          filename: importProgress.filename
+        })
+      : t('layout:importing')
 
   const inAssetBrowse =
     !fontPreviewAssetId &&
@@ -65,22 +73,26 @@ const StatusBar: React.FC<StatusBarProps> = ({ isImporting, importProgress }) =>
 
         {inAssetBrowse ? (
           <span className="truncate min-w-0">
-            {totalAssets.toLocaleString()} assets
+            {t('layout:assetsTotal', { count: totalAssets.toLocaleString() })}
             {assets.length < totalAssets && (
               <span className="text-av-text-secondary">
                 {' '}
-                · {assets.length.toLocaleString()} in view
+                {t('layout:assetsInView', { count: assets.length.toLocaleString() })}
               </span>
             )}
-            {selectedAssetIds.size > 0 && ` · ${selectedAssetIds.size} selected`}
+            {selectedAssetIds.size > 0 &&
+              ` ${t('layout:selectedCount', { count: selectedAssetIds.size })}`}
             {assets.length > 1 && (
               <span className="text-av-text-muted/80 hidden lg:inline">
                 {' '}
-                · Ctrl/⌘+滚轮缩放 · Ctrl/⌘+单击多选 · Shift+单击范围 · 拖到上方子文件夹加入目录
+                {t('layout:browseHints')}
               </span>
             )}
             {viewMode === 'grid' && assets.length > 0 && (
-              <span className="text-av-text-muted/80 hidden md:inline"> · 瀑布流</span>
+              <span className="text-av-text-muted/80 hidden md:inline">
+                {' '}
+                · {t('layout:gridMasonry')}
+              </span>
             )}
           </span>
         ) : null}
@@ -89,7 +101,7 @@ const StatusBar: React.FC<StatusBarProps> = ({ isImporting, importProgress }) =>
       <div className="flex items-center gap-3 shrink-0">
         {inAssetBrowse && viewMode === 'grid' && (
           <div className="flex items-center gap-0.5">
-            {COLOR_BUCKET_OPTIONS.map((opt) => {
+            {colorBucketOptions.map((opt) => {
               const active = colorBucketFilter === opt.id
               return (
                 <button
@@ -111,13 +123,13 @@ const StatusBar: React.FC<StatusBarProps> = ({ isImporting, importProgress }) =>
           </div>
         )}
         {inAssetBrowse && isLoadingMore && (
-          <span className="text-av-accent-blue whitespace-nowrap">Loading more…</span>
+          <span className="text-av-accent-blue whitespace-nowrap">{t('layout:loadingMore')}</span>
         )}
         {inAssetBrowse && isLoading && assets.length > 0 && (
-          <span className="whitespace-nowrap">Updating…</span>
+          <span className="whitespace-nowrap">{t('layout:updating')}</span>
         )}
         <span className="tabular-nums whitespace-nowrap hidden sm:inline">
-          AssetVault Pro v0.5 Alpha
+          {t('common:appName')} v0.5 {t('common:alpha')}
         </span>
         <span className="tabular-nums whitespace-nowrap">{currentTime.toLocaleTimeString()}</span>
       </div>

@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { FontRegenerateResult } from '@/shared/fontTypes'
 import { notify } from '../Common/notify'
 
 export function FontThumbRegenerateButton({ disabled }: { disabled?: boolean }): React.ReactElement {
+  const { t } = useTranslation('settings')
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
   const [result, setResult] = useState<FontRegenerateResult | null>(null)
@@ -24,14 +26,14 @@ export function FontThumbRegenerateButton({ disabled }: { disabled?: boolean }):
       const res = await window.assetVaultAPI.assets.regenerateFontThumbnails()
       setResult(res)
       if (res.errors > 0) setShowFailures(true)
-      else notify.success(`已更新 ${res.updated} 个字体缩略图`)
+      else notify.success(t('thumbRegenerate.fontSuccess', { count: res.updated }))
     } catch (e) {
-      notify.error(e instanceof Error ? e.message : '重建失败')
+      notify.error(e instanceof Error ? e.message : t('thumbRegenerate.failed'))
     } finally {
       setBusy(false)
       setProgress(null)
     }
-  }, [])
+  }, [t])
 
   return (
     <div className="space-y-2">
@@ -43,15 +45,19 @@ export function FontThumbRegenerateButton({ disabled }: { disabled?: boolean }):
       >
         {busy
           ? progress
-            ? `生成字体缩略图… ${progress.current}/${progress.total}`
-            : '生成字体缩略图…'
-          : '重建字体缩略图'}
+            ? t('thumbRegenerate.fontBusyProgress', progress)
+            : t('thumbRegenerate.fontBusy')
+          : t('thumbRegenerate.fontIdle')}
       </button>
       {result && (
         <div className="text-xs text-av-text-muted space-y-1">
           <p>
-            共 {result.scanned} 个字体：更新 {result.updated}，跳过 {result.skipped}
-            {result.errors > 0 ? `，失败 ${result.errors}` : ''}
+            {t('thumbRegenerate.fontSummary', {
+              scanned: result.scanned,
+              updated: result.updated,
+              skipped: result.skipped,
+              errorsPart: result.errors > 0 ? t('thumbRegenerate.modelErrorsPart', { errors: result.errors }) : ''
+            })}
           </p>
           {result.failures.length > 0 ? (
             <>
@@ -60,7 +66,9 @@ export function FontThumbRegenerateButton({ disabled }: { disabled?: boolean }):
                 className="text-av-accent-blue hover:underline"
                 onClick={() => setShowFailures((v) => !v)}
               >
-                {showFailures ? '隐藏失败详情' : `查看失败详情 (${result.failures.length})`}
+                {showFailures
+                  ? t('thumbRegenerate.hideFailures')
+                  : t('thumbRegenerate.showFailures', { count: result.failures.length })}
               </button>
               {showFailures ? (
                 <ul className="max-h-32 overflow-y-auto space-y-1 rounded border border-av-border bg-av-bg-elevated/50 p-2">

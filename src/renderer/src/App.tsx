@@ -5,6 +5,7 @@ import AiCanvasApp from './AiCanvasApp'
 import { AppProvider, useApp } from './stores/AppContext'
 import { FormatIconOverridesProvider } from './stores/FormatIconOverridesContext'
 import { ThemeProvider, useAppTheme } from './stores/ThemeContext'
+import { LocaleProvider, useAppLocale } from './stores/LocaleContext'
 import { ToastProvider } from './components/Common/Toast'
 import DuplicateImportBridge from './components/Import/DuplicateImportBridge'
 import DropZone from './components/Common/DropZone'
@@ -46,10 +47,11 @@ const MainApp: React.FC = () => {
 
 const ThemedShell: React.FC = () => {
   const { arcoTheme } = useAppTheme()
+  const { arcoLocale } = useAppLocale()
   const canvasWindow = isAiCanvasWindowLocation()
 
   return (
-    <ConfigProvider theme={arcoTheme}>
+    <ConfigProvider theme={arcoTheme} locale={arcoLocale}>
       <AppProvider>
         <FormatIconOverridesProvider>
           <ToastProvider>
@@ -64,7 +66,9 @@ const ThemedShell: React.FC = () => {
 
 const App: React.FC = () => (
   <ThemeProvider>
-    <ThemedShell />
+    <LocaleProvider>
+      <ThemedShell />
+    </LocaleProvider>
   </ThemeProvider>
 )
 

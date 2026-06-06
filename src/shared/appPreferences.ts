@@ -7,7 +7,10 @@ import {
   normalizePageVideoFormatPreset,
   type PageVideoFormatPreset
 } from './pageVideoFormatPolicy'
+import { DEFAULT_APP_LOCALE, normalizeAppLocale, type AppLocale } from './appLocale'
 import { PAGE_VIDEO_IMPORT_LIMITS } from './pageVideoImportTypes'
+
+export type { AppLocale }
 
 export type { WebApiPreferences }
 
@@ -18,6 +21,8 @@ export type PageVideoImportPreferences = {
 }
 
 export type AppPreferences = {
+  /** UI display language (renderer only). */
+  locale: AppLocale
   /** Optional default folder for import dialogs (not all flows use this yet). */
   defaultImportPath: string
   /** After import, watch the source folder for add/change/delete. */
@@ -31,6 +36,7 @@ export type AppPreferences = {
 }
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
+  locale: DEFAULT_APP_LOCALE,
   defaultImportPath: '',
   autoWatchFolders: true,
   thumbnailQuality: 80,
@@ -56,6 +62,7 @@ export function normalizeAppPreferences(raw: unknown): AppPreferences {
   if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return { ...d }
   const o = raw as Record<string, unknown>
   return {
+    locale: normalizeAppLocale(o.locale),
     defaultImportPath: typeof o.defaultImportPath === 'string' ? o.defaultImportPath : d.defaultImportPath,
     autoWatchFolders:
       typeof o.autoWatchFolders === 'boolean'

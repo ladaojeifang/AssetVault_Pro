@@ -1,0 +1,11 @@
+{
+  "importFiles": "导入文件",
+  "importFolder": "导入文件夹",
+  "searchPlaceholder": "搜索资产…",
+  "viewGrid": "网格视图",
+  "viewList": "列表视图",
+  "sort": "排序",
+  "aiCanvas": "AI 画布",
+  "importFolderTitle": "导入整个文件夹（Ctrl+Shift+O）",
+  "aiCanvasTitle": "打开 AI 画布窗口（可与资源库叠放，拖素材到画布）"
+}

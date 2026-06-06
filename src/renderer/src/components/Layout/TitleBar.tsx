@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useApp } from '../../stores/AppContext'
 
 const TitleBar: React.FC = () => {
+  const { t } = useTranslation(['layout', 'common'])
   const { sidebarOpen, toggleSidebar, activeSpecialPreview, closeActiveSpecialPreview } = useApp()
+  const settingsShortcut =
+    typeof navigator !== 'undefined' && navigator.platform?.toLowerCase().includes('mac')
+      ? '⌘+,'
+      : 'Ctrl+,'
   const [isMaximized, setIsMaximized] = useState(false)
   const [isWinFocused, setIsWinFocused] = useState(true)
 
@@ -47,7 +53,7 @@ const TitleBar: React.FC = () => {
     <div className="titlebar-drag flex items-center justify-between h-9 px-3 bg-av-bg-secondary border-b border-av-border select-none shrink-0">
       {/* Left section */}
       <div className="flex items-center gap-2 titlebar-no-drag">
-        <button onClick={toggleSidebar} className="btn-icon" title="Toggle Sidebar">
+        <button onClick={toggleSidebar} className="btn-icon" title={t('layout:toggleSidebar')}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d={sidebarOpen ? 'M4 6h16M4 12h16M4 18h16' : 'M4 6h11M4 12h13M4 18h9'} />
           </svg>
@@ -58,10 +64,10 @@ const TitleBar: React.FC = () => {
             <span className="text-white text-[10px] font-bold">AV</span>
           </div>
           <span className="text-sm font-semibold text-av-text-primary tracking-tight">
-            AssetVault Pro
+            {t('common:appName')}
           </span>
           <span className="text-[10px] text-av-text-muted bg-av-bg-elevated px-1.5 py-0.5 rounded-full ml-1">
-            Alpha
+            {t('common:alpha')}
           </span>
         </div>
       </div>
@@ -75,8 +81,8 @@ const TitleBar: React.FC = () => {
           type="button"
           onClick={openSettings}
           className="w-[40px] h-[32px] flex items-center justify-center rounded hover:bg-av-bg-hover transition-colors text-av-text-secondary hover:text-av-text-primary"
-          title={`设置（${typeof navigator !== 'undefined' && navigator.platform?.toLowerCase().includes('mac') ? '⌘' : 'Ctrl'}+,）`}
-          aria-label="打开设置"
+          title={t('layout:settingsShortcut', { shortcut: settingsShortcut })}
+          aria-label={t('layout:openSettings')}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
             <circle cx="12" cy="12" r="3" />
@@ -86,7 +92,7 @@ const TitleBar: React.FC = () => {
         <button
           onClick={handleMinimize}
           className="w-[46px] h-[32px] flex items-center justify-center hover:bg-av-bg-hover transition-colors"
-          title="Minimize"
+          title={t('layout:minimize')}
         >
           <svg width="10" height="1" viewBox="0 0 10 1" fill="currentColor" opacity="0.7">
             <rect width="10" height="1" />
@@ -97,7 +103,7 @@ const TitleBar: React.FC = () => {
           className={`w-[46px] h-[32px] flex items-center justify-center transition-colors ${
             isMaximized ? 'bg-av-bg-hover' : 'hover:bg-av-bg-hover'
           }`}
-          title={isMaximized ? 'Restore' : 'Maximize'}
+          title={isMaximized ? t('layout:restore') : t('layout:maximize')}
         >
           {isMaximized ? (
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.7">
@@ -113,7 +119,7 @@ const TitleBar: React.FC = () => {
         <button
           onClick={handleClose}
           className="w-[46px] h-[32px] flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors"
-          title={activeSpecialPreview ? '关闭预览并返回资源库' : '关闭应用'}
+          title={activeSpecialPreview ? t('layout:closePreview') : t('layout:closeApp')}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" opacity="0.8">
             <path d="M1 1l8 8M9 1l-8 8" />

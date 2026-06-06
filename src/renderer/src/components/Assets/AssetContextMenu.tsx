@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import type { AssetItem, FolderItem } from '@/shared/types'
 import { flattenFolderTree } from '../../utils/flattenFolderTree'
@@ -48,6 +49,7 @@ export function AssetContextMenu({
   onClose: () => void
   onAction: (key: string, assetIds: string[], extra?: string) => void
 }) {
+  const { t } = useTranslation('assets')
   const menuRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
   const [openSubmenu, setOpenSubmenu] = useState<'folders' | 'libraries' | null>(null)
@@ -122,42 +124,60 @@ export function AssetContextMenu({
   const multi = assetIds.length > 1
 
   const items: MenuItem[] = [
-    { key: 'explorer', label: '在资源管理器打开' },
-    { key: 'add-folder', label: '添加至文件夹', submenu: 'folders' },
+    { key: 'explorer', label: t('contextMenu.openExplorer') },
+    { key: 'add-folder', label: t('contextMenu.addToFolder'), submenu: 'folders' },
     {
       key: 'add-library',
-      label: '添加至其它资源库',
+      label: t('contextMenu.addToOtherLibrary'),
       submenu: 'libraries',
       disabled: otherLibraries.length === 0
     },
-    { key: 'set-cover', label: '设为文件夹封面', disabled: !canSetCover },
-    { key: 'rename', label: '重命名', disabled: multi },
-    { key: 'copy-files', label: multi ? `复制文件 (${assetIds.length})` : '复制文件' },
-    { key: 'copy-paths', label: multi ? `复制文件路径 (${assetIds.length})` : '复制文件路径' },
+    { key: 'set-cover', label: t('contextMenu.setCover'), disabled: !canSetCover },
+    { key: 'rename', label: t('contextMenu.rename'), disabled: multi },
+    {
+      key: 'copy-files',
+      label: multi
+        ? t('contextMenu.copyFilesMulti', { count: assetIds.length })
+        : t('contextMenu.copyFiles')
+    },
+    {
+      key: 'copy-paths',
+      label: multi
+        ? t('contextMenu.copyPathsMulti', { count: assetIds.length })
+        : t('contextMenu.copyPaths')
+    },
     {
       key: 'analyze-colors',
-      label: multi ? `重新分析颜色 (${assetIds.length})` : '重新分析颜色',
+      label: multi
+        ? t('contextMenu.reanalyzeColorMulti', { count: assetIds.length })
+        : t('contextMenu.reanalyzeColor'),
       disabled: !canAnalyzeColors
     },
     { key: 'sep-thumb', label: '', separator: true },
     {
       key: 'custom-thumb-file',
-      label: '自定义缩略图 (选择文件)',
+      label: t('contextMenu.customThumbFile'),
       shortcut: 'Ctrl+Alt+T',
       disabled: multi
     },
     {
       key: 'custom-thumb-clipboard',
-      label: '自定义缩略图 (从剪贴板)',
+      label: t('contextMenu.customThumbClipboard'),
       shortcut: 'Ctrl+Shift+Alt+T',
       disabled: multi
     },
     {
       key: 'refresh-thumbnail',
-      label: '刷新缩略图',
+      label: t('contextMenu.refreshThumb'),
       shortcut: 'Ctrl+Alt+R'
     },
-    { key: 'delete', label: multi ? `删除 (${assetIds.length})` : '删除', danger: true }
+    {
+      key: 'delete',
+      label: multi
+        ? t('contextMenu.deleteMulti', { count: assetIds.length })
+        : t('contextMenu.delete'),
+      danger: true
+    }
   ]
 
   return createPortal(
@@ -216,7 +236,7 @@ export function AssetContextMenu({
               }}
             >
               {flatFolders.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-av-text-muted">暂无文件夹</p>
+                <p className="px-3 py-2 text-xs text-av-text-muted">{t('contextMenu.noFolders')}</p>
               ) : (
                 flatFolders.map((f) => (
                   <button

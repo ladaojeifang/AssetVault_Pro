@@ -1,0 +1,21 @@
+{
+  "toggleSidebar": "切换侧栏",
+  "openSettings": "打开设置",
+  "settingsShortcut": "设置（{{shortcut}}）",
+  "minimize": "最小化",
+  "maximize": "最大化",
+  "restore": "还原",
+  "importing": "导入中…",
+  "importingProgress": "导入中 {{current}}/{{total}} · {{filename}}",
+  "assetsTotal": "{{count}} 个资产",
+  "assetsInView": "· 当前显示 {{count}}",
+  "selectedCount": "· 已选 {{count}}",
+  "browseHints": "· Ctrl/⌘+滚轮缩放 · Ctrl/⌘+单击多选 · Shift+单击范围 · 拖到上方子文件夹加入目录",
+  "colorFilter": "颜色筛选",
+  "allColors": "全部颜色",
+  "closePreview": "关闭预览并返回资源库",
+  "closeApp": "关闭应用",
+  "gridMasonry": "瀑布流",
+  "loadingMore": "加载更多…",
+  "updating": "更新中…"
+}

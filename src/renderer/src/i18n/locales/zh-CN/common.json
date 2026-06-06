@@ -1,0 +1,18 @@
+{
+  "appName": "AssetVault Pro",
+  "alpha": "Alpha",
+  "cancel": "取消",
+  "save": "保存",
+  "saveChanges": "保存更改",
+  "saving": "保存中…",
+  "close": "关闭",
+  "delete": "删除",
+  "rename": "重命名",
+  "confirm": "确定",
+  "preview": "预览",
+  "loading": "加载中…",
+  "error": "错误",
+  "success": "成功",
+  "none": "无",
+  "optional": "可选"
+}

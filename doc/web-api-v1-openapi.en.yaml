@@ -1,0 +1,898 @@
+openapi: 3.1.0
+info:
+  title: AssetVault Pro Web API
+  version: 1.0.0
+  description: |
+    Local HTTP API (available while the app is running). Default base: `http://127.0.0.1:41596/api/v1/`.
+
+    - Response format: [JSend](https://github.com/omniti-labs/jsend)
+    - Local access needs no token by default; with "Allow remote" use `Authorization: Bearer <token>` or `?token=`
+    - Playground: `/api/v1/playground/`
+  contact:
+    name: AssetVault Pro
+servers:
+  - url: http://127.0.0.1:41596/api/v1
+    description: Local default (port configurable in Settings)
+
+tags:
+  - name: app
+  - name: library
+  - name: asset
+  - name: folder
+  - name: tag
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    queryToken:
+      type: apiKey
+      in: query
+      name: token
+  schemas:
+    JSendSuccess:
+      type: object
+      required: [status, data]
+      properties:
+        status:
+          type: string
+          enum: [success]
+        data: {}
+    JSendError:
+      type: object
+      required: [status, code, message]
+      properties:
+        status:
+          type: string
+          enum: [error]
+        code:
+          type: string
+        message:
+          type: string
+    AppInfo:
+      type: object
+      properties:
+        name: { type: string }
+        version: { type: string }
+        apiVersion: { type: string, enum: [v1] }
+        platform: { type: string }
+        packaged: { type: boolean }
+        features:
+          type: array
+          items: { type: string }
+        ytdlp:
+          type: object
+          properties:
+            version: { type: string, nullable: true }
+            ffmpegPresent: { type: boolean }
+        limits:
+          type: object
+          properties:
+            pageVideoImport:
+              type: object
+              properties:
+                maxBatchItems: { type: integer }
+                maxConcurrentJobs:
+                  type: integer
+                  description: Config cap 2; implementation currently runs one yt-dlp child at a time
+                maxActiveJobs: { type: integer, description: queued + running cap (default 100) }
+                jobTimeoutMs: { type: integer }
+                stallTimeoutMs: { type: integer }
+                pollIntervalMsRecommended: { type: integer }
+    AssetDto:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        fileType: { type: string }
+        filePath: { type: string }
+        resolvedFilePath: { type: string }
+        notes: { type: string }
+        sourceUrl: { type: string }
+        importedAt: { type: string, format: date-time }
+        tagIds: { type: array, items: { type: string } }
+        folderIds: { type: array, items: { type: string } }
+    AssetListPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/AssetDto' }
+        total: { type: integer }
+        offset: { type: integer }
+        limit: { type: integer }
+    FolderDto:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        parentId: { type: string, nullable: true }
+        path: { type: string }
+        level: { type: integer }
+        assetCount: { type: integer }
+    TagDto:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        color: { type: string }
+        usageCount: { type: integer }
+
+paths:
+  /app/info:
+    get:
+      tags: [app]
+      summary: Application info
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/JSendSuccess'
+                  - properties:
+                      data: { $ref: '#/components/schemas/AppInfo' }
+
+  /library/info:
+    get:
+      tags: [library]
+      summary: Current library metadata
+      responses:
+        '200': { description: OK }
+
+  /library/state:
+    get:
+      tags: [library]
+      summary: Active library and recent list
+      responses:
+        '200': { description: OK }
+
+  /library/importFromLibrary:
+    post:
+      tags: [library]
+      summary: Import entire library from another (archive→archive or catalog→catalog)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sourceLibraryRoot]
+              properties:
+                sourceLibraryRoot:
+                  type: string
+                  description: Source library root (must match current library mode — archive or catalog)
+      responses:
+        '200':
+          description: Import succeeded (catalog merge includes importMode, assetsAddedLocal, etc.)
+        '400':
+          description: Invalid path, source mode mismatch, or unsupported archive/catalog combination
+        '409':
+          description: Target mode mismatch or import already in progress
+
+  /asset/get:
+    get:
+      tags: [asset]
+      summary: List assets (paginated)
+      parameters:
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 1000 } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: folderId, in: query, schema: { type: string } }
+        - { name: fileType, in: query, schema: { type: string } }
+        - { name: sortBy, in: query, schema: { type: string } }
+        - { name: sortOrder, in: query, schema: { type: string, enum: [asc, desc] } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/JSendSuccess'
+                  - properties:
+                      data: { $ref: '#/components/schemas/AssetListPage' }
+    post:
+      tags: [asset]
+      summary: Query with complex filters (body mirrors query params)
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: OK }
+
+  /asset/info:
+    get:
+      tags: [asset]
+      summary: Single asset
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+        '404': { description: Asset not found }
+
+  /asset/import:
+    post:
+      tags: [asset]
+      summary: Import from local path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filePath]
+              properties:
+                filePath: { type: string, example: 'G:\\images\\photo.jpg' }
+                targetFolderId: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [ask, use_existing, import_copy]
+                  default: use_existing
+      responses:
+        '200': { description: OK }
+
+  /asset/importFromURL:
+    post:
+      tags: [asset]
+      summary: Import direct media URL (main process download; page URLs return 400 — use pageVideoImport)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, example: 'https://example.com/photo.jpg' }
+                filename: { type: string, example: 'photo.jpg' }
+                targetFolderId: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [ask, use_existing, import_copy]
+                  default: use_existing
+                headers:
+                  type: object
+                  additionalProperties: { type: string }
+                  description: Optional download headers (Referer, User-Agent, Accept, Accept-Language)
+      responses:
+        '200': { description: OK }
+
+  /asset/fetchRemoteBody:
+    post:
+      tags: [asset]
+      summary: Download URL in main process and return dataUrl (no library import; Markdown bundles)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, example: 'https://cdn.example.com/photo.jpg' }
+                headers:
+                  type: object
+                  additionalProperties: { type: string }
+                  description: Optional download headers (Referer, User-Agent, Accept, Accept-Language)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [success] }
+                  data:
+                    type: object
+                    properties:
+                      dataUrl: { type: string }
+                      bytes: { type: integer }
+                      contentType: { type: string, nullable: true }
+
+  /asset/fullPageSession/start:
+    post:
+      tags: [asset, fullPageSession]
+      summary: Start full-page stitch session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [layout, output]
+      responses:
+        '200': { description: OK }
+
+  /asset/fullPageSession/append:
+    post:
+      tags: [asset, fullPageSession]
+      summary: Register strip image (local path under session tempDir)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, stripIndex, filePath, stripHeightPx]
+      responses:
+        '200': { description: OK }
+
+  /asset/fullPageSession/finish:
+    post:
+      tags: [asset, fullPageSession]
+      summary: Stitch strips vertically and import as one asset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+      responses:
+        '200': { description: OK }
+
+  /asset/fullPageSession/{sessionId}:
+    get:
+      tags: [asset, fullPageSession]
+      summary: Get full-page stitch session status
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+    delete:
+      tags: [asset, fullPageSession]
+      summary: Cancel session and remove temp files
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /asset/articleBundleSession/start:
+    post:
+      tags: [asset, articleBundleSession]
+      summary: Start Markdown article bundle session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [output]
+      responses:
+        '200': { description: OK }
+
+  /asset/articleBundleSession/append:
+    post:
+      tags: [asset, articleBundleSession]
+      summary: Register bundle file (local path under session tempDir)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, relativePath, filePath]
+      responses:
+        '200': { description: OK }
+
+  /asset/articleBundleSession/finish:
+    post:
+      tags: [asset, articleBundleSession]
+      summary: Validate bundle and import as one asset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, requiredFiles]
+      responses:
+        '200': { description: OK }
+
+  /asset/articleBundleSession/{sessionId}:
+    get:
+      tags: [asset, articleBundleSession]
+      summary: Get article bundle session status
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+    delete:
+      tags: [asset, articleBundleSession]
+      summary: Cancel article bundle session and remove temp files
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /asset/pageVideoImport:
+    post:
+      tags: [asset, pageVideoImport]
+      summary: Create page video import job (async yt-dlp; no 300MB cap)
+      description: |
+        Requires open library (LIBRARY_NOT_READY 503). Rejects direct CDN/media URLs (PAGE_VIDEO_NOT_SUPPORTED).
+        Jobs persisted to userData/AssetVault/page-video-jobs.json (may contain cookieHeader plaintext).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string }
+                platform: { type: string }
+                format: { type: string, description: 'When omitted, platform preset applies (e.g. bilibili 1080p DASH)' }
+                cookiesFromBrowser:
+                  type: string
+                  enum: [edge, chrome, firefox, none]
+                  default: none
+                cookiesFile:
+                  type: string
+                  description: Local path to Netscape cookies.txt
+                cookieHeader:
+                  type: string
+                  description: 'Cookie header value from DevTools (without "Cookie:" prefix)'
+                duplicatePolicy:
+                  type: string
+                  enum: [import_copy, use_existing, replace]
+                  description: replace treated as import_copy; warnings include REPLACE_NOT_IMPLEMENTED
+                options:
+                  type: object
+                  properties:
+                    writeSubs:
+                      type: boolean
+                      description: Passes --write-subs to yt-dlp; subtitle files stay in temp only and are not imported as assets
+                    subtitleLangs: { type: array, items: { type: string } }
+                    noPlaylist: { type: boolean, default: true }
+                sourceMeta:
+                  type: object
+                  properties:
+                    pageUrl: { type: string }
+                    pageTitle: { type: string }
+      responses:
+        '200': { description: OK }
+        '503': { description: YTDLP_NOT_INSTALLED or LIBRARY_NOT_READY }
+
+  /asset/pageVideoImport/batch:
+    post:
+      tags: [asset, pageVideoImport]
+      summary: Batch create page video import jobs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                platform: { type: string }
+                format: { type: string }
+                cookiesFromBrowser:
+                  type: string
+                  enum: [edge, chrome, firefox, none]
+                cookiesFile: { type: string }
+                cookieHeader: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [import_copy, use_existing, replace]
+                targetFolderId: { type: string, nullable: true }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [url]
+                    properties:
+                      url: { type: string }
+                      platform: { type: string }
+                      format: { type: string }
+                      cookieHeader: { type: string }
+                      cookiesFile: { type: string }
+                      cookiesFromBrowser:
+                        type: string
+                        enum: [edge, chrome, firefox, none]
+      responses:
+        '200': { description: OK }
+
+  /asset/pageVideoImport/batch/{batchId}:
+    get:
+      tags: [asset, pageVideoImport]
+      summary: Get batch page video import jobs (all public job states)
+      description: Returns 404 BATCH_NOT_FOUND when no jobs remain for this batchId (e.g. after 24h retention purge).
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+        '404': { description: BATCH_NOT_FOUND }
+
+  /asset/pageVideoImport/jobs/{jobId}:
+    get:
+      tags: [asset, pageVideoImport]
+      summary: Get page video import job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+    delete:
+      tags: [asset, pageVideoImport]
+      summary: Cancel page video import job
+      description: |
+        Queued jobs cancel immediately with filesRemoved true. Running jobs set cancelRequested and kill yt-dlp;
+        response may still show running with filesRemoved false until polled as cancelled.
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+        '404': { description: JOB_NOT_FOUND }
+
+  /asset/importFromDataUrl:
+    post:
+      tags: [asset]
+      summary: Import from data URL (main process, e.g. screenshot)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dataUrl]
+              properties:
+                dataUrl: { type: string, example: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..." }
+                filename: { type: string, example: "screenshot.jpg" }
+                targetFolderId: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [ask, use_existing, import_copy]
+                  default: use_existing
+      responses:
+        '200': { description: OK }
+
+  /asset/importBatch:
+    post:
+      tags: [asset]
+      summary: Batch import from local paths
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filePaths]
+              properties:
+                filePaths: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /asset/importFromURLBatch:
+    post:
+      tags: [asset]
+      summary: Batch import from URLs (main process download)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [url]
+                    properties:
+                      url: { type: string, example: 'https://example.com/a.jpg' }
+                      filename: { type: string, example: 'a.jpg' }
+                targetFolderId: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [ask, use_existing, import_copy]
+                  default: use_existing
+      responses:
+        '200': { description: OK }
+
+  /asset/importFolder:
+    post:
+      tags: [asset]
+      summary: Recursively import folder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [folderPath]
+              properties:
+                folderPath: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /asset/delete:
+    delete:
+      tags: [asset]
+      summary: Delete assets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /asset/update:
+    patch:
+      tags: [asset]
+      summary: Update notes, source URL, or metadata
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+        notes: { type: string }
+        sourceUrl: { type: string }
+        metadata: { type: object }
+      responses:
+        '200': { description: OK }
+
+  /asset/rename:
+    post:
+      tags: [asset]
+      summary: Rename asset
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, newName]
+              properties:
+                id: { type: string }
+                newName: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /asset/relink:
+    post:
+      tags: [asset]
+      summary: Relink catalog asset source file
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetId, newSourcePath]
+              properties:
+                assetId: { type: string }
+                newSourcePath: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /asset/localize:
+    post:
+      tags: [asset]
+      summary: Localize catalog assets into full library
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetIds]
+              properties:
+                assetIds: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /folder/get:
+    get:
+      tags: [folder]
+      summary: Flat folder list
+      responses:
+        '200': { description: OK }
+
+  /folder/tree:
+    get:
+      tags: [folder]
+      summary: Folder tree
+      responses:
+        '200': { description: OK }
+
+  /folder/info:
+    get:
+      tags: [folder]
+      summary: Single folder
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /folder/create:
+    post:
+      tags: [folder]
+      summary: Create folder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                parentId: { type: string, nullable: true }
+                color: { type: string }
+                icon: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /folder/update:
+    patch:
+      tags: [folder]
+      summary: Update folder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                name: { type: string }
+                color: { type: string }
+                icon: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /folder/delete:
+    delete:
+      tags: [folder]
+      summary: Delete folder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /folder/move:
+    post:
+      tags: [folder]
+      summary: Move folder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                newParentId: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /tag/get:
+    get:
+      tags: [tag]
+      summary: Tag list
+      responses:
+        '200': { description: OK }
+
+  /tag/info:
+    get:
+      tags: [tag]
+      summary: Single tag
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /tag/create:
+    post:
+      tags: [tag]
+      summary: Create tag
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                color: { type: string }
+                description: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /tag/update:
+    patch:
+      tags: [tag]
+      summary: Update tag
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                name: { type: string }
+                color: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /tag/delete:
+    delete:
+      tags: [tag]
+      summary: Delete tag
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /tag/assign:
+    post:
+      tags: [tag]
+      summary: Assign tags to assets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetIds, tagIds]
+              properties:
+                assetIds: { type: array, items: { type: string } }
+                tagIds: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /tag/remove:
+    post:
+      tags: [tag]
+      summary: Remove tags from assets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetIds, tagIds]
+              properties:
+                assetIds: { type: array, items: { type: string } }
+                tagIds: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }

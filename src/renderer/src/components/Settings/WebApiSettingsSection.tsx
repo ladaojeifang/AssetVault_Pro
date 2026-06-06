@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { AppPreferences } from '@/shared/appPreferences'
 import type { WebApiPreferences } from '@/shared/webApiPreferences'
 import { DEFAULT_WEB_API_PREFERENCES } from '@/shared/webApiPreferences'
+import { useAppLocale } from '../../stores/LocaleContext'
 
 type WebApiStatus = {
   running: boolean
@@ -40,6 +42,8 @@ export function WebApiSettingsSection({
   prefs: AppPreferences
   onUpdateWebApi: (webApi: WebApiPreferences) => void
 }) {
+  const { t } = useTranslation('settings')
+  const { locale } = useAppLocale()
   const w = prefs.webApi ?? { ...DEFAULT_WEB_API_PREFERENCES }
   const [status, setStatus] = useState<WebApiStatus | null>(null)
   const [busy, setBusy] = useState(false)
@@ -66,12 +70,9 @@ export function WebApiSettingsSection({
 
   return (
     <div className="space-y-4 pt-4 border-t border-av-border">
-      <h4 className="text-sm font-semibold text-av-text-primary">开发者 · Web API</h4>
+      <h4 className="text-sm font-semibold text-av-text-primary">{t('webApi.title')}</h4>
 
-      <SettingField
-        label="启用 Web API"
-        description="应用运行时在本机提供 HTTP 接口（关闭后端口不监听）"
-      >
+      <SettingField label={t('webApi.enableLabel')} description={t('webApi.enableDesc')}>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -79,18 +80,18 @@ export function WebApiSettingsSection({
             onChange={(e) => patch({ enabled: e.target.checked })}
             className="w-4 h-4 rounded bg-av-bg-elevated border-av-border"
           />
-          <span className="text-sm text-av-text-secondary">启用</span>
+          <span className="text-sm text-av-text-secondary">{t('webApi.enableCheckbox')}</span>
           {status && (
             <span
               className={`text-xs ml-2 ${status.running ? 'text-green-500' : 'text-av-text-muted'}`}
             >
-              {status.running ? '● 运行中' : '○ 未监听'}
+              {status.running ? t('webApi.running') : t('webApi.notListening')}
             </span>
           )}
         </label>
       </SettingField>
 
-      <SettingField label="端口" description="默认 41596（保存后生效）">
+      <SettingField label={t('webApi.portLabel')} description={t('webApi.portDesc')}>
         <input
           type="number"
           min={1024}
@@ -102,10 +103,7 @@ export function WebApiSettingsSection({
         />
       </SettingField>
 
-      <SettingField
-        label="允许局域网 / 远程访问"
-        description="监听 0.0.0.0 并要求 Bearer Token；仅在你信任的网络中开启"
-      >
+      <SettingField label={t('webApi.allowRemoteLabel')} description={t('webApi.allowRemoteDesc')}>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -124,10 +122,10 @@ export function WebApiSettingsSection({
       </SettingField>
 
       {w.allowRemote && (
-        <SettingField label="API Token" description="远程请求须携带 Authorization: Bearer …">
+        <SettingField label={t('webApi.tokenLabel')} description={t('webApi.tokenDesc')}>
           <div className="flex flex-wrap gap-2 items-center">
             <code className="text-xs bg-av-bg-elevated px-2 py-1 rounded break-all max-w-full">
-              {w.token || '（保存后自动生成）'}
+              {w.token || t('webApi.tokenPlaceholder')}
             </code>
             <button
               type="button"
@@ -135,7 +133,7 @@ export function WebApiSettingsSection({
               disabled={!w.token}
               onClick={() => void copyText(w.token)}
             >
-              复制
+              {t('webApi.copy')}
             </button>
             <button
               type="button"
@@ -157,14 +155,14 @@ export function WebApiSettingsSection({
                   .finally(() => setBusy(false))
               }}
             >
-              重新生成
+              {t('webApi.regenerate')}
             </button>
           </div>
         </SettingField>
       )}
 
       {status && (
-        <SettingField label="Base URL">
+        <SettingField label={t('webApi.baseUrlLabel')}>
           <div className="flex flex-wrap gap-2 items-center">
             <code className="text-xs text-av-accent-blue break-all">{status.baseUrl}/</code>
             <button
@@ -172,7 +170,7 @@ export function WebApiSettingsSection({
               className="btn-secondary text-xs"
               onClick={() => void copyText(`${status.baseUrl}/`)}
             >
-              复制
+              {t('webApi.copy')}
             </button>
           </div>
         </SettingField>
@@ -185,25 +183,25 @@ export function WebApiSettingsSection({
           disabled={!status?.playgroundUrl}
           onClick={() => {
             if (status?.playgroundUrl) {
-              void window.assetVaultAPI.settings.openWebApiPlayground(status.playgroundUrl)
+              const url = new URL(status.playgroundUrl)
+              url.searchParams.set('lang', locale === 'en-US' ? 'en' : 'zh')
+              void window.assetVaultAPI.settings.openWebApiPlayground(url.toString())
             }
           }}
         >
-          打开 Playground
+          {t('webApi.openPlayground')}
         </button>
-        <button
-          type="button"
-          className="btn-secondary text-sm"
-          onClick={refreshStatus}
-        >
-          刷新状态
+        <button type="button" className="btn-secondary text-sm" onClick={refreshStatus}>
+          {t('webApi.refreshStatus')}
         </button>
       </div>
 
       <p className="text-xs text-av-text-muted">
-        使用说明见 <code className="text-av-text-secondary">doc/web-api-v1-guide.md</code>
-        ；设计稿 <code className="text-av-text-secondary">doc/web-api-v1-design.md</code>
-        ；OpenAPI <code className="text-av-text-secondary">doc/web-api-v1-openapi.yaml</code>
+        {t('webApi.docsHint', {
+          guide: 'doc/web-api-v1-guide.md',
+          design: 'doc/web-api-v1-design.md',
+          openapi: 'doc/web-api-v1-openapi.yaml'
+        })}
       </p>
     </div>
   )

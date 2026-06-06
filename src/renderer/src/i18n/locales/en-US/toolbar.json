@@ -1,0 +1,11 @@
+{
+  "importFiles": "Import Files",
+  "importFolder": "Import Folder",
+  "searchPlaceholder": "Search assets…",
+  "viewGrid": "Grid view",
+  "viewList": "List view",
+  "sort": "Sort",
+  "aiCanvas": "AI Canvas",
+  "importFolderTitle": "Import entire folder (Ctrl+Shift+O)",
+  "aiCanvasTitle": "Open AI Canvas window (stack with library, drag assets to canvas)"
+}

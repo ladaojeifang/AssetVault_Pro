@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Engine,
   Scene,
@@ -27,6 +28,7 @@ export function ModelViewer({
   className = '',
   interactive = true
 }: ModelViewerProps) {
+  const { t } = useTranslation('preview')
   const containerRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -37,7 +39,7 @@ export function ModelViewer({
 
     const format = parseModel3dFormat(extension)
     if (!format) {
-      setError('不支持的 3D 格式')
+      setError(t('model3d.unsupportedFormat'))
       setLoading(false)
       return
     }
@@ -83,7 +85,7 @@ export function ModelViewer({
         setLoading(false)
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : '模型加载失败')
+          setError(err instanceof Error ? err.message : t('model3d.loadFailed'))
           setLoading(false)
         }
       }
@@ -104,7 +106,7 @@ export function ModelViewer({
         container.removeChild(canvas)
       }
     }
-  }, [fileUrl, extension, interactive])
+  }, [fileUrl, extension, interactive, t])
 
   return (
     <div
@@ -113,7 +115,7 @@ export function ModelViewer({
     >
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center text-sm text-white/50 z-10 pointer-events-none">
-          加载模型…
+          {t('loadingModel')}
         </div>
       )}
       {error && (

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { AssetItem } from '@/shared/types'
 import { fontPreviewFamilyName } from '../utils/fontAssetMeta'
 import { resolveLibraryFileProtocolUrl } from '../utils/appFileProtocolUrl'
+import { i18n } from '../i18n'
 
 const MIME_BY_EXT: Record<string, string> = {
   ttf: 'font/ttf',
@@ -93,7 +94,7 @@ export function useFontFace(asset: AssetItem | null): {
         setLoaded(true)
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : '字体加载失败')
+          setError(err instanceof Error ? err.message : i18n.t('preview:fontPreview.loadFailed'))
         }
       }
     }

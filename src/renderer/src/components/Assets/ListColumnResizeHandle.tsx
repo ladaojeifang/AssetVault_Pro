@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 
 /** 列边界拖拽：默认隐形，悬停/拖拽时显示细线 */
 export function ListColumnResizeHandle({
@@ -8,12 +9,13 @@ export function ListColumnResizeHandle({
   onPointerDown: (e: React.MouseEvent) => void
   onDoubleClickReset?: () => void
 }): React.ReactElement {
+  const { t } = useTranslation('assets')
   return (
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="拖拽调整列宽，双击恢复默认宽度"
-      title="拖拽调整列宽 · 双击恢复默认"
+      aria-label={t('columnResizeAria')}
+      title={t('columnResize')}
       onMouseDown={onPointerDown}
       onDoubleClick={(e) => {
         e.preventDefault()

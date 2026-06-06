@@ -1,0 +1,9 @@
+{
+  "ASSET_NOT_FOUND": "资产不存在",
+  "FOLDER_NOT_FOUND": "文件夹不存在",
+  "TAG_NOT_FOUND": "标签不存在",
+  "LIBRARY_NOT_READY": "资料库未就绪",
+  "INVALID_REQUEST": "请求无效",
+  "NETWORK": "网络连接失败",
+  "UNKNOWN": "未知错误"
+}

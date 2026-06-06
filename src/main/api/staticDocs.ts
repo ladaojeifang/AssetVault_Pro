@@ -36,7 +36,13 @@ function resolveFirstExisting(relPaths: string[]): string | null {
   return null
 }
 
-export function resolveOpenApiYamlPath(): string | null {
+export function resolveOpenApiYamlPath(locale: 'en' | 'zh' = 'zh'): string | null {
+  if (locale === 'en') {
+    return resolveFirstExisting([
+      'doc/web-api-v1-openapi.en.yaml',
+      'web-api-v1-openapi.en.yaml'
+    ])
+  }
   return resolveFirstExisting([
     'doc/web-api-v1-openapi.yaml',
     'web-api-v1-openapi.yaml'
@@ -66,10 +72,18 @@ function sendFile(res: ServerResponse, filePath: string): boolean {
 /** Docs/playground routes — no auth. Returns true if handled. */
 export function tryServeStaticDocs(pathname: string, res: ServerResponse): boolean {
   if (pathname === '/api/v1/docs/openapi.yaml') {
-    const p = resolveOpenApiYamlPath()
+    const p = resolveOpenApiYamlPath('zh')
     if (p && sendFile(res, p)) return true
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
     res.end('openapi.yaml not found')
+    return true
+  }
+
+  if (pathname === '/api/v1/docs/openapi.en.yaml') {
+    const p = resolveOpenApiYamlPath('en')
+    if (p && sendFile(res, p)) return true
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+    res.end('openapi.en.yaml not found')
     return true
   }
 

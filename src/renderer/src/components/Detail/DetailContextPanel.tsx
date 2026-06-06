@@ -1,20 +1,64 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { formatFileSizeMbFilterLabel } from '@/shared/assetFilters'
+import type { DatePreset, SizePreset } from '@/shared/assetFilters'
 import { useApp } from '../../stores/AppContext'
 import { findFolderInTree, getChildFolders } from '../../utils/folderTreeNav'
 import { FolderIconDisplay } from '../Common/FolderIconDisplay'
 import { FontFamilyContextView, FontTypeContextView } from './FontDetailContext'
+import {
+  translateDatePresetLabel,
+  translateSizePresetLabel
+} from '../../utils/assetFilterLabels'
 
-const FILE_TYPE_META: Record<string, { label: string; emoji: string; desc: string }> = {
-  image: { label: 'Images', emoji: '🖼️', desc: '图片与照片类素材' },
-  video: { label: 'Videos', emoji: '🎬', desc: '视频文件' },
-  audio: { label: 'Audio', emoji: '🎵', desc: '音频文件' },
-  font: { label: 'Fonts', emoji: '🔤', desc: '字体文件（TTF / OTF / TTC 等）' },
-  design: { label: 'Design', emoji: '🎨', desc: '设计源文件' },
-  document: { label: 'Docs', emoji: '📄', desc: '文档与文本' },
-  '3d': { label: '3D', emoji: '📦', desc: '三维模型与场景' },
-  code: { label: 'Code', emoji: '💻', desc: '代码与脚本' },
-  other: { label: 'Other', emoji: '📎', desc: '其他类型' }
+const FILE_TYPE_META: Record<string, { label: string; emoji: string }> = {
+  image: { label: 'Images', emoji: '🖼️' },
+  video: { label: 'Videos', emoji: '🎬' },
+  audio: { label: 'Audio', emoji: '🎵' },
+  font: { label: 'Fonts', emoji: '🔤' },
+  design: { label: 'Design', emoji: '🎨' },
+  document: { label: 'Docs', emoji: '📄' },
+  '3d': { label: '3D', emoji: '📦' },
+  code: { label: 'Code', emoji: '💻' },
+  other: { label: 'Other', emoji: '📎' }
+}
+
+function buildActiveFilterChips(
+  t: TFunction<'detail'>,
+  ta: TFunction<'assets'>,
+  p: {
+    debouncedSearch: string
+    colorBucketFilter: string | null
+    sizePresetFilter: SizePreset | null
+    fileSizeMinMb: number | null
+    fileSizeMaxMb: number | null
+    datePresetFilter: DatePreset | null
+    tagFilters: string[]
+  }
+): string[] {
+  const filters: string[] = []
+  const q = p.debouncedSearch.trim()
+  if (q) filters.push(t('context.filter.search', { query: q }))
+  if (p.colorBucketFilter) filters.push(t('context.filter.color', { value: p.colorBucketFilter }))
+  if (p.sizePresetFilter) {
+    filters.push(
+      t('context.filter.sizePreset', {
+        value: translateSizePresetLabel(ta, p.sizePresetFilter)
+      })
+    )
+  }
+  const mbLabel = formatFileSizeMbFilterLabel(p.fileSizeMinMb, p.fileSizeMaxMb)
+  if (mbLabel) filters.push(t('context.filter.volume', { value: mbLabel }))
+  if (p.datePresetFilter) {
+    filters.push(
+      t('context.filter.date', { value: translateDatePresetLabel(ta, p.datePresetFilter) })
+    )
+  }
+  if (p.tagFilters.length > 0) {
+    filters.push(t('context.filter.tags', { count: p.tagFilters.length }))
+  }
+  return filters
 }
 
 function DetailPanelShell({
@@ -30,6 +74,7 @@ function DetailPanelShell({
   children: React.ReactNode
   onClose: () => void
 }) {
+  const { t } = useTranslation('detail')
   return (
     <div className="h-full flex flex-col bg-av-bg-secondary">
       <div className="flex items-center justify-between px-4 py-3 border-b border-av-border shrink-0">
@@ -37,7 +82,7 @@ function DetailPanelShell({
           <p className="text-sm font-semibold truncate">{title}</p>
           {subtitle ? <p className="text-[11px] text-av-text-muted truncate mt-0.5">{subtitle}</p> : null}
         </div>
-        <button type="button" onClick={onClose} className="btn-icon shrink-0" title="关闭面板">
+        <button type="button" onClick={onClose} className="btn-icon shrink-0" title={t('closePanel')}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
@@ -72,6 +117,7 @@ function ContextInfoRow({ label, value }: { label: string; value: string }) {
 }
 
 function FolderContextView({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation('detail')
   const { currentFolderId, folderTree } = useApp()
   const folder = currentFolderId ? findFolderInTree(folderTree, currentFolderId) : null
   const [coverSrc, setCoverSrc] = useState<string | null>(null)
@@ -115,7 +161,7 @@ function FolderContextView({ onClose }: { onClose: () => void }) {
   return (
     <DetailPanelShell
       title={folder.name}
-      subtitle="文件夹"
+      subtitle={t('context.folder.subtitle')}
       onClose={onClose}
       preview={
         coverSrc ? (
@@ -130,22 +176,27 @@ function FolderContextView({ onClose }: { onClose: () => void }) {
             ) : (
               <FolderIconDisplay icon={folder.icon} fallbackEmoji="📂" size={48} />
             )}
-            <p className="text-xs text-av-text-muted">{folder.assetCount} 个素材</p>
+            <p className="text-xs text-av-text-muted">
+              {t('context.folder.assetCount', { count: folder.assetCount })}
+            </p>
           </div>
         )
       }
     >
-      <ContextInfoSection title="文件夹信息">
-        <ContextInfoRow label="名称" value={folder.name} />
-        <ContextInfoRow label="素材数" value={String(folder.assetCount)} />
-        <ContextInfoRow label="子文件夹" value={String(childFolders.length)} />
-        <ContextInfoRow label="层级" value={`第 ${folder.level + 1} 级`} />
-        <ContextInfoRow label="路径" value={folder.path || '/'} />
-        <ContextInfoRow label="创建" value={new Date(folder.createdAt).toLocaleString()} />
-        <ContextInfoRow label="更新" value={new Date(folder.updatedAt).toLocaleString()} />
+      <ContextInfoSection title={t('context.folder.infoSection')}>
+        <ContextInfoRow label={t('context.labels.name')} value={folder.name} />
+        <ContextInfoRow label={t('context.labels.assetCount')} value={String(folder.assetCount)} />
+        <ContextInfoRow label={t('context.labels.subfolders')} value={String(childFolders.length)} />
+        <ContextInfoRow
+          label={t('context.labels.level')}
+          value={t('context.labels.levelValue', { n: folder.level + 1 })}
+        />
+        <ContextInfoRow label={t('context.labels.path')} value={folder.path || '/'} />
+        <ContextInfoRow label={t('context.labels.created')} value={new Date(folder.createdAt).toLocaleString()} />
+        <ContextInfoRow label={t('context.labels.updated')} value={new Date(folder.updatedAt).toLocaleString()} />
       </ContextInfoSection>
       {childFolders.length > 0 ? (
-        <ContextInfoSection title="子文件夹">
+        <ContextInfoSection title={t('context.folder.subfolderSection')}>
           <div className="space-y-1">
             {childFolders.map((child) => (
               <div
@@ -161,14 +212,14 @@ function FolderContextView({ onClose }: { onClose: () => void }) {
           </div>
         </ContextInfoSection>
       ) : null}
-      <p className="text-[11px] text-av-text-muted leading-relaxed">
-        选中素材后可在此查看文件详情；当前显示的是侧栏所选文件夹的概览。
-      </p>
+      <p className="text-[11px] text-av-text-muted leading-relaxed">{t('context.folder.footerHint')}</p>
     </DetailPanelShell>
   )
 }
 
 function TypeContextView({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation('detail')
+  const { t: ta } = useTranslation('assets')
   const {
     fileTypeFilter,
     totalAssets,
@@ -186,40 +237,44 @@ function TypeContextView({ onClose }: { onClose: () => void }) {
     return <LibraryContextView onClose={onClose} />
   }
 
-  const filters: string[] = []
-  if (debouncedSearch.trim()) filters.push(`搜索「${debouncedSearch.trim()}」`)
-  if (colorBucketFilter) filters.push(`颜色 ${colorBucketFilter}`)
-  if (sizePresetFilter) filters.push(`尺寸 ${sizePresetFilter}`)
-  const mbLabel = formatFileSizeMbFilterLabel(fileSizeMinMb, fileSizeMaxMb)
-  if (mbLabel) filters.push(`体积 ${mbLabel}`)
-  if (datePresetFilter) filters.push(`日期 ${datePresetFilter}`)
-  if (tagFilters.length > 0) filters.push(`${tagFilters.length} 个标签筛选`)
+  const filters = buildActiveFilterChips(t, ta, {
+    debouncedSearch,
+    colorBucketFilter,
+    sizePresetFilter,
+    fileSizeMinMb,
+    fileSizeMaxMb,
+    datePresetFilter,
+    tagFilters
+  })
+
+  const desc = t(`context.fileTypeDesc.${fileTypeFilter}` as 'context.fileTypeDesc.image')
 
   return (
     <DetailPanelShell
       title={meta.label}
-      subtitle="类型筛选"
+      subtitle={t('context.type.subtitle')}
       onClose={onClose}
       preview={
         <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-av-bg-primary">
           <span className="text-5xl">{meta.emoji}</span>
-          <p className="text-sm text-av-text-secondary">{meta.desc}</p>
+          <p className="text-sm text-av-text-secondary">{desc}</p>
         </div>
       }
     >
-      <ContextInfoSection title="类型信息">
-        <ContextInfoRow label="类型 ID" value={fileTypeFilter} />
-        <ContextInfoRow label="匹配数量" value={totalAssets.toLocaleString()} />
-        {filters.length > 0 ? <ContextInfoRow label="附加筛选" value={filters.join(' · ')} /> : null}
+      <ContextInfoSection title={t('context.type.infoSection')}>
+        <ContextInfoRow label={t('context.labels.typeId')} value={fileTypeFilter} />
+        <ContextInfoRow label={t('context.labels.matchCount')} value={totalAssets.toLocaleString()} />
+        {filters.length > 0 ? (
+          <ContextInfoRow label={t('context.labels.extraFilters')} value={filters.join(' · ')} />
+        ) : null}
       </ContextInfoSection>
-      <p className="text-[11px] text-av-text-muted leading-relaxed">
-        侧栏 Types 中再次点击可取消类型筛选，返回资料库概览。
-      </p>
+      <p className="text-[11px] text-av-text-muted leading-relaxed">{t('context.type.footerHint')}</p>
     </DetailPanelShell>
   )
 }
 
 function LibraryContextView({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation('detail')
   const { totalAssets, folderTree, tags } = useApp()
   const [libraryState, setLibraryState] = useState<{
     libraryDisplayName: string
@@ -277,32 +332,32 @@ function LibraryContextView({ onClose }: { onClose: () => void }) {
 
   return (
     <DetailPanelShell
-      title={libraryState?.libraryDisplayName ?? '资料库'}
-      subtitle="全部资产"
+      title={libraryState?.libraryDisplayName ?? t('context.library.defaultTitle')}
+      subtitle={t('context.library.subtitle')}
       onClose={onClose}
       preview={
         <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-av-bg-primary to-av-bg-elevated">
           <span className="text-5xl">🗂</span>
           <p className="text-lg font-semibold text-av-text-primary tabular-nums">
-            {totalAssets.toLocaleString()} 项素材
+            {t('context.library.assetCount', { count: totalAssets.toLocaleString() })}
           </p>
         </div>
       }
     >
-      <ContextInfoSection title="资料库信息">
-        <ContextInfoRow label="名称" value={libraryState?.libraryDisplayName ?? '…'} />
-        <ContextInfoRow label="素材总数" value={totalAssets.toLocaleString()} />
-        <ContextInfoRow label="文件夹" value={String(folderCount)} />
-        <ContextInfoRow label="标签" value={String(tags.length)} />
+      <ContextInfoSection title={t('context.library.infoSection')}>
+        <ContextInfoRow label={t('context.labels.name')} value={libraryState?.libraryDisplayName ?? '…'} />
+        <ContextInfoRow label={t('context.labels.totalAssets')} value={totalAssets.toLocaleString()} />
+        <ContextInfoRow label={t('context.labels.folders')} value={String(folderCount)} />
+        <ContextInfoRow label={t('context.labels.tags')} value={String(tags.length)} />
         {storage ? (
           <>
-            <ContextInfoRow label="条目包" value={String(storage.itemPackCount)} />
-            <ContextInfoRow label="数据库行" value={String(storage.assetRowCount)} />
+            <ContextInfoRow label={t('context.labels.itemPacks')} value={String(storage.itemPackCount)} />
+            <ContextInfoRow label={t('context.labels.dbRows')} value={String(storage.assetRowCount)} />
           </>
         ) : null}
       </ContextInfoSection>
       {libraryState?.activeLibraryRoot ? (
-        <ContextInfoSection title="存储位置">
+        <ContextInfoSection title={t('context.library.storageSection')}>
           <p className="text-[11px] font-mono text-av-text-secondary leading-relaxed break-all select-all">
             {libraryState.activeLibraryRoot}
           </p>
@@ -313,9 +368,7 @@ function LibraryContextView({ onClose }: { onClose: () => void }) {
           ) : null}
         </ContextInfoSection>
       ) : null}
-      <p className="text-[11px] text-av-text-muted leading-relaxed">
-        未选中素材时显示当前资料库概览；选择文件夹或类型筛选后会显示对应上下文信息。
-      </p>
+      <p className="text-[11px] text-av-text-muted leading-relaxed">{t('context.library.footerHint')}</p>
     </DetailPanelShell>
   )
 }

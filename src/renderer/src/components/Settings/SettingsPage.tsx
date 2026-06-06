@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Modal } from '@arco-design/web-react'
 import { LibrarySettingsPanel } from './LibrarySettingsPanel'
 import { FormatIconOverridesSection } from './FormatIconOverridesSection'
@@ -8,7 +9,9 @@ import {
   MASONRY_COLUMN_WIDTH_DEFAULT
 } from '../../utils/masonryLayout'
 import { useAppTheme } from '../../stores/ThemeContext'
+import { useAppLocale } from '../../stores/LocaleContext'
 import type { AppTheme } from '@/shared/appTheme'
+import type { AppLocale } from '@/shared/appLocale'
 import {
   DEFAULT_APP_PREFERENCES,
   type AppPreferences
@@ -38,6 +41,7 @@ function inferGridSizeFromColumnWidth(px: number): 'small' | 'medium' | 'large' 
 }
 
 const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
+  const { t } = useTranslation(['settings', 'common'])
   const [activeTab, setActiveTab] = useState('general')
   const [prefs, setPrefs] = useState<AppPreferences>({ ...DEFAULT_APP_PREFERENCES })
   const [gridSize, setGridSize] = useState<'small' | 'medium' | 'large'>('medium')
@@ -72,18 +76,18 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
   }, [prefs, gridSize])
 
   const tabs = [
-    { id: 'general', label: 'General', icon: '⚙️' },
-    { id: 'library', label: 'Library', icon: '📁' },
-    { id: 'appearance', label: 'Appearance', icon: '🎨' },
-    { id: 'shortcuts', label: 'Shortcuts', icon: '⌨️' },
-    { id: 'advanced', label: 'Advanced', icon: '🔧' }
+    { id: 'general', label: t('settings:tabs.general'), icon: '⚙️' },
+    { id: 'library', label: t('settings:tabs.library'), icon: '📁' },
+    { id: 'appearance', label: t('settings:tabs.appearance'), icon: '🎨' },
+    { id: 'shortcuts', label: t('settings:tabs.shortcuts'), icon: '⌨️' },
+    { id: 'advanced', label: t('settings:tabs.advanced'), icon: '🔧' }
   ]
 
   return (
     <Modal
       title={
         <div className="flex items-center gap-2">
-          <span className="text-lg">Settings</span>
+          <span className="text-lg">{t('settings:title')}</span>
         </div>
       }
       visible={visible}
@@ -135,7 +139,7 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
       {/* Footer */}
       <div className="flex justify-end gap-3 px-6 py-4 border-t border-av-border">
         <button onClick={onClose} className="btn-secondary">
-          Cancel
+          {t('common:cancel')}
         </button>
         <button
           disabled={saving}
@@ -144,7 +148,7 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
           }}
           className="btn-primary"
         >
-          {saving ? 'Saving…' : 'Save Changes'}
+          {saving ? t('common:saving') : t('common:saveChanges')}
         </button>
       </div>
     </Modal>
@@ -158,26 +162,27 @@ function GeneralSettings({
   prefs: AppPreferences
   onUpdate: <K extends keyof AppPreferences>(key: K, value: AppPreferences[K]) => void
 }) {
+  const { t } = useTranslation('settings')
   return (
     <div className="space-y-6">
-      <h3 className="text-base font-semibold mb-4">General Settings</h3>
+      <h3 className="text-base font-semibold mb-4">{t('general.title')}</h3>
 
       <SettingField
-        label="Default Import Path"
-        description="Default location when importing files"
+        label={t('general.defaultImportPath')}
+        description={t('general.defaultImportPathDesc')}
       >
         <input
           type="text"
           value={prefs.defaultImportPath}
           onChange={(e) => onUpdate('defaultImportPath', e.target.value)}
-          placeholder="Leave empty for system default"
+          placeholder={t('general.defaultImportPathPlaceholder')}
           className="input-base"
         />
       </SettingField>
 
       <SettingField
-        label="Auto-watch Folders"
-        description="Automatically detect new files in imported folders"
+        label={t('general.autoWatch')}
+        description={t('general.autoWatchDesc')}
       >
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -186,13 +191,13 @@ function GeneralSettings({
             onChange={(e) => onUpdate('autoWatchFolders', e.target.checked)}
             className="w-4 h-4 rounded bg-av-bg-elevated border-av-border"
           />
-          <span className="text-sm text-av-text-secondary">Enable file watching</span>
+          <span className="text-sm text-av-text-secondary">{t('general.enableFileWatching')}</span>
         </label>
       </SettingField>
 
       <SettingField
-        label="Thumbnail Quality"
-        description={`JPEG/WebP quality (1-100). Current: ${prefs.thumbnailQuality}%`}
+        label={t('general.thumbnailQuality')}
+        description={t('general.thumbnailQualityDesc', { value: prefs.thumbnailQuality })}
       >
         <input
           type="range"
@@ -206,18 +211,18 @@ function GeneralSettings({
       </SettingField>
 
       <SettingField
-        label="Thumbnail Size"
-        description={`Max dimension in pixels. Applies to newly generated thumbnails. Current: ${prefs.thumbnailMaxEdge}px`}
+        label={t('general.thumbnailSize')}
+        description={t('general.thumbnailSizeDesc', { value: prefs.thumbnailMaxEdge })}
       >
         <select
           value={prefs.thumbnailMaxEdge}
           onChange={(e) => onUpdate('thumbnailMaxEdge', Number(e.target.value))}
           className="input-base w-auto"
         >
-          <option value={128}>128px (Small)</option>
-          <option value={256}>256px (Medium)</option>
-          <option value={384}>384px (Large)</option>
-          <option value={512}>512px (HD)</option>
+          <option value={128}>{t('general.thumbSize128')}</option>
+          <option value={256}>{t('general.thumbSize256')}</option>
+          <option value={384}>{t('general.thumbSize384')}</option>
+          <option value={512}>{t('general.thumbSize512')}</option>
         </select>
       </SettingField>
 
@@ -233,13 +238,28 @@ function AppearanceSettings({
   gridSize: 'small' | 'medium' | 'large'
   onGridSizeChange: (size: 'small' | 'medium' | 'large') => void
 }) {
+  const { t } = useTranslation('settings')
   const { theme, setTheme } = useAppTheme()
+  const { locale, setLocale } = useAppLocale()
 
   return (
     <div className="space-y-6">
-      <h3 className="text-base font-semibold mb-4">外观</h3>
+      <h3 className="text-base font-semibold mb-4">{t('appearance.title')}</h3>
 
-      <SettingField label="软件主题" description="切换界面配色（立即生效并自动保存）">
+      <SettingField label={t('appearance.language')} description={t('appearance.languageDesc')}>
+        <select
+          value={locale}
+          onChange={(e) => {
+            void setLocale(e.target.value as AppLocale)
+          }}
+          className="input-base w-auto min-w-[200px]"
+        >
+          <option value="zh-CN">{t('appearance.languageZh')}</option>
+          <option value="en-US">{t('appearance.languageEn')}</option>
+        </select>
+      </SettingField>
+
+      <SettingField label={t('appearance.theme')} description={t('appearance.themeDesc')}>
         <select
           value={theme}
           onChange={(e) => {
@@ -248,14 +268,14 @@ function AppearanceSettings({
           }}
           className="input-base w-auto min-w-[200px]"
         >
-          <option value="dark">深色（默认）</option>
-          <option value="light">浅色</option>
+          <option value="dark">{t('appearance.themeDark')}</option>
+          <option value="light">{t('appearance.themeLight')}</option>
         </select>
       </SettingField>
 
       <SettingField
-        label="瀑布流缩略图"
-        description={`Ctrl/⌘+滚轮可微调。当前列宽约 ${loadMasonryColumnWidth()}px（列数随窗口宽度变化）`}
+        label={t('appearance.masonry')}
+        description={t('appearance.masonryDesc', { width: loadMasonryColumnWidth() })}
       >
         <div className="flex gap-2">
           {(['small', 'medium', 'large'] as const).map((size) => (
@@ -268,7 +288,11 @@ function AppearanceSettings({
                   : 'bg-av-bg-elevated text-av-text-secondary hover:text-av-text-primary'
               }`}
             >
-              {size}
+              {size === 'small'
+                ? t('appearance.gridSmall')
+                : size === 'medium'
+                  ? t('appearance.gridMedium')
+                  : t('appearance.gridLarge')}
             </button>
           ))}
         </div>
@@ -330,6 +354,7 @@ function ShortcutSettings() {
 }
 
 function LibraryStorageStatsCard(): React.ReactElement {
+  const { t } = useTranslation('settings')
   const [stats, setStats] = useState<{ assetRowCount: number; itemPackCount: number; itemsDir: string } | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -363,25 +388,27 @@ function LibraryStorageStatsCard(): React.ReactElement {
   return (
     <div className="p-4 rounded-lg bg-av-bg-elevated border border-av-border space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h4 className="text-sm font-semibold text-av-text-primary">资料库自检</h4>
+        <h4 className="text-sm font-semibold text-av-text-primary">{t('librarySelfCheck.title')}</h4>
         <button type="button" onClick={() => void load()} disabled={loading} className="btn-secondary text-xs px-2 py-1">
-          {loading ? '刷新中…' : '刷新'}
+          {loading ? t('librarySelfCheck.refreshing') : t('librarySelfCheck.refresh')}
         </button>
       </div>
       <p className="text-xs text-av-text-muted leading-relaxed">
-        主界面列表来自 <code className="text-[11px] px-1 rounded bg-av-bg-secondary">library.sqlite</code> 的{' '}
-        <code className="text-[11px] px-1 rounded bg-av-bg-secondary">assets</code> 表；此处对比磁盘上{' '}
-        <code className="text-[11px] px-1 rounded bg-av-bg-secondary">items/</code> 子目录数量。
+        {t('librarySelfCheck.intro', {
+          sqlite: 'library.sqlite',
+          assetsTable: 'assets',
+          itemsDir: 'items/'
+        })}
       </p>
       {err != null && <p className="text-xs text-red-400">{err}</p>}
       {stats != null && (
         <dl className="grid grid-cols-2 gap-2 text-sm">
           <div className="rounded-md bg-av-bg-secondary/80 px-3 py-2 border border-av-border/60">
-            <dt className="text-xs text-av-text-muted">assets 行数</dt>
+            <dt className="text-xs text-av-text-muted">{t('librarySelfCheck.assetRows')}</dt>
             <dd className="font-mono text-av-text-primary tabular-nums mt-0.5">{stats.assetRowCount}</dd>
           </div>
           <div className="rounded-md bg-av-bg-secondary/80 px-3 py-2 border border-av-border/60">
-            <dt className="text-xs text-av-text-muted">items 子目录数</dt>
+            <dt className="text-xs text-av-text-muted">{t('librarySelfCheck.itemDirs')}</dt>
             <dd className="font-mono text-av-text-primary tabular-nums mt-0.5">{stats.itemPackCount}</dd>
           </div>
         </dl>
@@ -389,18 +416,20 @@ function LibraryStorageStatsCard(): React.ReactElement {
       {stats != null && diff != null && diff !== 0 && (
         <p className="text-xs text-amber-400/90">
           {diff > 0
-            ? `磁盘上多 ${diff} 个目录：多为历史残留（库内已无对应记录），界面不会显示这些文件夹。`
-            : `数据库记录比 items 子目录多 ${-diff} 条：可能部分包目录缺失或已被手动删除。`}
+            ? t('librarySelfCheck.extraDirs', { count: diff })
+            : t('librarySelfCheck.missingDirs', { count: -diff })}
         </p>
       )}
       {stats != null && diff === 0 && stats.assetRowCount > 0 && (
-        <p className="text-xs text-emerald-400/80">数量一致；若主界面仍为空，请检查侧栏文件夹筛选与类型筛选。</p>
+        <p className="text-xs text-emerald-400/80">{t('librarySelfCheck.countsMatch')}</p>
       )}
       {stats != null && stats.assetRowCount === 0 && stats.itemPackCount === 0 && (
-        <p className="text-xs text-av-text-muted">当前库为空，请通过导入或拖拽添加资源。</p>
+        <p className="text-xs text-av-text-muted">{t('librarySelfCheck.emptyLibrary')}</p>
       )}
       {stats != null && (
-        <p className="text-[11px] text-av-text-muted font-mono break-all">items: {stats.itemsDir}</p>
+        <p className="text-[11px] text-av-text-muted font-mono break-all">
+          {t('librarySelfCheck.itemsPath', { path: stats.itemsDir })}
+        </p>
       )}
     </div>
   )
@@ -415,23 +444,22 @@ function AdvancedSettings({
   onUpdate: <K extends keyof AppPreferences>(key: K, value: AppPreferences[K]) => void
   onUpdateWebApi: (webApi: WebApiPreferences) => void
 }) {
+  const { t } = useTranslation('settings')
   return (
     <div className="space-y-6">
-      <h3 className="text-base font-semibold mb-4">Advanced Settings</h3>
+      <h3 className="text-base font-semibold mb-4">{t('advanced.title')}</h3>
 
       <WebApiSettingsSection prefs={prefs} onUpdateWebApi={onUpdateWebApi} />
 
       <LibraryStorageStatsCard />
 
       <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-        <p className="text-sm text-yellow-400/80">
-          ⚠️ These settings may affect performance or stability.
-        </p>
+        <p className="text-sm text-yellow-400/80">⚠️ {t('advanced.warning')}</p>
       </div>
 
       <SettingField
-        label="Search Debounce"
-        description={`Delay before search executes (ms). Save to apply. Current: ${prefs.searchDebounceMs}ms`}
+        label={t('advanced.searchDebounce')}
+        description={t('advanced.searchDebounceDesc', { value: prefs.searchDebounceMs })}
       >
         <input
           type="range"
@@ -445,8 +473,8 @@ function AdvancedSettings({
       </SettingField>
 
       <SettingField
-        label="Max Cache Size"
-        description={`In-memory thumbnail LRU cap (applies on save). Current: ${prefs.maxCacheSizeMB}MB`}
+        label={t('advanced.maxCache')}
+        description={t('advanced.maxCacheDesc', { value: prefs.maxCacheSizeMB })}
       >
         <input
           type="number"

@@ -1,4 +1,5 @@
 import React, { useRef, useCallback, useEffect, useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Virtualizer } from '@tanstack/virtual-core'
 import { useApp } from '../../stores/AppContext'
@@ -25,6 +26,7 @@ import { hasActiveAssetListQuery } from '@/shared/assetFilters'
 import type { SortField } from '@/shared/types'
 
 const AssetGrid: React.FC = () => {
+  const { t } = useTranslation('assets')
   const {
     assets,
     totalAssets,
@@ -331,12 +333,17 @@ const AssetGrid: React.FC = () => {
       try {
         const result = await addDraggedAssetsToFolder(e, folderId)
         if (!result.ok) return
-        notify.success(`已将 ${result.count} 项加入「${findFolderInTree(folderTree, folderId)?.name ?? '文件夹'}」`)
+        notify.success(
+          t('notify.addedToFolder', {
+            count: result.count,
+            name: findFolderInTree(folderTree, folderId)?.name ?? t('folder')
+          })
+        )
         await refreshAssets()
         await refreshFolders()
       } catch (err) {
         console.error('[AssetGrid] drop on folder:', err)
-        notify.error('加入文件夹失败')
+        notify.error(t('notify.addToFolderFailed'))
       }
     },
     [folderTree, refreshAssets, refreshFolders]
@@ -362,7 +369,7 @@ const AssetGrid: React.FC = () => {
   async function handleDelete(ids?: string[]) {
     const toDelete = ids ?? Array.from(selectedAssetIds)
     if (toDelete.length === 0) return
-    if (!confirm(`确定删除 ${toDelete.length} 项？`)) return
+    if (!confirm(t('notify.confirmDelete', { count: toDelete.length }))) return
 
     await window.assetVaultAPI.assets.delete(toDelete)
     selectMultiple([])
@@ -394,8 +401,8 @@ const AssetGrid: React.FC = () => {
           case 'add-folder':
             if (extra) {
               await window.assetVaultAPI.assets.addToFolders(assetIds, [extra])
-              const name = findFolderInTree(folderTree, extra)?.name ?? '文件夹'
-              notify.success(`已将 ${assetIds.length} 项加入「${name}」`)
+              const name = findFolderInTree(folderTree, extra)?.name ?? t('folder')
+              notify.success(t('notify.addedToFolder', { count: assetIds.length, name }))
               await refreshAssets()
               await refreshFolders()
             }
@@ -403,13 +410,16 @@ const AssetGrid: React.FC = () => {
           case 'add-library':
             if (extra) {
               const r = await window.assetVaultAPI.assets.copyToLibrary(assetIds, extra)
-              notify.success(`已复制 ${r.copied} 项到其它资料库${r.skipped ? `（跳过 ${r.skipped}）` : ''}`)
+              notify.success(
+                t('notify.copiedToLibrary', { copied: r.copied }) +
+                  (r.skipped ? t('notify.copiedSkipped', { skipped: r.skipped }) : '')
+              )
             }
             break
           case 'set-cover':
             if (currentFolderId && assetIds[0]) {
               await window.assetVaultAPI.folders.setCover(currentFolderId, assetIds[0])
-              notify.success('已设为文件夹封面')
+              notify.success(t('notify.setCoverDone'))
               const ids = childFolders.map((c) => c.id)
               if (ids.length) {
                 const m = await window.assetVaultAPI.folders.getCoverAssetIds(ids)
@@ -428,18 +438,18 @@ const AssetGrid: React.FC = () => {
           }
           case 'copy-files': {
             const ok = await window.assetVaultAPI.fs.copyFilesToClipboard(assetIds)
-            if (ok) notify.success('已复制文件到剪贴板')
-            else notify.error('复制文件失败')
+            if (ok) notify.success(t('notify.filesCopied'))
+            else notify.error(t('notify.copyFilesFailed'))
             break
           }
           case 'copy-paths': {
             const n = await window.assetVaultAPI.fs.copyPathsToClipboard(assetIds)
-            notify.success(`已复制 ${n} 条路径`)
+            notify.success(t('notify.pathsCopied', { count: n }))
             break
           }
           case 'analyze-colors': {
             const { updated } = await window.assetVaultAPI.assets.analyzeColorsBatch(assetIds)
-            notify.success(`已更新 ${updated} 项颜色`)
+            notify.success(t('notify.colorsUpdated', { count: updated }))
             await refreshAssets()
             break
           }
@@ -456,19 +466,19 @@ const AssetGrid: React.FC = () => {
             const source = paths[0]
             if (!source) break
             await window.assetVaultAPI.assets.setCustomThumbnailFile(assetIds[0]!, source)
-            notify.success('已设置自定义缩略图')
+            notify.success(t('notify.customThumbSet'))
             await refreshAssets()
             break
           }
           case 'custom-thumb-clipboard': {
             await window.assetVaultAPI.assets.setCustomThumbnailFromClipboard(assetIds[0]!)
-            notify.success('已从剪贴板设置自定义缩略图')
+            notify.success(t('notify.customThumbFromClipboard'))
             await refreshAssets()
             break
           }
           case 'refresh-thumbnail': {
             const { updated } = await window.assetVaultAPI.assets.refreshThumbnail(assetIds)
-            notify.success(`已刷新 ${updated}/${assetIds.length} 个缩略图`)
+            notify.success(t('notify.thumbsRefreshed', { updated, total: assetIds.length }))
             await refreshAssets()
             break
           }
@@ -478,7 +488,7 @@ const AssetGrid: React.FC = () => {
         }
       } catch (err) {
         console.error('[AssetGrid] menu action:', err)
-        notify.error(err instanceof Error ? err.message : '操作失败')
+        notify.error(err instanceof Error ? err.message : t('notify.operationFailed'))
       }
     },
     [
@@ -496,17 +506,17 @@ const AssetGrid: React.FC = () => {
     if (!renameAssetId) return
     const name = renameValue.trim()
     if (!name) {
-      notify.warning('请输入名称')
+      notify.warning(t('notify.enterName'))
       return
     }
     setRenameBusy(true)
     try {
       await window.assetVaultAPI.assets.rename(renameAssetId, name)
       setRenameOpen(false)
-      notify.success('已重命名')
+      notify.success(t('notify.renamed'))
       await refreshAssets()
     } catch (err) {
-      notify.error(err instanceof Error ? err.message : '重命名失败')
+      notify.error(err instanceof Error ? err.message : t('notify.renameFailed'))
     } finally {
       setRenameBusy(false)
     }
@@ -539,10 +549,10 @@ const AssetGrid: React.FC = () => {
   const listAreaEmpty = !isLoading && assets.length === 0
 
   const parentNavLabel = !currentFolderNode
-    ? '全部资产'
+    ? t('allAssets')
     : currentFolderNode.parentId == null || currentFolderNode.parentId === undefined
-      ? '全部资产'
-      : findFolderInTree(folderTree, currentFolderNode.parentId)?.name ?? '上级'
+      ? t('allAssets')
+      : findFolderInTree(folderTree, currentFolderNode.parentId)?.name ?? t('parent')
 
   if (listAreaEmpty && !hasActiveQuery && !showSubfolderStrip) {
     return <EmptyState />
@@ -557,7 +567,7 @@ const AssetGrid: React.FC = () => {
             onClick={() => void setCurrentFolder(currentFolderNode?.parentId ?? null)}
             className="text-xs text-av-accent-blue hover:underline"
           >
-            ← 返回「{parentNavLabel}」
+            {t('backTo', { name: parentNavLabel })}
           </button>
         </div>
       )}
@@ -625,7 +635,7 @@ const AssetGrid: React.FC = () => {
               >
                 ▼
               </span>
-              子文件夹 ({childFolders.length})
+              {t('childFolders', { count: childFolders.length })}
             </button>
             {subfoldersOpen && (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -668,7 +678,7 @@ const AssetGrid: React.FC = () => {
               >
                 ▼
               </span>
-              内容 ({totalAssets})
+              {t('contentCount', { count: totalAssets })}
             </button>
           </div>
         )}
@@ -730,7 +740,7 @@ const AssetGrid: React.FC = () => {
                     : 'py-10 text-center text-sm text-av-text-muted'
                 }
               >
-                此位置暂无素材文件
+                {t('emptyFolder')}
               </div>
             ) : null}
           </div>
@@ -751,14 +761,14 @@ const AssetGrid: React.FC = () => {
       />
 
       <Modal
-        title="重命名"
+        title={t('renameTitle')}
         visible={renameOpen}
         onOk={() => void submitRename()}
         onCancel={() => setRenameOpen(false)}
         confirmLoading={renameBusy}
         autoFocus={false}
       >
-        <Input value={renameValue} onChange={setRenameValue} placeholder="文件名（不含扩展名）" />
+        <Input value={renameValue} onChange={setRenameValue} placeholder={t('renamePlaceholder')} />
       </Modal>
     </div>
   )
@@ -918,6 +928,7 @@ function FolderBrowseCard({
   onAssetDragLeave?: () => void
   onAssetDrop?: (e: React.DragEvent) => void
 }) {
+  const { t } = useTranslation('assets')
   const accent = folder.color ?? '#64748b'
   return (
     <div
@@ -944,7 +955,7 @@ function FolderBrowseCard({
         {isDropTarget && (
           <div className="absolute inset-0 z-[2] bg-av-accent-blue/15 flex items-center justify-center pointer-events-none">
             <span className="text-xs font-medium text-av-accent-blue px-2 py-1 rounded-md bg-av-bg-primary/80">
-              松开加入
+              {t('dropToAdd')}
             </span>
           </div>
         )}
@@ -965,7 +976,9 @@ function FolderBrowseCard({
         </div>
       </div>
       <p className="mt-2 text-sm font-medium text-av-text-primary truncate">{folder.name}</p>
-      <p className="text-xs text-av-text-muted tabular-nums">{folder.assetCount} 个文件</p>
+      <p className="text-xs text-av-text-muted tabular-nums">
+        {t('filesCount', { count: folder.assetCount })}
+      </p>
     </div>
   )
 }
@@ -990,6 +1003,7 @@ function AssetListItem({
   onDragStart: (e: React.DragEvent) => void
   onContextMenu: (e: React.MouseEvent) => void
 }) {
+  const { t } = useTranslation('assets')
   const can3dPreview = asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)
 
   const ext = (asset.extension || '').replace(/^\./, '').toLowerCase() || '—'
@@ -1038,7 +1052,7 @@ function AssetListItem({
               asset.sourceMissing ? 'bg-red-900/60 text-red-200' : 'bg-amber-900/50 text-amber-200'
             }`}
           >
-            {asset.sourceMissing ? '缺失' : '引用'}
+            {asset.sourceMissing ? t('missing') : t('reference')}
           </span>
         )}
       </p>

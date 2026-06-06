@@ -1,8 +1,52 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { formatFileSizeMbFilterLabel } from '@/shared/assetFilters'
+import type { DatePreset, SizePreset } from '@/shared/assetFilters'
 import type { FontAppSettings } from '@/shared/fontSettings'
 import type { FontFamilyGroup } from '@/shared/fontTypes'
 import { useApp } from '../../stores/AppContext'
+import {
+  translateDatePresetLabel,
+  translateSizePresetLabel
+} from '../../utils/assetFilterLabels'
+
+function buildFontFilterChips(
+  t: TFunction<'detail'>,
+  ta: TFunction<'assets'>,
+  p: {
+    debouncedSearch: string
+    colorBucketFilter: string | null
+    sizePresetFilter: SizePreset | null
+    fileSizeMinMb: number | null
+    fileSizeMaxMb: number | null
+    datePresetFilter: DatePreset | null
+    tagFilters: string[]
+  }
+): string[] {
+  const filters: string[] = []
+  const q = p.debouncedSearch.trim()
+  if (q) filters.push(t('context.filter.search', { query: q }))
+  if (p.colorBucketFilter) filters.push(t('context.filter.color', { value: p.colorBucketFilter }))
+  if (p.sizePresetFilter) {
+    filters.push(
+      t('context.filter.sizePreset', {
+        value: translateSizePresetLabel(ta, p.sizePresetFilter)
+      })
+    )
+  }
+  const mbLabel = formatFileSizeMbFilterLabel(p.fileSizeMinMb, p.fileSizeMaxMb)
+  if (mbLabel) filters.push(t('context.filter.volume', { value: mbLabel }))
+  if (p.datePresetFilter) {
+    filters.push(
+      t('context.filter.date', { value: translateDatePresetLabel(ta, p.datePresetFilter) })
+    )
+  }
+  if (p.tagFilters.length > 0) {
+    filters.push(t('context.font.tagFilters', { count: p.tagFilters.length }))
+  }
+  return filters
+}
 
 function DetailPanelShell({
   title,
@@ -17,6 +61,7 @@ function DetailPanelShell({
   children: React.ReactNode
   onClose: () => void
 }) {
+  const { t } = useTranslation('detail')
   return (
     <div className="h-full flex flex-col bg-av-bg-secondary">
       <div className="flex items-center justify-between px-4 py-3 border-b border-av-border shrink-0">
@@ -24,7 +69,7 @@ function DetailPanelShell({
           <p className="text-sm font-semibold truncate">{title}</p>
           {subtitle ? <p className="text-[11px] text-av-text-muted truncate mt-0.5">{subtitle}</p> : null}
         </div>
-        <button type="button" onClick={onClose} className="btn-icon shrink-0" title="关闭面板">
+        <button type="button" onClick={onClose} className="btn-icon shrink-0" title={t('closePanel')}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
@@ -103,6 +148,7 @@ function FontFamilyList({
   onSelectFamily: (key: string) => void
   onSelectAsset: (assetId: string, familyKey: string) => void
 }) {
+  const { t } = useTranslation('detail')
   return (
     <div className="space-y-2 max-h-[min(420px,50vh)] overflow-y-auto pr-1 scrollbar-hide">
       {groups.map((g) => {
@@ -123,8 +169,8 @@ function FontFamilyList({
             >
               <p className="text-sm font-medium text-av-text-primary truncate">{g.familyName}</p>
               <p className="text-[10px] text-av-text-muted mt-0.5">
-                {g.assets.length} 个文件
-                {g.assets.some((a) => a.ttcIndex != null) ? ' · 含 TTC' : ''}
+                {t('context.font.filesCount', { count: g.assets.length })}
+                {g.assets.some((a) => a.ttcIndex != null) ? t('context.font.includesTtc') : ''}
               </p>
             </button>
             <div className="flex flex-wrap gap-1 mt-1.5">
@@ -149,6 +195,8 @@ function FontFamilyList({
 
 /** 选中 Types → 字体：资料库内全部字体概览 */
 export function FontTypeContextView({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation('detail')
+  const { t: ta } = useTranslation('assets')
   const {
     totalAssets,
     debouncedSearch,
@@ -176,14 +224,15 @@ export function FontTypeContextView({ onClose }: { onClose: () => void }) {
   )
   const extMap = useMemo(() => extensionCounts(groups), [groups])
 
-  const filters: string[] = []
-  if (debouncedSearch.trim()) filters.push(`搜索「${debouncedSearch.trim()}」`)
-  if (colorBucketFilter) filters.push(`颜色 ${colorBucketFilter}`)
-  if (sizePresetFilter) filters.push(`尺寸 ${sizePresetFilter}`)
-  const mbLabel = formatFileSizeMbFilterLabel(fileSizeMinMb, fileSizeMaxMb)
-  if (mbLabel) filters.push(`体积 ${mbLabel}`)
-  if (datePresetFilter) filters.push(`日期 ${datePresetFilter}`)
-  if (tagFilters.length > 0) filters.push(`${tagFilters.length} 个标签`)
+  const filters = buildFontFilterChips(t, ta, {
+    debouncedSearch,
+    colorBucketFilter,
+    sizePresetFilter,
+    fileSizeMinMb,
+    fileSizeMaxMb,
+    datePresetFilter,
+    tagFilters
+  })
 
   const sampleLines = (fontSettings?.thumbSampleText ?? 'VibeShotClub\nAIGC创作').split('\n')
 
@@ -195,8 +244,8 @@ export function FontTypeContextView({ onClose }: { onClose: () => void }) {
 
   return (
     <DetailPanelShell
-      title="字体"
-      subtitle="类型筛选 · 全部字体"
+      title={t('context.font.title')}
+      subtitle={t('context.font.typeSubtitle')}
       onClose={onClose}
       preview={
         <div className="w-full h-full flex flex-col items-center justify-center gap-2 px-6 bg-av-bg-primary">
@@ -214,19 +263,24 @@ export function FontTypeContextView({ onClose }: { onClose: () => void }) {
               </p>
             ))}
           </div>
-          <p className="text-[10px] text-av-text-muted mt-1">缩略图样例文字</p>
+          <p className="text-[10px] text-av-text-muted mt-1">{t('context.font.thumbSample')}</p>
         </div>
       }
     >
-      <ContextInfoSection title="统计">
-        <ContextInfoRow label="匹配条目" value={totalAssets.toLocaleString()} />
-        <ContextInfoRow label="字体族" value={loading ? '…' : String(groups.length)} />
-        <ContextInfoRow label="字体文件" value={loading ? '…' : String(fileCount)} />
-        {filters.length > 0 ? <ContextInfoRow label="附加筛选" value={filters.join(' · ')} /> : null}
+      <ContextInfoSection title={t('context.font.statsSection')}>
+        <ContextInfoRow label={t('context.font.matchEntries')} value={totalAssets.toLocaleString()} />
+        <ContextInfoRow
+          label={t('context.font.families')}
+          value={loading ? '…' : String(groups.length)}
+        />
+        <ContextInfoRow label={t('context.font.files')} value={loading ? '…' : String(fileCount)} />
+        {filters.length > 0 ? (
+          <ContextInfoRow label={t('context.labels.extraFilters')} value={filters.join(' · ')} />
+        ) : null}
       </ContextInfoSection>
 
       {!loading && extMap.size > 0 ? (
-        <ContextInfoSection title="格式分布">
+        <ContextInfoSection title={t('context.font.formatSection')}>
           {Array.from(extMap.entries())
             .sort((a, b) => b[1] - a[1])
             .map(([ext, count]) => (
@@ -236,19 +290,22 @@ export function FontTypeContextView({ onClose }: { onClose: () => void }) {
       ) : null}
 
       {fontSettings ? (
-        <ContextInfoSection title="缩略图设置">
-          <ContextInfoRow label="样例版本" value={`v${fontSettings.thumbSampleVersion}`} />
+        <ContextInfoSection title={t('context.font.thumbSettingsSection')}>
+          <ContextInfoRow
+            label={t('context.font.sampleVersion')}
+            value={`v${fontSettings.thumbSampleVersion}`}
+          />
           <p className="text-[11px] text-av-text-muted leading-relaxed whitespace-pre-wrap">
             {fontSettings.thumbSampleText}
           </p>
         </ContextInfoSection>
       ) : null}
 
-      <ContextInfoSection title="字体族">
+      <ContextInfoSection title={t('context.font.familiesSection')}>
         {loading ? (
-          <p className="text-xs text-av-text-muted">加载中…</p>
+          <p className="text-xs text-av-text-muted">{t('context.font.loading')}</p>
         ) : groups.length === 0 ? (
-          <p className="text-xs text-av-text-muted">当前筛选下没有字体文件</p>
+          <p className="text-xs text-av-text-muted">{t('context.font.noFonts')}</p>
         ) : (
           <FontFamilyList
             groups={groups}
@@ -261,13 +318,11 @@ export function FontTypeContextView({ onClose }: { onClose: () => void }) {
 
       <div className="flex flex-wrap gap-2">
         <button type="button" className="btn-secondary text-xs" disabled={loading} onClick={reload}>
-          刷新列表
+          {t('context.font.refreshList')}
         </button>
       </div>
 
-      <p className="text-[11px] text-av-text-muted leading-relaxed">
-        点击字体族查看该族详情；点击字重/文件名可在下方查看单个字体文件信息。双击网格中的字体可打开全屏预览。
-      </p>
+      <p className="text-[11px] text-av-text-muted leading-relaxed">{t('context.font.typeFooterHint')}</p>
     </DetailPanelShell>
   )
 }
@@ -280,6 +335,7 @@ export function FontFamilyContextView({
   familyKey: string
   onClose: () => void
 }) {
+  const { t } = useTranslation('detail')
   const { groups, loading } = useFontFamilyGroups()
   const { selectMultiple, setDetailPanelOpen, openFontPreview, setSelectedFontFamilyKey } = useApp()
 
@@ -292,16 +348,16 @@ export function FontFamilyContextView({
 
   if (loading && !group) {
     return (
-      <DetailPanelShell title="字体族" subtitle="加载中…" onClose={onClose}>
-        <p className="text-xs text-av-text-muted">正在加载字体信息…</p>
+      <DetailPanelShell title={t('context.font.familyTitle')} subtitle={t('context.font.loadingSubtitle')} onClose={onClose}>
+        <p className="text-xs text-av-text-muted">{t('context.font.loadingFamily')}</p>
       </DetailPanelShell>
     )
   }
 
   if (!group) {
     return (
-      <DetailPanelShell title="字体族" subtitle="未找到" onClose={onClose}>
-        <p className="text-xs text-av-text-muted">该字体族不存在或已被移除。</p>
+      <DetailPanelShell title={t('context.font.familyTitle')} subtitle={t('context.font.notFoundSubtitle')} onClose={onClose}>
+        <p className="text-xs text-av-text-muted">{t('context.font.notFound')}</p>
       </DetailPanelShell>
     )
   }
@@ -309,14 +365,14 @@ export function FontFamilyContextView({
   return (
     <DetailPanelShell
       title={group.familyName}
-      subtitle="字体族"
+      subtitle={t('context.font.familySubtitle')}
       onClose={onClose}
       preview={
         <div className="w-full h-full flex flex-col items-center justify-center gap-1 px-4 bg-av-bg-primary">
           <span className="text-3xl text-av-text-primary" style={{ fontFamily: 'inherit' }}>
             {group.familyName}
           </span>
-          <p className="text-sm text-av-text-muted">Aa 字体族预览</p>
+          <p className="text-sm text-av-text-muted">{t('context.font.familyPreview')}</p>
         </div>
       }
     >
@@ -325,24 +381,24 @@ export function FontFamilyContextView({
         className="btn-ghost text-xs -mt-1 mb-1 px-0"
         onClick={() => setSelectedFontFamilyKey(null)}
       >
-        ← 全部字体
+        {t('context.font.backToAllFonts')}
       </button>
 
-      <ContextInfoSection title="概览">
-        <ContextInfoRow label="族名称" value={group.familyName} />
-        <ContextInfoRow label="文件数" value={String(group.assets.length)} />
-        <ContextInfoRow label="族键" value={group.familyKey} />
+      <ContextInfoSection title={t('context.font.overviewSection')}>
+        <ContextInfoRow label={t('context.font.familyName')} value={group.familyName} />
+        <ContextInfoRow label={t('context.font.fileCount')} value={String(group.assets.length)} />
+        <ContextInfoRow label={t('context.font.familyKey')} value={group.familyKey} />
       </ContextInfoSection>
 
       {extMap.size > 0 ? (
-        <ContextInfoSection title="格式">
+        <ContextInfoSection title={t('context.font.formatSectionShort')}>
           {Array.from(extMap.entries()).map(([ext, count]) => (
             <ContextInfoRow key={ext} label={`.${ext}`} value={String(count)} />
           ))}
         </ContextInfoSection>
       ) : null}
 
-      <ContextInfoSection title="包含文件">
+      <ContextInfoSection title={t('context.font.includedFilesSection')}>
         <ul className="space-y-2">
           {group.assets.map((a) => (
             <li
@@ -362,14 +418,14 @@ export function FontFamilyContextView({
                     setDetailPanelOpen(true)
                   }}
                 >
-                  详情
+                  {t('context.font.detailBtn')}
                 </button>
                 <button
                   type="button"
                   className="btn-ghost text-[10px] py-0.5 px-2"
                   onClick={() => openFontPreview(a.id)}
                 >
-                  全屏预览
+                  {t('context.font.fullscreenPreview')}
                 </button>
               </div>
             </li>

@@ -14,6 +14,7 @@ import { formatExrPreviewError } from '@/shared/exrPreviewErrors'
 import { partitionExrLayerChannelSuffixes } from '@/shared/exrLayerGrouping'
 import { isExrExtension } from '@/shared/exrFormats'
 import { useApp } from '../../stores/AppContext'
+import { useTranslation } from 'react-i18next'
 
 interface ExrPreviewPageProps {
   assetId: string
@@ -50,6 +51,7 @@ function defaultToggleForLayer(layer: ExrLayerInfo): ExrChannelToggle {
 }
 
 const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
+  const { t } = useTranslation('preview')
   const { assets, closeExrPreview } = useApp()
   const [asset, setAsset] = useState<AssetItem | null>(() => assets.find((a) => a.id === assetId) ?? null)
   const [loadingAsset, setLoadingAsset] = useState(!asset)
@@ -250,7 +252,7 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
   if (loadingAsset) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-av-text-muted">
-        正在加载资产…
+        {t('loadingAsset')}
       </div>
     )
   }
@@ -258,9 +260,9 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
   if (!asset || asset.fileType !== 'image' || !isExr) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-av-text-secondary">
-        <p>找不到该 EXR 资产</p>
+        <p>{t('notFoundExr')}</p>
         <button type="button" className="btn-secondary text-sm" onClick={handleBack}>
-          返回资源库
+          {t('backToLibrary')}
         </button>
       </div>
     )
@@ -279,7 +281,7 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-av-bg-primary">
       <header className="flex items-center gap-3 px-4 h-12 border-b border-av-border bg-av-bg-secondary shrink-0">
-        <button type="button" className="btn-ghost p-2 rounded-lg" onClick={handleBack} title="返回 (Esc)">
+        <button type="button" className="btn-ghost p-2 rounded-lg" onClick={handleBack} title={t('backTitle')}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M15 18l-6-6 6-6" />
           </svg>
@@ -293,9 +295,9 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
         <div className="flex items-center gap-3 shrink-0">
           <label
             className={`flex items-center gap-2 text-[11px] text-av-text-muted ${!exposureEnabled ? 'opacity-40' : ''}`}
-            title={exposureEnabled ? undefined : '当前 AOV 不使用曝光调整'}
+            title={exposureEnabled ? undefined : t('exr.exposureDisabledTitle')}
           >
-            曝光
+            {t('exposure')}
             <input
               type="range"
               min={EXR_PREVIEW_MIN_EXPOSURE}
@@ -312,7 +314,7 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
             {Math.round(scale * 100)}%
           </span>
           <button type="button" className="btn-secondary text-xs px-3 py-1.5" onClick={resetView}>
-            重置视图
+            {t('resetView')}
           </button>
         </div>
       </header>
@@ -321,17 +323,17 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
         <aside className="w-56 shrink-0 border-r border-av-border bg-av-bg-secondary flex flex-col min-h-0">
           <div className="px-3 py-2 border-b border-av-border">
             <h2 className="text-xs font-semibold text-av-text-muted uppercase tracking-wider">
-              Layers ({metadata?.layers.length ?? 0})
+              {t('exr.layersTitle', { count: metadata?.layers.length ?? 0 })}
             </h2>
           </div>
           <div className="flex-1 overflow-y-auto py-1">
             {metaError ? (
               <p className="px-3 py-2 text-[11px] text-red-300/90">{metaError}</p>
             ) : !metadata ? (
-              <p className="px-3 py-2 text-[11px] text-av-text-muted">正在解析图层…</p>
+              <p className="px-3 py-2 text-[11px] text-av-text-muted">{t('exr.parsingLayers')}</p>
             ) : !perLayerPreviewAvailable ? (
               <p className="px-3 py-2 text-[11px] text-av-text-muted leading-relaxed">
-                超大 EXR 仅提供 RGBA 合成预览，无法按 AOV 分层切换。
+                {t('exr.oversizedCompositeOnly')}
               </p>
             ) : (
               metadata.layers.map((layer, layerIndex) => {
@@ -343,14 +345,14 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
                       type="button"
                       className={`w-full text-left px-3 py-2 text-xs transition-colors ${
                         active
-                          ? 'bg-av-accent/15 text-av-text-primary'
+                          ? 'bg-av-accent-blue/15 text-av-text-primary'
                           : 'text-av-text-secondary hover:bg-av-bg-primary/60'
                       } ${!layer.previewable ? 'opacity-70' : ''}`}
                       onClick={() => selectLayer(layer)}
                     >
                       <span className="font-medium">{layer.name}</span>
                       {!layer.previewable ? (
-                        <span className="ml-1 text-[10px] text-av-text-muted">(不可预览)</span>
+                        <span className="ml-1 text-[10px] text-av-text-muted">{t('exr.notPreviewable')}</span>
                       ) : null}
                     </button>
                     {active ? (
@@ -372,14 +374,14 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
                                     title={
                                       disabled
                                         ? layer.previewable
-                                          ? '超大文件暂不可分通道'
-                                          : '该图层不可预览'
+                                          ? t('exr.channelDisabledLarge')
+                                          : t('exr.layerNotPreviewable')
                                         : undefined
                                     }
                                     className={`min-w-[1.75rem] px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-colors ${
                                       on
-                                        ? 'bg-av-accent text-white border-av-accent'
-                                        : 'bg-av-bg-primary text-av-text-muted border-av-border'
+                                        ? 'bg-av-accent-blue text-white border-av-accent-blue'
+                                        : 'bg-av-bg-tertiary text-av-text-secondary border-av-border'
                                     } disabled:opacity-40 disabled:cursor-not-allowed`}
                                     onClick={() => toggleChannel(key)}
                                   >
@@ -390,14 +392,14 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
                               {custom.map((suffix) => (
                                 <span
                                   key={suffix}
-                                  className="min-w-[1.75rem] px-1.5 py-0.5 rounded text-[10px] font-semibold border border-av-border/60 bg-av-bg-primary/40 text-av-text-muted"
-                                  title="自定义通道（始终参与预览）"
+                                  className="min-w-[1.75rem] px-1.5 py-0.5 rounded text-[10px] font-semibold border border-av-border bg-av-bg-tertiary text-av-text-secondary"
+                                  title={t('exr.customChannelTitle')}
                                 >
                                   {channelLabel(suffix)}
                                 </span>
                               ))}
                               {toggleable.length === 0 && custom.length > 0 ? (
-                                <span className="text-[10px] text-av-text-muted">全通道</span>
+                                <span className="text-[10px] text-av-text-muted">{t('exr.allChannels')}</span>
                               ) : null}
                             </>
                           )
@@ -411,12 +413,12 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
           </div>
           {!channelControlAvailable && metadata && perLayerPreviewAvailable ? (
             <p className="px-3 py-2 text-[10px] text-av-text-muted border-t border-av-border leading-relaxed">
-              超大 EXR：通道开关已禁用，仍可切换图层。
+              {t('exr.oversizedChannelsDisabled')}
             </p>
           ) : null}
           {metadata?.layerListIncomplete ? (
             <p className="px-3 py-2 text-[10px] text-amber-200/80 border-t border-av-border leading-relaxed">
-              无法读取完整图层列表，仅提供 RGBA 合成预览。
+              {t('exr.layerListIncomplete')}
             </p>
           ) : null}
         </aside>
@@ -457,12 +459,12 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
             </div>
           ) : (
             <div className="absolute inset-0 flex items-center justify-center text-sm text-av-text-muted">
-              {rendering ? '正在渲染 HDR 预览…' : '准备预览…'}
+              {rendering ? t('exr.renderingHdr') : t('exr.preparingPreview')}
             </div>
           )}
           {rendering && previewUrl ? (
             <div className="absolute top-3 right-3 text-[10px] px-2 py-1 rounded bg-black/50 text-white/80">
-              更新中…
+              {t('exr.updating')}
             </div>
           ) : null}
         </div>

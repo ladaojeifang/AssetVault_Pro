@@ -16,6 +16,7 @@
     "lint": "pnpm exec eslint . --ext .ts,.tsx,.js,.jsx",
     "lint:fix": "pnpm exec eslint . --ext .ts,.tsx,.js,.jsx --fix",
     "typecheck": "pnpm exec tsc --noEmit",
+    "i18n:check": "node scripts/check-i18n-keys.mjs",
     "test": "pnpm exec vitest run",
     "test:watch": "pnpm exec vitest",
     "rebuild:native": "node scripts/rebuild-native.mjs",
@@ -46,11 +47,13 @@
     "file-type": "^19.4.0",
     "fontkit": "^2.0.4",
     "framer-motion": "^11.9.0",
+    "i18next": "^26.3.1",
     "lru-cache": "^10.4.3",
     "mime-types": "^2.1.35",
     "music-metadata": "^7.14.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-i18next": "^17.0.8",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^6.26.0",
     "remark-gfm": "^4.0.1",
@@ -110,6 +113,10 @@
       {
         "from": "doc/web-api-v1-openapi.yaml",
         "to": "web-api-v1-openapi.yaml"
+      },
+      {
+        "from": "doc/web-api-v1-openapi.en.yaml",
+        "to": "web-api-v1-openapi.en.yaml"
       },
       {
         "from": "resources/api-playground",

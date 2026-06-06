@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { AssetItem } from '@/shared/types'
@@ -18,6 +19,7 @@ interface MarkdownPreviewPageProps {
 type ViewMode = 'split' | 'edit' | 'preview'
 
 const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) => {
+  const { t } = useTranslation('preview')
   const { assets, closeMarkdownPreview, refreshAssets, registerMarkdownPreviewCloser } = useApp()
   const [asset, setAsset] = useState<AssetItem | null>(() => assets.find((a) => a.id === assetId) ?? null)
   const [loadingAsset, setLoadingAsset] = useState(!asset)
@@ -57,7 +59,7 @@ const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) =>
     if (!asset || !isMarkdownPreviewAsset(asset)) return
     const path = markdownContentPath(asset)
     if (!path) {
-      setLoadError('无法解析文件路径')
+      setLoadError(t('pathResolveFailed'))
       setLoadingText(false)
       return
     }
@@ -87,7 +89,7 @@ const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) =>
   }, [asset?.id, asset?.filePath, asset?.resolvedFilePath])
 
   const handleBack = useCallback(() => {
-    if (dirty && !confirm('有未保存的修改，确定离开？')) return
+    if (dirty && !confirm(t('unsavedLeave'))) return
     closeMarkdownPreview()
   }, [closeMarkdownPreview, dirty])
 
@@ -97,7 +99,7 @@ const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) =>
     try {
       const { bytes } = await window.assetVaultAPI.fs.writeTextFile(contentPath, draft, asset.id)
       setSaved(draft)
-      notify.success('已保存')
+      notify.success(t('saved'))
       if (bytes !== asset.fileSize) {
         await refreshAssets()
       }
@@ -146,7 +148,7 @@ const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) =>
   if (loadingAsset) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-av-text-muted">
-        正在加载资产…
+        {t('loadingAsset')}
       </div>
     )
   }
@@ -154,9 +156,9 @@ const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) =>
   if (!asset || !isMarkdownPreviewAsset(asset)) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-av-text-secondary">
-        <p>找不到该 Markdown 资产</p>
+        <p>{t('notFoundMarkdown')}</p>
         <button type="button" className="btn-secondary text-sm" onClick={handleBack}>
-          返回资源库
+          {t('backToLibrary')}
         </button>
       </div>
     )
@@ -165,7 +167,7 @@ const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) =>
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-av-bg-primary">
       <header className="flex items-center gap-3 px-4 h-12 border-b border-av-border bg-av-bg-secondary shrink-0">
-        <button type="button" className="btn-ghost p-2 rounded-lg" onClick={handleBack} title="返回 (Esc)">
+        <button type="button" className="btn-ghost p-2 rounded-lg" onClick={handleBack} title={t('backTitle')}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M15 18l-6-6 6-6" />
           </svg>
@@ -174,7 +176,7 @@ const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) =>
           <span className="text-sm font-medium text-av-text-primary truncate">{asset.filename}</span>
           <span className="text-[11px] text-av-text-muted truncate">
             Markdown · {formatFileSize(asset.fileSize)}
-            {dirty ? ' · 未保存' : ''}
+            {dirty ? t('unsaved') : ''}
           </span>
         </div>
         <div className="flex items-center gap-1 rounded-lg border border-av-border p-0.5 bg-av-bg-primary">
@@ -189,7 +191,7 @@ const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) =>
               }`}
               onClick={() => setViewMode(mode)}
             >
-              {mode === 'edit' ? '编辑' : mode === 'split' ? '分栏' : '预览'}
+              {mode === 'edit' ? t('edit') : mode === 'split' ? t('split') : t('preview')}
             </button>
           ))}
         </div>
@@ -199,7 +201,7 @@ const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) =>
           disabled={!dirty || saving || loadingText}
           onClick={() => void handleSave()}
         >
-          {saving ? '保存中…' : '保存'}
+          {saving ? t('saving') : t('save')}
         </button>
       </header>
 
@@ -207,11 +209,11 @@ const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) =>
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-av-text-secondary">
           <p>{loadError}</p>
           <button type="button" className="btn-secondary text-sm" onClick={handleBack}>
-            返回
+            {t('back')}
           </button>
         </div>
       ) : loadingText ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-av-text-muted">正在读取文件…</div>
+        <div className="flex flex-1 items-center justify-center text-sm text-av-text-muted">{t('loadingFile')}</div>
       ) : (
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {(viewMode === 'edit' || viewMode === 'split') && (
@@ -221,14 +223,14 @@ const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) =>
               }`}
             >
               <div className="px-3 py-1.5 text-[11px] text-av-text-muted border-b border-av-border shrink-0">
-                编辑 · Ctrl+S 保存
+                {t('editHint')}
               </div>
               <textarea
                 className="flex-1 min-h-0 w-full resize-none bg-transparent px-4 py-3 text-sm text-av-text-primary font-mono leading-relaxed outline-none"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 spellCheck={false}
-                placeholder="在此编辑 Markdown…"
+                placeholder={t('markdownPlaceholder')}
               />
             </section>
           )}
@@ -239,7 +241,7 @@ const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) =>
               }`}
             >
               <div className="px-3 py-1.5 text-[11px] text-av-text-muted border-b border-av-border shrink-0">
-                预览
+                {t('preview')}
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 av-markdown-body">
                 {draft.trim() ? (
@@ -261,7 +263,7 @@ const MarkdownPreviewPage: React.FC<MarkdownPreviewPageProps> = ({ assetId }) =>
                     {draft}
                   </ReactMarkdown>
                 ) : (
-                  <p className="text-sm text-av-text-muted">暂无内容</p>
+                  <p className="text-sm text-av-text-muted">{t('noContent')}</p>
                 )}
               </div>
             </section>
@@ -278,6 +280,7 @@ function MarkdownImage({
   alt,
   ...rest
 }: React.ImgHTMLAttributes<HTMLImageElement> & { contentPath: string }) {
+  const { t } = useTranslation('preview')
   const [objectUrl, setObjectUrl] = useState<string | undefined>(undefined)
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const srcStr = typeof src === 'string' ? src : undefined
@@ -314,7 +317,7 @@ function MarkdownImage({
 
   if (status === 'loading') {
     return (
-      <span className="inline-block my-2 px-2 py-1 text-xs text-av-text-muted">加载图片…</span>
+      <span className="inline-block my-2 px-2 py-1 text-xs text-av-text-muted">{t('loadingImage')}</span>
     )
   }
 
@@ -324,7 +327,7 @@ function MarkdownImage({
         className="inline-flex items-center gap-1 my-2 px-2 py-1 text-xs text-av-text-muted bg-av-bg-secondary rounded border border-av-border"
         title={srcStr}
       >
-        无法加载图片：{srcStr}
+        {t('imageLoadFailed', { src: srcStr })}
       </span>
     )
   }

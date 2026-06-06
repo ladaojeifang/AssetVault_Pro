@@ -26,6 +26,9 @@ import {
 } from '../../utils/model3d/loadModel'
 import type { ModelAnimationClipInfo } from '@/shared/model3dFormats'
 import type { AnimationGroup } from '@babylonjs/core'
+import { i18n } from '../../i18n'
+
+const tp = () => i18n.getFixedT(i18n.language, 'preview')
 
 export type ModelPreviewControls = {
   resetCamera: () => void
@@ -196,7 +199,7 @@ export function ModelPreviewViewport({
 
     const format = parseModel3dFormat(extension)
     if (!format) {
-      const msg = '不支持的 3D 格式'
+      const msg = tp()('model3d.unsupportedFormat')
       setError(msg)
       setLoading(false)
       onErrorRef.current?.(msg)
@@ -282,7 +285,7 @@ export function ModelPreviewViewport({
         setReady(true)
       } catch (err) {
         if (!cancelled) {
-          const msg = err instanceof Error ? err.message : '模型加载失败'
+          const msg = err instanceof Error ? err.message : tp()('model3d.loadFailed')
           setError(msg)
           setLoading(false)
           onErrorRef.current?.(msg)
@@ -405,7 +408,7 @@ export function ModelPreviewViewport({
     >
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center text-sm text-white/50 z-10 pointer-events-none">
-          加载模型…
+          {tp()('loadingModel')}
         </div>
       )}
       {error && (

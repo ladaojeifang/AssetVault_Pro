@@ -1,0 +1,9 @@
+{
+  "ASSET_NOT_FOUND": "Asset not found",
+  "FOLDER_NOT_FOUND": "Folder not found",
+  "TAG_NOT_FOUND": "Tag not found",
+  "LIBRARY_NOT_READY": "Library not ready",
+  "INVALID_REQUEST": "Invalid request",
+  "NETWORK": "Network connection failed",
+  "UNKNOWN": "Unknown error"
+}

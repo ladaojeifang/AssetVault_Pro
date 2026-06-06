@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import type { FolderItem } from '@/shared/types'
 
@@ -23,6 +24,7 @@ export function FolderContextMenu({
   onAction: (key: string, folder: FolderItem) => void
   maxParentLevel: number
 }) {
+  const { t } = useTranslation('sidebar')
   const menuRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
 
@@ -70,13 +72,13 @@ export function FolderContextMenu({
   }> = [
     {
       key: 'subfolder',
-      label: '新增子文件夹',
+      label: t('folderMenu.newChild'),
       disabled: folder.level >= maxParentLevel
     },
-    { key: 'rename', label: '重命名' },
-    { key: 'icon', label: '修改文件夹图标' },
-    { key: 'color', label: '修改文件夹颜色' },
-    { key: 'delete', label: '删除文件夹', danger: true }
+    { key: 'rename', label: t('folderMenu.rename') },
+    { key: 'icon', label: t('folderMenu.editIcon') },
+    { key: 'color', label: t('folderMenu.editColor') },
+    { key: 'delete', label: t('folderMenu.delete'), danger: true }
   ]
 
   return createPortal(

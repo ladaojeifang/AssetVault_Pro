@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { AssetItem } from '@/shared/types'
 import { formatFileSize } from '@/shared/types'
 import { isModel3dPreviewExtension, type ModelAnimationClipInfo } from '@/shared/model3dFormats'
@@ -38,6 +39,7 @@ function ToggleBtn({
 }
 
 const ModelPreviewPage: React.FC<ModelPreviewPageProps> = ({ assetId }) => {
+  const { t } = useTranslation('preview')
   const { assets, closeModelPreview } = useApp()
   const [asset, setAsset] = useState<AssetItem | null>(() => assets.find((a) => a.id === assetId) ?? null)
   const [loadingAsset, setLoadingAsset] = useState(!asset)
@@ -161,7 +163,7 @@ const ModelPreviewPage: React.FC<ModelPreviewPageProps> = ({ assetId }) => {
   if (loadingAsset) {
     return (
       <div className="flex flex-1 items-center justify-center text-av-text-secondary text-sm">
-        加载模型…
+        {t('loadingModel')}
       </div>
     )
   }
@@ -169,9 +171,9 @@ const ModelPreviewPage: React.FC<ModelPreviewPageProps> = ({ assetId }) => {
   if (!asset || asset.fileType !== '3d') {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-av-text-secondary">
-        <p>找不到该 3D 资产</p>
+        <p>{t('notFound3d')}</p>
         <button type="button" className="btn-secondary text-sm" onClick={handleBack}>
-          返回资源库
+          {t('backToLibrary')}
         </button>
       </div>
     )
@@ -180,7 +182,7 @@ const ModelPreviewPage: React.FC<ModelPreviewPageProps> = ({ assetId }) => {
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-av-bg-primary">
       <header className="flex items-center gap-3 px-4 h-12 border-b border-av-border bg-av-bg-secondary shrink-0">
-        <button type="button" className="btn-ghost p-2 rounded-lg" onClick={handleBack} title="返回 (Esc)">
+        <button type="button" className="btn-ghost p-2 rounded-lg" onClick={handleBack} title={t('backTitle')}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M15 18l-6-6 6-6" />
           </svg>
@@ -189,21 +191,26 @@ const ModelPreviewPage: React.FC<ModelPreviewPageProps> = ({ assetId }) => {
           <h1 className="text-sm font-semibold text-av-text-primary truncate">{asset.filename}</h1>
           <p className="text-[11px] text-av-text-muted truncate">
             {ext.toUpperCase()} · {formatFileSize(asset.fileSize)}
-            {hasAnimation ? ` · ${animClips.length} 个动画` : ''}
+            {hasAnimation ? ` · ${t('model3d.animCount', { count: animClips.length })}` : ''}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <ToggleBtn active={showGrid} onClick={() => setShowGrid((v) => !v)} title="显示/隐藏网格平面">
-            网格平面
+          <ToggleBtn active={showGrid} onClick={() => setShowGrid((v) => !v)} title={t('model3d.toggleGridTitle')}>
+            {t('gridPlane')}
           </ToggleBtn>
-          <ToggleBtn active={wireframe} onClick={() => setWireframe((v) => !v)} title="线框模式">
-            线框模式
+          <ToggleBtn active={wireframe} onClick={() => setWireframe((v) => !v)} title={t('model3d.toggleWireframeTitle')}>
+            {t('wireframe')}
           </ToggleBtn>
-          <ToggleBtn active={uvDebug} onClick={() => setUvDebug((v) => !v)} title="UV 棋盘格展示">
-            UV 展示
+          <ToggleBtn active={uvDebug} onClick={() => setUvDebug((v) => !v)} title={t('model3d.toggleUvTitle')}>
+            {t('uvDebug')}
           </ToggleBtn>
-          <button type="button" className="btn-secondary text-xs px-3 py-1.5" onClick={resetView} title="重置相机到默认视角">
-            默认视角
+          <button
+            type="button"
+            className="btn-secondary text-xs px-3 py-1.5"
+            onClick={resetView}
+            title={t('model3d.resetCameraTitle')}
+          >
+            {t('defaultView')}
           </button>
         </div>
       </header>
@@ -213,7 +220,7 @@ const ModelPreviewPage: React.FC<ModelPreviewPageProps> = ({ assetId }) => {
           <div className="flex-1 min-w-0 relative flex flex-col min-h-0">
             {!supported ? (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-av-text-muted px-6 text-center">
-                当前格式暂不支持 3D 预览（支持 GLB / GLTF / OBJ / STL / FBX）
+                {t('model3d.formatUnsupportedHint')}
               </div>
             ) : modelFileUrl ? (
               <ModelPreviewViewport
@@ -233,42 +240,50 @@ const ModelPreviewPage: React.FC<ModelPreviewPageProps> = ({ assetId }) => {
               />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-av-text-muted">
-                正在解析模型路径…
+                {t('model3d.resolvingPath')}
               </div>
             )}
           </div>
 
           <aside className="w-56 shrink-0 border-l border-av-border bg-av-bg-secondary p-4 space-y-4 overflow-y-auto">
             <div>
-              <h3 className="text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2">操作</h3>
+              <h3 className="text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2">
+                {t('model3d.controlsSection')}
+              </h3>
               <ul className="text-[11px] text-av-text-secondary space-y-1.5 leading-relaxed">
-                <li>左键拖拽：旋转视角</li>
-                <li>滚轮：缩放</li>
-                <li>右键拖拽：平移</li>
-                <li>「默认视角」：重置相机</li>
-                {hasAnimation ? <li>空格键：播放 / 暂停</li> : null}
+                <li>{t('model3d.controlsRotate')}</li>
+                <li>{t('model3d.controlsZoom')}</li>
+                <li>{t('model3d.controlsPan')}</li>
+                <li>{t('model3d.controlsReset', { view: t('defaultView') })}</li>
+                {hasAnimation ? <li>{t('model3d.controlsPlayPause')}</li> : null}
               </ul>
             </div>
             <div>
-              <h3 className="text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2">显示</h3>
+              <h3 className="text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2">
+                {t('model3d.displaySection')}
+              </h3>
               <ul className="text-[11px] text-av-text-secondary space-y-1.5 leading-relaxed">
-                <li>网格平面：模型底部参考网格</li>
-                <li>线框模式：网格线框显示</li>
-                <li>UV 展示：棋盘格 UV 贴图</li>
+                <li>{t('model3d.displayGrid')}</li>
+                <li>{t('model3d.displayWireframe')}</li>
+                <li>{t('model3d.displayUv')}</li>
               </ul>
             </div>
             {hasAnimation ? (
               <div>
-                <h3 className="text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2">动画</h3>
+                <h3 className="text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2">
+                  {t('model3d.animationSection')}
+                </h3>
                 <ul className="text-[11px] text-av-text-secondary space-y-1.5 leading-relaxed">
-                  <li>底部时间轴可拖动定位</li>
-                  <li>支持多动画切换与循环</li>
+                  <li>{t('model3d.timelineScrub')}</li>
+                  <li>{t('model3d.timelineMulti')}</li>
                 </ul>
               </div>
             ) : supported ? (
               <div>
-                <h3 className="text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2">动画</h3>
-                <p className="text-[11px] text-av-text-muted leading-relaxed">此模型未检测到动画轨道</p>
+                <h3 className="text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2">
+                  {t('model3d.animationSection')}
+                </h3>
+                <p className="text-[11px] text-av-text-muted leading-relaxed">{t('model3d.noAnimationTracks')}</p>
               </div>
             ) : null}
           </aside>

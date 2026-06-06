@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Modal, Input } from '@arco-design/web-react'
 import { notify } from '../Common/notify'
 import { useApp } from '../../stores/AppContext'
@@ -22,6 +23,7 @@ function collectSubtreeFolderIds(folder: FolderItem): string[] {
 }
 
 const Sidebar: React.FC = () => {
+  const { t } = useTranslation(['sidebar', 'common'])
   const {
     folderTree,
     tags,
@@ -77,23 +79,23 @@ const Sidebar: React.FC = () => {
       try {
         const result = await addDraggedAssetsToFolder(e, folderId, { requireAlt: true })
         if (result.skippedAltHint) {
-          notify.info('侧栏：按住 Alt 拖到文件夹可加入分类；主区域子文件夹卡片可直接拖入')
+          notify.info(t('dragAltHint'))
           return
         }
         if (!result.ok) return
-        notify.success(`已将 ${result.count} 项加入文件夹`)
+        notify.success(t('addedToFolder', { count: result.count }))
         await refreshFolders()
         await refreshAssets()
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        notify.error(msg || '加入文件夹失败')
+        notify.error(msg || t('addToFolderFailed'))
       }
     },
     [refreshFolders, refreshAssets]
   )
 
   const openCreateFolderModal = useCallback(() => {
-    setNewFolderName('New Folder')
+    setNewFolderName(t('newFolderDefault'))
     setNewFolderColor('#64748b')
     setNewFolderIconEmoji('')
     setNewFolderIconRel('')
@@ -104,10 +106,10 @@ const Sidebar: React.FC = () => {
 
   const openCreateSubfolderModal = useCallback((parent: FolderItem) => {
     if (parent.level >= MAX_FOLDER_PARENT_LEVEL_FOR_CHILD) {
-      notify.warning('文件夹层级已达上限，无法继续添加子文件夹')
+      notify.warning(t('sidebar:maxDepth'))
       return
     }
-    setNewFolderName('New Folder')
+    setNewFolderName(t('newFolderDefault'))
     setNewFolderColor(parent.color?.trim() || '#64748b')
     setNewFolderIconEmoji('')
     setNewFolderIconRel('')
@@ -149,7 +151,7 @@ const Sidebar: React.FC = () => {
       setNewFolderIconPreview(previewDataUrl)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      notify.error(msg || '导入图标失败')
+      notify.error(msg || t('sidebar:importIconFailed'))
     }
   }, [newFolderIconRel])
 
@@ -173,11 +175,11 @@ const Sidebar: React.FC = () => {
   const submitCreateFolder = useCallback(async () => {
     const name = newFolderName.trim()
     if (!name) {
-      notify.warning('请输入文件夹名称')
+      notify.warning(t('sidebar:enterFolderName'))
       return
     }
     if (/[/\\]/.test(name)) {
-      notify.warning('名称不能包含 / 或 \\')
+      notify.warning(t('sidebar:invalidFolderName'))
       return
     }
     const iconForCreate = newFolderIconRel || (newFolderIconEmoji.trim() || null)
@@ -198,7 +200,7 @@ const Sidebar: React.FC = () => {
       setNewFolderIconPreview(null)
       setNewFolderParentId(null)
       setCreateFolderOpen(false)
-      notify.success('已创建文件夹')
+      notify.success(t('sidebar:folderCreated'))
       await setCurrentFolder(created.id)
     } catch (e) {
       if (iconForCreate && iconForCreate.startsWith('folder-icons/')) {
@@ -209,7 +211,7 @@ const Sidebar: React.FC = () => {
         }
       }
       const msg = e instanceof Error ? e.message : String(e)
-      notify.error(msg || '创建失败')
+      notify.error(msg || t('sidebar:createFailed'))
     } finally {
       setCreateBusy(false)
     }
@@ -264,7 +266,7 @@ const Sidebar: React.FC = () => {
       setIconEditPreview(previewDataUrl)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      notify.error(msg || '导入图标失败')
+      notify.error(msg || t('sidebar:importIconFailed'))
     }
   }, [iconEditRel, iconEditBaselineRel])
 
@@ -326,7 +328,7 @@ const Sidebar: React.FC = () => {
       setIconEditRel('')
       setIconEditPreview(null)
       setIconEditBaselineRel(null)
-      notify.success('图标已更新')
+      notify.success(t('sidebar:iconUpdated'))
     } catch (e) {
       if (newIcon && newIcon.startsWith('folder-icons/') && newIcon !== baseline) {
         try {
@@ -336,7 +338,7 @@ const Sidebar: React.FC = () => {
         }
       }
       const msg = e instanceof Error ? e.message : String(e)
-      notify.error(msg || '更新失败')
+      notify.error(msg || t('sidebar:updateFailed'))
     } finally {
       setIconEditBusy(false)
     }
@@ -346,11 +348,11 @@ const Sidebar: React.FC = () => {
     if (!renameFolderId) return
     const name = renameValue.trim()
     if (!name) {
-      notify.warning('请输入文件夹名称')
+      notify.warning(t('sidebar:enterFolderName'))
       return
     }
     if (/[/\\]/.test(name)) {
-      notify.warning('名称不能包含 / 或 \\')
+      notify.warning(t('sidebar:invalidFolderName'))
       return
     }
     const existing = findFolderInTree(folderTree, renameFolderId)
@@ -366,10 +368,10 @@ const Sidebar: React.FC = () => {
       await refreshAssets()
       setRenameOpen(false)
       setRenameFolderId(null)
-      notify.success('已重命名')
+      notify.success(t('sidebar:folderRenamed'))
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      notify.error(msg || '重命名失败')
+      notify.error(msg || t('sidebar:renameFailed'))
     } finally {
       setRenameBusy(false)
     }
@@ -383,10 +385,10 @@ const Sidebar: React.FC = () => {
       await refreshFolders()
       setColorEditOpen(false)
       setColorEditFolderId(null)
-      notify.success('颜色已更新')
+      notify.success(t('sidebar:colorUpdated'))
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      notify.error(msg || '更新失败')
+      notify.error(msg || t('sidebar:updateFailed'))
     } finally {
       setColorEditBusy(false)
     }
@@ -396,10 +398,10 @@ const Sidebar: React.FC = () => {
     (folder: FolderItem) => {
       const subtree = new Set(collectSubtreeFolderIds(folder))
       Modal.confirm({
-        title: '删除文件夹',
-        content: `确定删除「${folder.name}」？子文件夹会被一并删除，素材与该文件夹的关联也会被移除。`,
-        okText: '删除',
-        cancelText: '取消',
+        title: t('deleteFolderTitle'),
+        content: t('sidebar:deleteFolderContentLong', { name: folder.name }),
+        okText: t('common:delete'),
+        cancelText: t('common:cancel'),
         okButtonProps: { status: 'danger' as const },
         async onOk() {
           try {
@@ -409,10 +411,10 @@ const Sidebar: React.FC = () => {
             if (currentFolderId && subtree.has(currentFolderId)) {
               await setCurrentFolder(folder.parentId)
             }
-            notify.success('已删除文件夹')
+            notify.success(t('sidebar:deleteFolderSuccess'))
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e)
-            notify.error(msg || '删除失败')
+            notify.error(msg || t('sidebar:deleteFailed'))
             throw e
           }
         }
@@ -459,21 +461,21 @@ const Sidebar: React.FC = () => {
   return (
     <div className="h-full flex flex-col bg-av-bg-secondary overflow-y-auto scrollbar-hide">
       {/* 资料库 / 全部资产 / 文件夹树 */}
-      <SidebarSection title="资料库">
+      <SidebarSection title={t('sidebar:librarySection')}>
         <LibrarySwitcherBar />
       </SidebarSection>
 
       <div className="px-3 py-2 border-b border-av-border/50">
         <SidebarItem
           icon="🗂"
-          label="全部资产"
+          label={t('sidebar:allAssets')}
           active={!currentFolderId}
           onClick={() => void setCurrentFolder(null)}
           count={null}
         />
       </div>
 
-      <SidebarSection title="文件夹">
+      <SidebarSection title={t('sidebar:folders')}>
         <div className="space-y-0.5 mt-0.5">
           <FolderTreeItem
             folders={folderTree}
@@ -494,48 +496,50 @@ const Sidebar: React.FC = () => {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 6v12M6 12h12" />
           </svg>
-          New Folder
+          {t('sidebar:newFolder')}
         </button>
       </SidebarSection>
 
       <Modal
-        title="新建文件夹"
+        title={t('sidebar:createFolderTitle')}
         visible={createFolderOpen}
         onOk={() => void submitCreateFolder()}
         onCancel={() => closeCreateFolderModal()}
-        okText="创建"
-        cancelText="取消"
+        okText={t('sidebar:create')}
+        cancelText={t('common:cancel')}
         confirmLoading={createBusy}
         mountOnEnter={false}
       >
         <p className="text-xs text-av-text-muted mb-2">
           {newFolderParentId
-            ? `将在「${findFolderInTree(folderTree, newFolderParentId)?.name ?? '…'}」下创建子文件夹。`
-            : '将在顶层创建文件夹（可与现有根级文件夹并列）。'}
+            ? t('sidebar:createChildHint', {
+                name: findFolderInTree(folderTree, newFolderParentId)?.name ?? '…'
+              })
+            : t('sidebar:createRootHint')}
         </p>
         <Input
           value={newFolderName}
           onChange={(v) => setNewFolderName(v)}
-          placeholder="文件夹名称"
+          placeholder={t('sidebar:folderName')}
           onPressEnter={() => void submitCreateFolder()}
         />
         <div className="flex gap-3 mt-3 items-center">
-          <label className="text-xs text-av-text-muted shrink-0">颜色</label>
+          <label className="text-xs text-av-text-muted shrink-0">{t('sidebar:color')}</label>
           <input
             type="color"
             value={newFolderColor}
             onChange={(e) => setNewFolderColor(e.target.value)}
             className="h-8 w-12 rounded border border-av-border bg-transparent cursor-pointer"
-            title="文件夹标识色"
+            title={t('sidebar:folderColorTitle')}
           />
         </div>
         <div className="flex gap-3 mt-2 items-center">
-          <label className="text-xs text-av-text-muted shrink-0">图标</label>
+          <label className="text-xs text-av-text-muted shrink-0">{t('sidebar:icon')}</label>
           <div className="flex-1 min-w-0 flex items-center gap-2">
             <Input
               value={newFolderIconEmoji}
               onChange={(v) => setNewFolderIconEmoji(v)}
-              placeholder="可选，如 📷 Logo"
+              placeholder={t('sidebar:folderIconEmoji')}
               className="flex-1"
               maxLength={8}
               disabled={Boolean(newFolderIconRel)}
@@ -545,7 +549,7 @@ const Sidebar: React.FC = () => {
               onClick={() => void pickFolderIconFromDisk()}
               className="shrink-0 px-2.5 py-1 text-xs rounded border border-av-border bg-av-bg-tertiary hover:bg-av-bg-hover text-av-text-secondary transition-colors"
             >
-              本地选择
+              {t('sidebar:pickLocal')}
             </button>
           </div>
         </div>
@@ -563,7 +567,7 @@ const Sidebar: React.FC = () => {
                 onClick={() => void clearLocalFolderIcon()}
                 className="text-xs text-av-text-muted hover:text-av-accent-blue shrink-0"
               >
-                清除图片
+                {t('sidebar:clearImage')}
               </button>
             </div>
           </div>
@@ -571,41 +575,41 @@ const Sidebar: React.FC = () => {
       </Modal>
 
       <Modal
-        title="重命名文件夹"
+        title={t('sidebar:renameFolder')}
         visible={renameOpen}
         onOk={() => void submitRenameFolder()}
         onCancel={() => {
           setRenameOpen(false)
           setRenameFolderId(null)
         }}
-        okText="保存"
-        cancelText="取消"
+        okText={t('common:save')}
+        cancelText={t('common:cancel')}
         confirmLoading={renameBusy}
         mountOnEnter={false}
       >
         <Input
           value={renameValue}
           onChange={(v) => setRenameValue(v)}
-          placeholder="文件夹名称"
+          placeholder={t('sidebar:folderName')}
           onPressEnter={() => void submitRenameFolder()}
         />
       </Modal>
 
       <Modal
-        title="修改文件夹颜色"
+        title={t('sidebar:editFolderColor')}
         visible={colorEditOpen}
         onOk={() => void submitColorEdit()}
         onCancel={() => {
           setColorEditOpen(false)
           setColorEditFolderId(null)
         }}
-        okText="保存"
-        cancelText="取消"
+        okText={t('common:save')}
+        cancelText={t('common:cancel')}
         confirmLoading={colorEditBusy}
         mountOnEnter={false}
       >
         <div className="flex gap-3 items-center">
-          <label className="text-xs text-av-text-muted shrink-0">颜色</label>
+          <label className="text-xs text-av-text-muted shrink-0">{t('sidebar:color')}</label>
           <input
             type="color"
             value={colorEditValue}
@@ -616,22 +620,22 @@ const Sidebar: React.FC = () => {
       </Modal>
 
       <Modal
-        title="修改文件夹图标"
+        title={t('sidebar:editFolderIcon')}
         visible={iconEditOpen}
         onOk={() => void submitIconEdit()}
         onCancel={() => closeIconEditModal()}
-        okText="保存"
-        cancelText="取消"
+        okText={t('common:save')}
+        cancelText={t('common:cancel')}
         confirmLoading={iconEditBusy}
         mountOnEnter={false}
       >
         <div className="flex gap-3 mt-1 items-center">
-          <label className="text-xs text-av-text-muted shrink-0">图标</label>
+          <label className="text-xs text-av-text-muted shrink-0">{t('sidebar:icon')}</label>
           <div className="flex-1 min-w-0 flex items-center gap-2">
             <Input
               value={iconEditEmoji}
               onChange={(v) => setIconEditEmoji(v)}
-              placeholder="可选，如 📷"
+              placeholder={t('sidebar:folderIconShort')}
               className="flex-1"
               maxLength={8}
               disabled={Boolean(iconEditRel)}
@@ -641,7 +645,7 @@ const Sidebar: React.FC = () => {
               onClick={() => void pickIconEditFromDisk()}
               className="shrink-0 px-2.5 py-1 text-xs rounded border border-av-border bg-av-bg-tertiary hover:bg-av-bg-hover text-av-text-secondary transition-colors"
             >
-              本地选择
+              {t('sidebar:pickLocal')}
             </button>
           </div>
         </div>
@@ -659,13 +663,13 @@ const Sidebar: React.FC = () => {
                 onClick={() => void clearIconEditLocal()}
                 className="text-xs text-av-text-muted hover:text-av-accent-blue shrink-0"
               >
-                清除图片
+                {t('sidebar:clearImage')}
               </button>
             </div>
           </div>
         ) : null}
         <p className="text-[10px] text-av-text-muted mt-3 leading-relaxed">
-          留空并保存可恢复默认文件夹图标。选择本地图片会替换当前图标；保存失败时临时文件会被清理。
+          {t('sidebar:iconEditHint')}
         </p>
       </Modal>
 

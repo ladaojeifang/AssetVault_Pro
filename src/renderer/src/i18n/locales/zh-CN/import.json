@@ -1,0 +1,27 @@
+{
+  "dropRelease": "松开以导入",
+  "dropItemsJoin": "{{count}} 个条目将加入资源库",
+  "dropFilesOrFolders": "将文件或文件夹拖入窗口",
+  "dropHint": "松开以导入文件",
+  "dropCount": "拖入 {{count}} 个文件",
+  "dropPathFailed": "无法取得拖入文件的路径。请尝试从资源管理器拖到窗口中央，或使用工具栏「导入」。",
+  "duplicateTitle": "检测到重复文件",
+  "duplicateIntro": "「{{name}}」与库内已有资产内容相同（SHA-256 一致，{{size}}）",
+  "existingName": "库内名称",
+  "existingImported": "导入时间",
+  "existingFolders": "所在文件夹",
+  "noFolder": "（未分配到文件夹）",
+  "useExisting": "使用已有资产",
+  "importCopy": "仍要导入副本",
+  "applyToAll": "全部按此处理",
+  "applyToAllBatch": "本次导入全部相同处理",
+  "importCopyAnyway": "仍要再存一份",
+  "skipFile": "跳过此文件",
+  "dropTypes": {
+    "image": "图片",
+    "video": "视频",
+    "audio": "音频",
+    "font": "字体",
+    "document": "文档"
+  }
+}

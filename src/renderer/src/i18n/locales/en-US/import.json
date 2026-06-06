@@ -1,0 +1,27 @@
+{
+  "dropRelease": "Release to import",
+  "dropItemsJoin": "{{count}} item(s) will be added to the library",
+  "dropFilesOrFolders": "Drop files or folders into the window",
+  "dropHint": "Release to import files",
+  "dropCount": "{{count}} file(s) to import",
+  "dropPathFailed": "Could not resolve dropped file paths. Try dragging from Explorer to the window center, or use toolbar Import.",
+  "duplicateTitle": "Duplicate file detected",
+  "duplicateIntro": "\"{{name}}\" matches an existing asset (same SHA-256, {{size}})",
+  "existingName": "Library name",
+  "existingImported": "Imported at",
+  "existingFolders": "Folders",
+  "noFolder": "(not in any folder)",
+  "useExisting": "Use existing asset",
+  "importCopy": "Import copy anyway",
+  "applyToAll": "Apply to all",
+  "applyToAllBatch": "Apply to all duplicates in this import",
+  "importCopyAnyway": "Import copy anyway",
+  "skipFile": "Skip this file",
+  "dropTypes": {
+    "image": "Images",
+    "video": "Video",
+    "audio": "Audio",
+    "font": "Fonts",
+    "document": "Documents"
+  }
+}

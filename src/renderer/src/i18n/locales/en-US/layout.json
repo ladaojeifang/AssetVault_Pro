@@ -1,0 +1,21 @@
+{
+  "toggleSidebar": "Toggle Sidebar",
+  "openSettings": "Open Settings",
+  "settingsShortcut": "Settings ({{shortcut}})",
+  "minimize": "Minimize",
+  "maximize": "Maximize",
+  "restore": "Restore",
+  "importing": "Importing…",
+  "importingProgress": "Importing {{current}}/{{total}} · {{filename}}",
+  "assetsTotal": "{{count}} assets",
+  "assetsInView": "· {{count}} in view",
+  "selectedCount": "· {{count}} selected",
+  "browseHints": "· Ctrl/⌘+wheel zoom · Ctrl/⌘+click multi-select · Shift+click range · drag to subfolders above",
+  "colorFilter": "Color filter",
+  "allColors": "All colors",
+  "closePreview": "Close preview and return to library",
+  "closeApp": "Close application",
+  "gridMasonry": "Masonry",
+  "loadingMore": "Loading more…",
+  "updating": "Updating…"
+}

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { SizePreset } from '@/shared/assetFilters'
-import { SIZE_PRESET_OPTIONS, parseMbInput } from '@/shared/assetFilters'
+import { parseMbInput } from '@/shared/assetFilters'
+import { getTranslatedSizePresetOptions } from '../../utils/assetFilterLabels'
 
 type Props = {
   sizePreset: SizePreset | null
@@ -26,6 +28,8 @@ export function FileSizeFilterControl({
   compact = false,
   layout = 'stack'
 }: Props): React.ReactElement {
+  const { t } = useTranslation('assets')
+  const sizePresetOptions = getTranslatedSizePresetOptions(t)
   const [minDraft, setMinDraft] = useState(minMb != null ? String(minMb) : '')
   const [maxDraft, setMaxDraft] = useState(maxMb != null ? String(maxMb) : '')
 
@@ -68,10 +72,10 @@ export function FileSizeFilterControl({
         const v = (e.target.value || null) as SizePreset | null
         onPresetChange(v)
       }}
-      title="按像素尺寸预设筛选（小/中/大图）"
+      title={t('sizeFilter.presetTitle')}
     >
-      <option value="">预设…</option>
-      {SIZE_PRESET_OPTIONS.map((o) => (
+      <option value="">{t('sizeFilter.presetPlaceholder')}</option>
+      {sizePresetOptions.map((o) => (
         <option key={o.id} value={o.id}>
           {o.label}
         </option>
@@ -88,7 +92,7 @@ export function FileSizeFilterControl({
       : 'flex items-center gap-0.5 shrink-0'
 
   const mbInputs = (
-    <div className={mbRowClass} title="按文件体积 (MB) 筛选">
+    <div className={mbRowClass} title={t('sizeFilter.mbTitle')}>
       <span className="text-[9px] text-av-text-muted shrink-0">≥</span>
       <input
         type="text"
@@ -128,7 +132,7 @@ export function FileSizeFilterControl({
           type="button"
           className="text-[9px] text-av-text-muted hover:text-av-accent-blue px-0.5 shrink-0"
           onClick={clearMb}
-          title="清除 MB 筛选"
+          title={t('sizeFilter.clearMb')}
         >
           ×
         </button>

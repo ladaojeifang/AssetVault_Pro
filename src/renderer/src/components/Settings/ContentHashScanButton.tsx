@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ContentHashScanResult } from '@/shared/importTypes'
 
 export function ContentHashScanButton({ disabled }: { disabled?: boolean }): React.ReactElement {
+  const { t } = useTranslation('settings')
   const [scanning, setScanning] = useState(false)
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
   const [result, setResult] = useState<ContentHashScanResult | null>(null)
@@ -38,14 +40,18 @@ export function ContentHashScanButton({ disabled }: { disabled?: boolean }): Rea
       >
         {scanning
           ? progress
-            ? `扫描中… ${progress.current}/${progress.total}`
-            : '扫描中…'
-          : '扫描并更新内容指纹'}
+            ? t('hashScan.busyProgress', progress)
+            : t('hashScan.busy')
+          : t('hashScan.idle')}
       </button>
       {result && (
         <p className="text-xs text-av-text-muted">
-          共 {result.scanned} 条：更新 {result.updated}，跳过 {result.skipped}
-          {result.errors > 0 ? `，失败 ${result.errors}` : ''}
+          {t('hashScan.summary', {
+            scanned: result.scanned,
+            updated: result.updated,
+            skipped: result.skipped,
+            errorsPart: result.errors > 0 ? t('hashScan.errorsPart', { errors: result.errors }) : ''
+          })}
         </p>
       )}
     </div>

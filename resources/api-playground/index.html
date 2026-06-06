@@ -42,14 +42,26 @@
     <div class="topbar">
       <strong>AssetVault Pro</strong>
       <span>Web API v1</span>
-      <a href="../docs/openapi.yaml" target="_blank" rel="noopener">openapi.yaml</a>
+      <a id="openapi-link" href="../docs/openapi.yaml" target="_blank" rel="noopener">openapi.yaml</a>
+      <span id="lang-hint" style="margin-left: auto; opacity: 0.75"></span>
     </div>
     <div id="swagger-ui"></div>
     <script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-bundle.js" crossorigin></script>
     <script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-standalone-preset.js" crossorigin></script>
     <script>
       window.onload = function () {
-        const specUrl = new URL('../docs/openapi.yaml', window.location.href).href
+        const params = new URLSearchParams(window.location.search)
+        const navEn = typeof navigator !== 'undefined' && navigator.language && navigator.language.startsWith('en')
+        const langParam = params.get('lang')
+        const useEn = langParam === 'en' || (langParam !== 'zh' && navEn)
+        const specFile = useEn ? 'openapi.en.yaml' : 'openapi.yaml'
+        document.documentElement.lang = useEn ? 'en' : 'zh-CN'
+        document.getElementById('openapi-link').href = new URL('../docs/' + specFile, window.location.href).href
+        document.getElementById('openapi-link').textContent = specFile
+        document.getElementById('lang-hint').textContent = useEn
+          ? 'Documentation language: English'
+          : '文档语言：简体中文'
+        const specUrl = new URL('../docs/' + specFile, window.location.href).href
         window.ui = SwaggerUIBundle({
           url: specUrl,
           dom_id: '#swagger-ui',

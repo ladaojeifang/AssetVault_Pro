@@ -1,10 +1,15 @@
-import React from 'react'
+import React, { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useApp } from '../../stores/AppContext'
-import { COLOR_BUCKET_OPTIONS } from '@/shared/colorBucket'
-import { DATE_PRESET_OPTIONS, hasActiveAssetFilters } from '@/shared/assetFilters'
+import { hasActiveAssetFilters } from '@/shared/assetFilters'
+import { getTranslatedDatePresetOptions } from '../../utils/assetFilterLabels'
+import { getColorBucketOptions } from '../../utils/colorBucketLabels'
 import { FileSizeFilterControl } from '../Assets/FileSizeFilterControl'
 
 const AssetFilterBar: React.FC = () => {
+  const { t } = useTranslation('assets')
+  const datePresetOptions = getTranslatedDatePresetOptions(t)
+  const colorBucketOptions = useMemo(() => getColorBucketOptions(t), [t])
   const {
     colorBucketFilter,
     sizePresetFilter,
@@ -28,10 +33,10 @@ const AssetFilterBar: React.FC = () => {
 
   return (
     <div className="flex items-center gap-2 px-4 py-1.5 border-b border-av-border bg-av-bg-secondary shrink-0 flex-wrap">
-      <span className="text-[11px] text-av-text-muted shrink-0">筛选</span>
+      <span className="text-[11px] text-av-text-muted shrink-0">{t('filterBar.label')}</span>
 
-      <div className="flex items-center gap-1" title="主色">
-        {COLOR_BUCKET_OPTIONS.map((opt) => {
+      <div className="flex items-center gap-1" title={t('filterBar.dominantColor')}>
+        {colorBucketOptions.map((opt) => {
           const active = colorBucketFilter === opt.id
           return (
             <button
@@ -68,10 +73,10 @@ const AssetFilterBar: React.FC = () => {
         value={datePresetFilter ?? ''}
         onChange={(e) => setDatePresetFilter((e.target.value || null) as typeof datePresetFilter)}
         className="bg-av-bg-elevated text-av-text-secondary border border-av-border rounded-md px-2 py-0.5 text-[11px] outline-none cursor-pointer focus:border-av-accent-blue"
-        title="导入日期"
+        title={t('filterBar.importDate')}
       >
-        <option value="">日期</option>
-        {DATE_PRESET_OPTIONS.map((o) => (
+        <option value="">{t('filterBar.date')}</option>
+        {datePresetOptions.map((o) => (
           <option key={o.id} value={o.id}>
             {o.label}
           </option>
@@ -84,7 +89,7 @@ const AssetFilterBar: React.FC = () => {
           onClick={() => clearAssetFilters()}
           className="text-[11px] text-av-text-muted hover:text-av-accent-blue transition-colors ml-1"
         >
-          清除筛选
+          {t('filterBar.clear')}
         </button>
       ) : null}
     </div>

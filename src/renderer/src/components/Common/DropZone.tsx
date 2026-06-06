@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useApp } from '../../stores/AppContext'
 import {
   dataTransferMightContainOsFiles,
@@ -20,6 +21,7 @@ function shouldHintFileImportOverlay(dt: DataTransfer | null): boolean {
  * even when a full-screen wrapper uses pointer-events-none (events hit children first).
  */
 const DropZone: React.FC = () => {
+  const { t } = useTranslation('import')
   const [isDragging, setIsDragging] = useState(false)
   const [dragFileCount, setDragFileCount] = useState(0)
   const { startImport, stopImport, refreshAssets, currentFolderId } = useApp()
@@ -29,9 +31,7 @@ const DropZone: React.FC = () => {
       const paths = resolveDropPaths(dt)
       if (paths.length === 0) {
         console.warn('[DropZone] No file paths resolved from drop')
-        notify.warning(
-          '无法取得拖入文件的路径。请尝试从资源管理器拖到窗口中央，或使用工具栏「导入」。'
-        )
+        notify.warning(t('dropPathFailed'))
         return
       }
 
@@ -137,19 +137,19 @@ const DropZone: React.FC = () => {
               </svg>
             </div>
             <div>
-              <p className="text-xl font-semibold text-av-text-primary">松开以导入</p>
+              <p className="text-xl font-semibold text-av-text-primary">{t('dropRelease')}</p>
               <p className="text-sm text-av-text-secondary mt-1">
                 {dragFileCount > 0
-                  ? `${dragFileCount} 个条目将加入资源库`
-                  : '将文件或文件夹拖入窗口'}
+                  ? t('dropItemsJoin', { count: dragFileCount })
+                  : t('dropFilesOrFolders')}
               </p>
             </div>
             <div className="flex items-center justify-center gap-4 text-xs text-av-text-muted">
-              <span>图片</span>
-              <span>视频</span>
-              <span>音频</span>
-              <span>字体</span>
-              <span>文档</span>
+              <span>{t('dropTypes.image')}</span>
+              <span>{t('dropTypes.video')}</span>
+              <span>{t('dropTypes.audio')}</span>
+              <span>{t('dropTypes.font')}</span>
+              <span>{t('dropTypes.document')}</span>
             </div>
           </div>
         </div>

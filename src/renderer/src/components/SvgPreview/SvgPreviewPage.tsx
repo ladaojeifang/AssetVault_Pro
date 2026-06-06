@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { AssetItem } from '@/shared/types'
 import { formatFileSize } from '@/shared/types'
 import { isSvgExtension } from '@/shared/svgFormats'
@@ -13,6 +14,7 @@ const MIN_SCALE = 0.1
 const MAX_SCALE = 32
 
 const SvgPreviewPage: React.FC<SvgPreviewPageProps> = ({ assetId }) => {
+  const { t } = useTranslation('preview')
   const { assets, closeSvgPreview } = useApp()
   const [asset, setAsset] = useState<AssetItem | null>(() => assets.find((a) => a.id === assetId) ?? null)
   const [loadingAsset, setLoadingAsset] = useState(!asset)
@@ -60,7 +62,7 @@ const SvgPreviewPage: React.FC<SvgPreviewPageProps> = ({ assetId }) => {
     void (async () => {
       const target = asset.resolvedFilePath ?? asset.filePath
       if (!target) {
-        if (!cancelled) setLoadError('无法解析文件路径')
+        if (!cancelled) setLoadError(t('pathResolveFailed'))
         return
       }
       const href = await loadSvgPreviewObjectUrl(target)
@@ -69,13 +71,13 @@ const SvgPreviewPage: React.FC<SvgPreviewPageProps> = ({ assetId }) => {
         return
       }
       if (href) setSvgFileUrl(href)
-      else setLoadError('无法加载 SVG 文件')
+      else setLoadError(t('svg.loadFailed'))
     })()
 
     return () => {
       cancelled = true
     }
-  }, [asset?.id, asset?.filePath, asset?.resolvedFilePath, isSvg])
+  }, [asset?.id, asset?.filePath, asset?.resolvedFilePath, isSvg, t])
 
   useEffect(() => {
     return () => {
@@ -107,11 +109,14 @@ const SvgPreviewPage: React.FC<SvgPreviewPageProps> = ({ assetId }) => {
     setScale((s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s * delta)))
   }, [])
 
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
-    if (e.button !== 0) return
-    dragRef.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y }
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-  }, [offset.x, offset.y])
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return
+      dragRef.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y }
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    },
+    [offset.x, offset.y]
+  )
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     const d = dragRef.current
@@ -134,7 +139,7 @@ const SvgPreviewPage: React.FC<SvgPreviewPageProps> = ({ assetId }) => {
   if (loadingAsset) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-av-text-muted">
-        正在加载资产…
+        {t('loadingAsset')}
       </div>
     )
   }
@@ -142,21 +147,21 @@ const SvgPreviewPage: React.FC<SvgPreviewPageProps> = ({ assetId }) => {
   if (!asset || asset.fileType !== 'image' || !isSvg) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-av-text-secondary">
-        <p>找不到该 SVG 资产</p>
+        <p>{t('notFoundSvg')}</p>
         <button type="button" className="btn-secondary text-sm" onClick={handleBack}>
-          返回资源库
+          {t('backToLibrary')}
         </button>
       </div>
     )
   }
 
   const dimLabel =
-    asset.width && asset.height ? `${asset.width} × ${asset.height}` : '矢量 · 可无损缩放'
+    asset.width && asset.height ? `${asset.width} × ${asset.height}` : t('svg.vectorScalable')
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-av-bg-primary">
       <header className="flex items-center gap-3 px-4 h-12 border-b border-av-border bg-av-bg-secondary shrink-0">
-        <button type="button" className="btn-ghost p-2 rounded-lg" onClick={handleBack} title="返回 (Esc)">
+        <button type="button" className="btn-ghost p-2 rounded-lg" onClick={handleBack} title={t('backTitle')}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M15 18l-6-6 6-6" />
           </svg>
@@ -172,7 +177,7 @@ const SvgPreviewPage: React.FC<SvgPreviewPageProps> = ({ assetId }) => {
             {Math.round(scale * 100)}%
           </span>
           <button type="button" className="btn-secondary text-xs px-3 py-1.5" onClick={resetView}>
-            重置视图
+            {t('resetView')}
           </button>
         </div>
       </header>
@@ -198,7 +203,7 @@ const SvgPreviewPage: React.FC<SvgPreviewPageProps> = ({ assetId }) => {
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-av-text-muted px-6 text-center">
               <p>{loadError}</p>
               {asset.sourceMissing ? (
-                <p className="text-xs text-red-300/80">源文件已缺失</p>
+                <p className="text-xs text-red-300/80">{t('svg.sourceMissing')}</p>
               ) : null}
             </div>
           ) : svgFileUrl ? (
@@ -214,30 +219,32 @@ const SvgPreviewPage: React.FC<SvgPreviewPageProps> = ({ assetId }) => {
                 alt={asset.filename}
                 className="max-w-[min(90vw,1200px)] max-h-[min(80vh,900px)] w-auto h-auto object-contain select-none pointer-events-none shadow-2xl"
                 draggable={false}
-                onError={() => setLoadError('SVG 渲染失败')}
+                onError={() => setLoadError(t('svg.renderFailed'))}
               />
             </div>
           ) : (
             <div className="absolute inset-0 flex items-center justify-center text-sm text-av-text-muted">
-              正在加载 SVG…
+              {t('loadingSvg')}
             </div>
           )}
         </div>
 
         <aside className="w-52 shrink-0 border-l border-av-border bg-av-bg-secondary p-4 space-y-4 overflow-y-auto">
           <div>
-            <h3 className="text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2">操作</h3>
+            <h3 className="text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2">
+              {t('svg.controlsSection')}
+            </h3>
             <ul className="text-[11px] text-av-text-secondary space-y-1.5 leading-relaxed">
-              <li>滚轮：缩放</li>
-              <li>拖拽：平移</li>
-              <li>Esc：返回资源库</li>
+              <li>{t('svg.controlsZoom')}</li>
+              <li>{t('svg.controlsPan')}</li>
+              <li>{t('svg.controlsBack')}</li>
             </ul>
           </div>
           <div>
-            <h3 className="text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2">说明</h3>
-            <p className="text-[11px] text-av-text-secondary leading-relaxed">
-              使用应用内置引擎加载原始 SVG 文件，无需安装外部浏览器。复杂 SVG 若含外链资源，预览可能不完整。
-            </p>
+            <h3 className="text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2">
+              {t('svg.aboutSection')}
+            </h3>
+            <p className="text-[11px] text-av-text-secondary leading-relaxed">{t('svg.aboutDesc')}</p>
           </div>
         </aside>
       </div>

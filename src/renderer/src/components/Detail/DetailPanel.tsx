@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useApp } from '../../stores/AppContext'
 import { flattenFolderTree } from '../../utils/flattenFolderTree'
 import { formatFileSize } from '@/shared/types'
@@ -17,6 +18,7 @@ import { isExrExtension } from '@/shared/exrFormats'
 import { FileTypePlaceholder } from '../Common/FileTypePlaceholder'
 
 const DetailPanel: React.FC = () => {
+  const { t } = useTranslation('detail')
   const { selectedAssetIds, assets, tags, folderTree, clearSelection, refreshAssets, refreshFolders, setDetailPanelOpen, refreshTags, openFontPreview, openModelPreview, openSvgPreview, openExrPreview, openMarkdownPreview } = useApp()
   const [assetTagIds, setAssetTagIds] = useState<string[]>([])
   const [assetFolderIds, setAssetFolderIds] = useState<string[]>([])
@@ -150,7 +152,7 @@ const DetailPanel: React.FC = () => {
       await refreshAssets()
     } catch (e: any) {
       console.error('Failed to save source URL:', e)
-      notify.error(e?.message ?? '保存链接失败')
+      notify.error(e?.message ?? t('saveLinkFailed'))
     } finally {
       savingSourceUrlRef.current = false
     }
@@ -279,17 +281,17 @@ const DetailPanel: React.FC = () => {
           />
           <InfoRow label="Views" value={String(asset.viewCount)} />
           <InfoRow
-            label="存储"
+            label={t('storage')}
             value={
               asset.storageMode === 'referenced'
                 ? asset.sourceMissing
-                  ? '引用（源缺失）'
-                  : '仅引用'
-                : '库内副本'
+                  ? t('storageRefMissing')
+                  : t('storageRefOnly')
+                : t('storageLocal')
             }
           />
           {asset.storageMode === 'referenced' && (
-            <InfoRow label="源路径" value={asset.resolvedFilePath ?? asset.filePath} variant="block" />
+            <InfoRow label={t('sourcePath')} value={asset.resolvedFilePath ?? asset.filePath} variant="block" />
           )}
         </InfoSection>
 
@@ -299,7 +301,7 @@ const DetailPanel: React.FC = () => {
             className="w-full btn-primary text-sm py-2"
             onClick={() => openModelPreview(asset.id)}
           >
-            3D 预览
+            {t('preview3d')}
           </button>
         )}
 
@@ -309,7 +311,7 @@ const DetailPanel: React.FC = () => {
             className="w-full btn-primary text-sm py-2"
             onClick={() => openSvgPreview(asset.id)}
           >
-            SVG 预览
+            {t('previewSvg')}
           </button>
         )}
 
@@ -319,7 +321,7 @@ const DetailPanel: React.FC = () => {
             className="w-full btn-primary text-sm py-2"
             onClick={() => openExrPreview(asset.id)}
           >
-            EXR 预览
+            {t('previewExr')}
           </button>
         )}
 
@@ -329,7 +331,7 @@ const DetailPanel: React.FC = () => {
             className="w-full btn-primary text-sm py-2"
             onClick={() => openMarkdownPreview(asset.id)}
           >
-            Markdown 编辑
+            {t('previewMarkdown')}
           </button>
         )}
 
@@ -340,14 +342,14 @@ const DetailPanel: React.FC = () => {
               className="w-full btn-primary text-sm py-2"
               onClick={() => openFontPreview(asset.id)}
             >
-              字体预览
+              {t('previewFont')}
             </button>
             <FontDetailSection asset={asset} onRefresh={() => void refreshAssets()} />
           </>
         )}
-        <InfoSection title="文件夹">
+        <InfoSection title={t('foldersSection')}>
           <p className="text-[11px] text-av-text-muted mb-2 leading-relaxed">
-            逻辑分类，同一素材可属于多个文件夹；与磁盘目录无关。
+            {t('foldersHint')}
           </p>
           <div className="space-y-2">
             {assetFolderIds.length > 0 && (
@@ -381,7 +383,7 @@ const DetailPanel: React.FC = () => {
                 defaultValue=""
               >
                 <option value="" disabled>
-                  添加文件夹…
+                  {t('addFolder')}
                 </option>
                 {flatFolders
                   .filter((f) => !assetFolderIds.includes(f.id))
@@ -485,7 +487,7 @@ const DetailPanel: React.FC = () => {
         {(asset.fileType === 'image' || asset.fileType === 'video') && (
           <InfoSection title="COLOR ANALYSIS">
             {paletteLoading && paletteColors.length === 0 ? (
-              <p className="text-xs text-av-text-muted">正在分析色彩…</p>
+              <p className="text-xs text-av-text-muted">{t('analyzingColors')}</p>
             ) : paletteColors.length > 0 ? (
               <div className="space-y-3">
                 <div className="flex justify-center">
@@ -505,13 +507,13 @@ const DetailPanel: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-av-text-muted">无法提取色彩信息</p>
+              <p className="text-xs text-av-text-muted">{t('noColorInfo')}</p>
             )}
           </InfoSection>
         )}
 
         {/* User remarks */}
-        <InfoSection title="备注">
+        <InfoSection title={t('notes')}>
           <textarea
             value={notesDraft}
             onChange={(e) => {
@@ -521,16 +523,16 @@ const DetailPanel: React.FC = () => {
             onBlur={() => void saveNotesIfChanged()}
             maxLength={16000}
             rows={5}
-            placeholder="在此输入对该资产的说明…"
+            placeholder={t('notesPlaceholder')}
             className="input-base w-full min-h-[100px] py-2 px-2.5 text-sm resize-y text-av-text-primary placeholder:text-av-text-muted leading-relaxed"
           />
-          <p className="text-[11px] text-av-text-muted mt-1.5">失焦时自动保存，最多 16000 字</p>
+          <p className="text-[11px] text-av-text-muted mt-1.5">{t('notesHint')}</p>
         </InfoSection>
 
         {/* Source URL */}
         <InfoSection title="SOURCE LINK">
           <p className="text-[11px] text-av-text-muted mb-2 leading-relaxed">
-            资产来源网页链接；支持 http/https，失焦自动保存。
+            {t('sourceUrlHint')}
           </p>
           <div className="flex gap-1.5">
             <input
@@ -559,16 +561,16 @@ const DetailPanel: React.FC = () => {
                   if (/^https?:\/\/.+/i.test(url)) {
                     window.open(url, '_blank', 'noopener,noreferrer')
                   } else {
-                    notify.error('仅支持 http:// 或 https:// 开头的合法 URL')
+                    notify.error(t('urlInvalid'))
                   }
                 }}
                 className="btn-secondary py-1 px-2.5 text-xs shrink-0 flex items-center gap-1"
-                title="在浏览器中打开链接"
+                title={t('openLink')}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
                 </svg>
-                打开
+                {t('openLink')}
               </button>
             )}
           </div>
@@ -586,14 +588,14 @@ const DetailPanel: React.FC = () => {
               onClick={async () => {
                 const r = await window.assetVaultAPI.assets.localize([asset.id])
                 if (r.localized > 0) {
-                  notify.success('已本地化到资料库')
+                  notify.success(t('localized'))
                   await refreshAssets()
                 } else if (r.errors[0]) {
                   notify.error(r.errors[0].reason)
                 }
               }}
             >
-              本地化到资料库
+              {t('localize')}
             </button>
             {asset.sourceMissing && (
               <button
@@ -605,12 +607,12 @@ const DetailPanel: React.FC = () => {
                   if (!path) return
                   const res = await window.assetVaultAPI.assets.relink(asset.id, path)
                   if (res.ok) {
-                    notify.success('已重新链接')
+                    notify.success(t('relinked'))
                     await refreshAssets()
                   } else notify.error(res.error)
                 }}
               >
-                重新链接源文件…
+                {t('relink')}
               </button>
             )}
           </>
@@ -717,6 +719,7 @@ function FontDetailSection({
   asset: AssetItem
   onRefresh: () => void
 }) {
+  const { t } = useTranslation('detail')
   const font = parseFontMetadataFromAsset(asset)
   const [faces, setFaces] = useState<FontFaceSummary[]>([])
   const [faceBusy, setFaceBusy] = useState(false)
@@ -738,7 +741,7 @@ function FontDetailSection({
       const res = await window.assetVaultAPI.fonts.updateFaceIndex(asset.id, index, true)
       if (!res.ok) notify.error(res.error)
       else {
-        notify.success('已切换 TTC 字重')
+        notify.success(t('ttcSwitched'))
         onRefresh()
       }
     } finally {
@@ -750,7 +753,8 @@ function FontDetailSection({
     setActionBusy(true)
     try {
       const res = await window.assetVaultAPI.fonts.installToSystem(asset.id)
-      if (res.ok) notify.success(res.dest ? `已安装到 ${res.dest}` : '已安装到用户字体目录')
+      if (res.ok)
+        notify.success(res.dest ? t('installedTo', { dest: res.dest }) : t('installedUserFont'))
       else notify.error(res.error)
     } finally {
       setActionBusy(false)
@@ -761,7 +765,7 @@ function FontDetailSection({
     setActionBusy(true)
     try {
       const res = await window.assetVaultAPI.fonts.exportCopy(asset.id)
-      if (res.ok) notify.success(`已导出到 ${res.path}`)
+      if (res.ok) notify.success(t('exportedTo', { path: res.path }))
       else if (res.error !== 'cancelled') notify.error(res.error)
     } finally {
       setActionBusy(false)
@@ -772,10 +776,10 @@ function FontDetailSection({
     <>
       <div className="flex flex-wrap gap-2">
         <button type="button" className="btn-secondary text-xs flex-1" disabled={actionBusy} onClick={() => void install()}>
-          安装到系统
+          {t('installSystem')}
         </button>
         <button type="button" className="btn-secondary text-xs flex-1" disabled={actionBusy} onClick={() => void exportCopy()}>
-          导出副本
+          {t('exportCopy')}
         </button>
         <button
           type="button"
@@ -783,7 +787,7 @@ function FontDetailSection({
           disabled={actionBusy}
           onClick={() => void window.assetVaultAPI.fonts.openItemFolder(asset.id)}
         >
-          打开字体目录
+          {t('openFontDir')}
         </button>
       </div>
       <FontInfoSection font={font} faces={faces} faceBusy={faceBusy} onFaceChange={(i) => void onFaceChange(i)} />
@@ -802,6 +806,7 @@ function FontInfoSection({
   faceBusy?: boolean
   onFaceChange?: (index: number) => void
 }) {
+  const { t } = useTranslation('detail')
   const cov = font.unicodeCoverage
 
   return (
@@ -816,7 +821,7 @@ function FontInfoSection({
           <InfoRow label="TTC faces" value={String(font.ttcFaceCount)} />
           {faces.length > 0 && onFaceChange ? (
             <div className="pt-1">
-              <label className="text-[11px] text-av-text-muted block mb-1">当前字重</label>
+              <label className="text-[11px] text-av-text-muted block mb-1">{t('currentWeight')}</label>
               <select
                 className="input-base py-1 text-xs w-full"
                 disabled={faceBusy}
@@ -837,7 +842,7 @@ function FontInfoSection({
       ) : null}
       {cov ? (
         <div className="pt-1 space-y-0.5">
-          <p className="text-[11px] text-av-text-muted">Unicode 覆盖（抽样）</p>
+          <p className="text-[11px] text-av-text-muted">{t('unicodeCoverage')}</p>
           <InfoRow label="Total" value={String(cov.totalCodePoints)} />
           <InfoRow label="Latin" value={String(cov.latinBasic + cov.latinExtended)} />
           <InfoRow label="CJK" value={String(cov.cjkUnified)} />
@@ -846,7 +851,7 @@ function FontInfoSection({
       ) : null}
       {font.variationAxes && font.variationAxes.length > 0 ? (
         <div className="pt-1">
-          <p className="text-[11px] text-av-text-muted mb-1">可变轴</p>
+          <p className="text-[11px] text-av-text-muted mb-1">{t('variableAxes')}</p>
           {font.variationAxes.map((a) => (
             <p key={a.tag} className="text-[11px] text-av-text-secondary font-mono">
               {a.name} ({a.tag}) {a.min}–{a.max} default {a.default}
@@ -919,6 +924,7 @@ function FolderChip({
   icon?: string | null
   onRemove: () => void
 }) {
+  const { t } = useTranslation('detail')
   return (
     <span
       className="inline-flex items-center gap-1.5 max-w-full px-2 py-0.5 rounded-md text-xs border"
@@ -930,7 +936,7 @@ function FolderChip({
     >
       <FolderIconDisplay icon={icon} fallbackEmoji="📂" size={13} className="shrink-0" />
       <span className="truncate font-medium">{name}</span>
-      <button type="button" onClick={onRemove} className="shrink-0 opacity-70 hover:opacity-100" title="移出文件夹">
+      <button type="button" onClick={onRemove} className="shrink-0 opacity-70 hover:opacity-100" title={t('removeFromFolder')}>
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M2 2l6 6M8 2L2 8" />
         </svg>

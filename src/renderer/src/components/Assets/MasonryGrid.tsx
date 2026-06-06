@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { AssetItem } from '@/shared/types'
 import { formatFileSize } from '@/shared/types'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
@@ -206,6 +207,7 @@ function MasonryAssetTile({
   onDragStart: (e: React.DragEvent) => void
   onContextMenu: (e: React.MouseEvent) => void
 }) {
+  const { t } = useTranslation('assets')
   const [imgError, setImgError] = useState(false)
   const can3dPreview = asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)
 
@@ -254,9 +256,9 @@ function MasonryAssetTile({
                   ? 'bg-red-900/80 text-red-100'
                   : 'bg-black/55 text-amber-200'
               }`}
-              title={asset.sourceMissing ? '源文件缺失' : '仅索引引用'}
+              title={asset.sourceMissing ? t('sourceMissingTitle') : t('referenceOnlyTitle')}
             >
-              {asset.sourceMissing ? '缺失' : '引用'}
+              {asset.sourceMissing ? t('missing') : t('reference')}
             </div>
           )}
 

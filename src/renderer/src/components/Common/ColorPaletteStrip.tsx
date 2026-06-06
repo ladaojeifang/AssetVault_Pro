@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 
 const SLOT_COUNT = 10
 
@@ -33,13 +34,14 @@ export const ColorPaletteStrip: React.FC<{
   colors: string[]
   className?: string
 }> = ({ colors, className = '' }) => {
+  const { t } = useTranslation('assets')
   const slots = Array.from({ length: SLOT_COUNT }, (_, i) => colors[i] ?? null)
 
   return (
     <div
       className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-full border border-av-border/50 bg-av-bg-tertiary/90 shadow-inner ${className}`}
       role="img"
-      aria-label="色彩分析，10 个主色"
+      aria-label={t('colorPaletteAria')}
     >
       {slots.map((hex, i) => (
         <span

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { LibraryMode } from '@/shared/libraryTypes'
 import { useToast } from '../Common/Toast'
 import { CreateLibraryModal } from './CreateLibraryModal'
@@ -10,11 +11,6 @@ type LibraryState = {
   libraryMode: LibraryMode
   manifestPath: string
   dbPath: string
-}
-
-const MODE_SHORT: Record<LibraryMode, string> = {
-  archive: '完整',
-  catalog: '索引'
 }
 
 function folderBasename(p: string): string {
@@ -33,6 +29,7 @@ function resolvePrimaryLibraryLabel(root: string, manifestDisplayName: string): 
 }
 
 export function LibrarySwitcherBar(): React.ReactElement {
+  const { t } = useTranslation('library')
   const showToast = useToast()
   const [state, setState] = useState<LibraryState | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -94,14 +91,14 @@ export function LibrarySwitcherBar(): React.ReactElement {
         | { ok: true }
         | { ok: false; error: string }
       if (!res.ok) {
-        showToast({ type: 'error', title: '切换资料库失败', description: res.error })
+        showToast({ type: 'error', title: t('switchFailed'), description: res.error })
         return
       }
       setMenuOpen(false)
     } catch (e) {
       showToast({
         type: 'error',
-        title: '切换资料库失败',
+        title: t('switchFailed'),
         description: e instanceof Error ? e.message : String(e)
       })
     } finally {
@@ -117,7 +114,7 @@ export function LibrarySwitcherBar(): React.ReactElement {
         | { ok: false; error: string }
       if (!res.ok) {
         if (res.error !== 'cancelled') {
-          showToast({ type: 'error', title: '打开资料库失败', description: res.error })
+          showToast({ type: 'error', title: t('openFailed'), description: res.error })
         }
         return
       }
@@ -125,7 +122,7 @@ export function LibrarySwitcherBar(): React.ReactElement {
     } catch (e) {
       showToast({
         type: 'error',
-        title: '打开资料库失败',
+        title: t('openFailed'),
         description: e instanceof Error ? e.message : String(e)
       })
     } finally {
@@ -141,7 +138,7 @@ export function LibrarySwitcherBar(): React.ReactElement {
         | { ok: false; error: string }
       if (!res.ok) {
         if (res.error !== 'cancelled') {
-          showToast({ type: 'error', title: '新建资料库失败', description: res.error })
+          showToast({ type: 'error', title: t('createFailed'), description: res.error })
         }
         return
       }
@@ -149,13 +146,13 @@ export function LibrarySwitcherBar(): React.ReactElement {
       setCreateOpen(false)
       showToast({
         type: 'success',
-        title: '已切换到新资料库',
-        description: mode === 'catalog' ? '索引库（不拷贝原文件）' : '完整库'
+        title: t('switchedNew'),
+        description: mode === 'catalog' ? t('switchedCatalogDesc') : t('switchedArchiveDesc')
       })
     } catch (e) {
       showToast({
         type: 'error',
-        title: '新建资料库失败',
+        title: t('createFailed'),
         description: e instanceof Error ? e.message : String(e)
       })
     } finally {
@@ -171,7 +168,7 @@ export function LibrarySwitcherBar(): React.ReactElement {
   if (!state) {
     return (
       <div className="px-2 py-2 mb-1 rounded-md bg-av-bg-primary/40 border border-av-border/50 text-xs text-av-text-muted">
-        正在加载资料库…
+        {t('loading')}
       </div>
     )
   }
@@ -185,7 +182,7 @@ export function LibrarySwitcherBar(): React.ReactElement {
           type="button"
           disabled={busy}
           onClick={() => setMenuOpen((o) => !o)}
-          title={`${state.activeLibraryRoot}\n切换资料库（Ctrl+L）`}
+          title={`${state.activeLibraryRoot}\n${t('switchTitle')}`}
           className={`flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded-md text-sm border transition-colors ${
             menuOpen
               ? 'bg-av-accent-blue/20 border-av-accent-blue/40 text-av-text-primary'
@@ -206,9 +203,9 @@ export function LibrarySwitcherBar(): React.ReactElement {
                 ? 'bg-amber-950/50 text-amber-300 border-amber-800/50'
                 : 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40'
             }`}
-            title={state.libraryMode === 'catalog' ? '索引库' : '完整库'}
+            title={state.libraryMode === 'catalog' ? t('catalogIndex') : t('archiveFull')}
           >
-            {MODE_SHORT[state.libraryMode === 'catalog' ? 'catalog' : 'archive']}
+            {state.libraryMode === 'catalog' ? t('catalog') : t('archive')}
           </span>
           <svg
             width="12"
@@ -227,7 +224,7 @@ export function LibrarySwitcherBar(): React.ReactElement {
           type="button"
           disabled={busy}
           onClick={openCreateModal}
-          title="新建资料库…"
+          title={t('newLibrary')}
           className="shrink-0 w-9 rounded-md border border-av-border/60 bg-av-bg-primary/50 text-av-text-secondary hover:text-av-accent-blue hover:bg-av-bg-hover hover:border-av-accent-blue/40 transition-colors flex items-center justify-center text-lg leading-none font-light disabled:opacity-50"
         >
           +
@@ -239,7 +236,9 @@ export function LibrarySwitcherBar(): React.ReactElement {
           className="absolute left-0 right-0 top-full mt-1 z-[500] rounded-lg border border-av-border bg-av-bg-elevated shadow-xl py-1 max-h-72 overflow-y-auto scrollbar-hide"
           role="menu"
         >
-          <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-av-text-muted">最近使用</div>
+          <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-av-text-muted">
+            {t('recent')}
+          </div>
           {state.recentLibraries.map((p) => {
             const active = p.toLowerCase() === state.activeLibraryRoot.toLowerCase()
             const label = folderBasename(p)
@@ -259,7 +258,7 @@ export function LibrarySwitcherBar(): React.ReactElement {
               >
                 <span className="font-medium truncate">{label}</span>
                 {!active && <span className="text-[10px] text-av-text-muted font-mono truncate opacity-80">{p}</span>}
-                {active && <span className="text-[10px] text-av-accent-blue">当前</span>}
+                {active && <span className="text-[10px] text-av-accent-blue">{t('current')}</span>}
               </button>
             )
           })}
@@ -271,7 +270,7 @@ export function LibrarySwitcherBar(): React.ReactElement {
             onClick={() => void handlePick()}
             className="w-full text-left px-3 py-2 text-xs text-av-text-secondary hover:bg-av-bg-hover hover:text-av-text-primary"
           >
-            打开其他资料库…
+            {t('openOther')}
           </button>
           <button
             type="button"
@@ -280,7 +279,7 @@ export function LibrarySwitcherBar(): React.ReactElement {
             onClick={openCreateModal}
             className="w-full text-left px-3 py-2 text-xs text-av-text-secondary hover:bg-av-bg-hover hover:text-av-text-primary"
           >
-            新建资料库…
+            {t('newLibrary')}
           </button>
         </div>
       )}

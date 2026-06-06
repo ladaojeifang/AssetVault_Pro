@@ -25,6 +25,7 @@ import {
 import { FramingBehavior } from '@babylonjs/core/Behaviors/Cameras/framingBehavior'
 import { FBXLoader } from 'babylonjs-fbx-loader'
 import { parseModel3dFormat, type Model3dFormat, type ModelAnimationClipInfo } from '@/shared/model3dFormats'
+import { i18n } from '../../i18n'
 import {
   fileUrlToPath,
   toAppFileProtocolUrl as toAppModelProtocolUrl
@@ -54,7 +55,7 @@ export function animationGroupFrameToTime(group: AnimationGroup, frame: number, 
 
 export function collectSceneAnimationClips(scene: Scene): ModelAnimationClipInfo[] {
   return scene.animationGroups.map((group, index) => ({
-    name: group.name?.trim() || `动画 ${index + 1}`,
+    name: group.name?.trim() || i18n.t('preview:model3d.animationName', { index: index + 1 }),
     durationSeconds: animationGroupDurationSeconds(group)
   }))
 }
@@ -219,7 +220,7 @@ export async function loadModelMeshes(
 
   await waitSceneReady(scene, forThumb)
   const meshes = collectVisibleMeshes(result, scene)
-  if (meshes.length === 0) throw new Error('模型无可见网格')
+  if (meshes.length === 0) throw new Error(i18n.t('preview:model3d.noVisibleMesh'))
   return meshes
 }
 

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import type {
   ImportLibraryProgress,
   ImportLibrarySuccess,
@@ -10,12 +11,8 @@ import { FontThumbRegenerateButton } from './FontThumbRegenerateButton'
 import { ModelThumbRegenerateButton } from './ModelThumbRegenerateButton'
 import { FontSettingsSection } from './FontSettingsSection'
 
-const MODE_LABEL: Record<LibraryMode, string> = {
-  archive: '完整库',
-  catalog: '索引库'
-}
-
 export function LibrarySettingsPanel(): React.ReactElement {
+  const { t } = useTranslation('library')
   const [state, setState] = useState<{
     activeLibraryRoot: string
     recentLibraries: string[]
@@ -53,17 +50,11 @@ export function LibrarySettingsPanel(): React.ReactElement {
       setUpgradeProgress(`${p.current}/${p.total} · ${p.filename}`)
     })
     const unsubImport = window.assetVaultAPI.library.onImportProgress((p: ImportLibraryProgress) => {
-      const phaseLabel: Record<ImportLibraryProgress['phase'], string> = {
-        validate: '校验',
-        tags: '标签',
-        folders: '文件夹',
-        assets: '资产',
-        finalize: '收尾'
-      }
+      const phaseLabel = t(`importPhase.${p.phase}`)
       if (p.phase === 'assets' && p.total > 0) {
-        setImportProgress(`${phaseLabel[p.phase]} ${p.current}/${p.total} · ${p.filename}`)
+        setImportProgress(t('importPhaseProgress', { phase: phaseLabel, current: p.current, total: p.total, filename: p.filename }))
       } else {
-        setImportProgress(phaseLabel[p.phase])
+        setImportProgress(phaseLabel)
       }
     })
     return () => {
@@ -71,7 +62,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
       unsubUpgrade()
       unsubImport()
     }
-  }, [load])
+  }, [load, t])
 
   const handleSwitch = async (path: string) => {
     setBusy(true)
@@ -131,9 +122,9 @@ export function LibrarySettingsPanel(): React.ReactElement {
   }
 
   const handleUpgrade = async () => {
-    if (!confirm('将把索引库中所有可访问的引用资产复制/硬链接进资料库，并转为完整库。是否继续？')) return
+    if (!confirm(t('upgradeConfirm'))) return
     setBusy(true)
-    setUpgradeProgress('准备中…')
+    setUpgradeProgress(t('preparing'))
     setError(null)
     try {
       const res = (await window.assetVaultAPI.library.upgradeToArchive({ preferHardlink: true })) as
@@ -157,13 +148,13 @@ export function LibrarySettingsPanel(): React.ReactElement {
     }
     const isCatalog = state?.libraryMode === 'catalog'
     const confirmMsg = isCatalog
-      ? `将从索引库「${pick.path}」合并到当前索引库：未本地化条目以引用方式合并；A 已本地化条目会在 B 中新建或补全本地副本（同 hash 且 B 已本地化则不重复占盘）。是否继续？`
-      : `将从完整库「${pick.path}」一次性导入标签、文件夹与资产（重复文件按内容指纹合并，并打上来源库标签）。是否继续？`
+      ? t('importConfirmCatalogMerge', { path: pick.path })
+      : t('importConfirmArchiveImport', { path: pick.path })
     if (!confirm(confirmMsg)) {
       return
     }
     setBusy(true)
-    setImportProgress('准备中…')
+    setImportProgress(t('preparing'))
     setError(null)
     setImportResult(null)
     try {
@@ -188,7 +179,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
     try {
       const r = await window.assetVaultAPI.library.verifySources()
       await load()
-      alert(`已检查 ${r.checked} 条引用，${r.missing} 条源文件缺失`)
+      alert(t('verifySourcesResult', { checked: r.checked, missing: r.missing }))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -220,15 +211,14 @@ export function LibrarySettingsPanel(): React.ReactElement {
   }
 
   if (!state) {
-    return <p className="text-sm text-av-text-muted">正在加载资料库信息…</p>
+    return <p className="text-sm text-av-text-muted">{t('loadingInfo')}</p>
   }
 
   return (
     <div className="space-y-6">
-      <h3 className="text-base font-semibold mb-2">资料库</h3>
+      <h3 className="text-base font-semibold mb-2">{t('panelTitle')}</h3>
       <p className="text-sm text-av-text-secondary leading-relaxed">
-        <strong>完整库</strong>：导入时拷贝原文件到 <code className="text-xs bg-av-bg-elevated px-1 rounded">items/</code>，可整体迁移。
-        <strong className="ml-1">索引库</strong>：仅元数据与缩略图，原文件保留在原路径；可稍后转为完整库。
+        {t('panelArchiveDesc')} {t('panelCatalogDesc')}
       </p>
 
       {error && (
@@ -237,38 +227,52 @@ export function LibrarySettingsPanel(): React.ReactElement {
 
       {upgradeProgress && (
         <div className="text-sm text-av-accent-blue bg-av-bg-elevated border border-av-border rounded-lg px-3 py-2">
-          正在转为完整库：{upgradeProgress}
+          {t('upgrading', { progress: upgradeProgress })}
         </div>
       )}
 
       {importProgress && (
         <div className="text-sm text-av-accent-blue bg-av-bg-elevated border border-av-border rounded-lg px-3 py-2">
-          正在从其它资料库导入：{importProgress}
+          {t('importing', { progress: importProgress })}
         </div>
       )}
 
       {importResult && (
         <div className="text-sm text-av-text-secondary bg-av-bg-elevated border border-av-border rounded-lg px-3 py-2 space-y-1">
-          <div className="font-medium text-av-text-primary">导入完成：{importResult.sourceDisplayName}</div>
+          <div className="font-medium text-av-text-primary">
+            {t('importComplete', { name: importResult.sourceDisplayName })}
+          </div>
           <div>
-            新增 {importResult.assetsAdded} · 重复跳过 {importResult.assetsSkippedDuplicate} · 失败{' '}
-            {importResult.assetsFailed}
+            {t('importSummary', {
+              added: importResult.assetsAdded,
+              skipped: importResult.assetsSkippedDuplicate,
+              failed: importResult.assetsFailed
+            })}
           </div>
           {importResult.importMode === 'catalog_to_catalog_same_machine' && (
             <div className="text-xs text-av-text-muted">
-              本地新增 {importResult.assetsAddedLocal ?? 0} · 引用新增 {importResult.assetsAddedReferenced ?? 0} ·
-              补本地化 {importResult.assetsLocalizedOnImport ?? 0} · 已本地化重复{' '}
-              {importResult.assetsSkippedDuplicateLocal ?? 0}
+              {t('importCatalogStatsDetailed', {
+                local: importResult.assetsAddedLocal ?? 0,
+                ref: importResult.assetsAddedReferenced ?? 0,
+                localized: importResult.assetsLocalizedOnImport ?? 0,
+                skippedLocal: importResult.assetsSkippedDuplicateLocal ?? 0
+              })}
             </div>
           )}
           <div>
-            文件夹 +{importResult.foldersCreated} / 合并 {importResult.foldersMerged} · 标签 +{importResult.tagsCreated} /
-            合并 {importResult.tagsMerged}
+            {t('importFolderTagStats', {
+              created: importResult.foldersCreated,
+              merged: importResult.foldersMerged,
+              tagsCreated: importResult.tagsCreated,
+              tagsMerged: importResult.tagsMerged
+            })}
           </div>
-          <div className="text-xs text-av-text-muted">来源库标签：{importResult.sourceLibraryTagName}</div>
+          <div className="text-xs text-av-text-muted">
+            {t('sourceLibraryTag', { name: importResult.sourceLibraryTagName })}
+          </div>
           {importResult.errors.length > 0 && (
             <details className="text-xs text-amber-300/90">
-              <summary>{importResult.errors.length} 条失败详情</summary>
+              <summary>{t('failureDetails', { count: importResult.errors.length })}</summary>
               <ul className="mt-1 list-disc pl-4 max-h-32 overflow-y-auto">
                 {importResult.errors.map((e: ImportLibrarySuccess['errors'][number]) => (
                   <li key={e.sourceAssetId}>
@@ -279,13 +283,13 @@ export function LibrarySettingsPanel(): React.ReactElement {
             </details>
           )}
           <button type="button" className="btn-secondary text-xs mt-2" onClick={() => setImportResult(null)}>
-            关闭
+            {t('dismiss')}
           </button>
         </div>
       )}
 
       <div className="space-y-2">
-        <div className="text-xs font-medium text-av-text-muted uppercase tracking-wide">当前</div>
+        <div className="text-xs font-medium text-av-text-muted uppercase tracking-wide">{t('sectionCurrent')}</div>
         <div className="flex items-center gap-2 flex-wrap">
           <span
             className={`text-[10px] font-medium px-2 py-0.5 rounded ${
@@ -294,7 +298,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
                 : 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/40'
             }`}
           >
-            {MODE_LABEL[state.libraryMode]}
+            {state.libraryMode === 'catalog' ? t('catalogIndex') : t('archiveFull')}
           </span>
           <span className="text-sm text-av-text-secondary">{state.libraryDisplayName}</span>
         </div>
@@ -303,8 +307,10 @@ export function LibrarySettingsPanel(): React.ReactElement {
         </code>
         {stats && (
           <p className="text-[11px] text-av-text-muted">
-            库内副本 {stats.localCount} · 仅引用 {stats.referencedCount}
-            {stats.missingSourceCount > 0 ? ` · 源缺失 ${stats.missingSourceCount}` : ''}
+            {t('localCopies', { local: stats.localCount, referenced: stats.referencedCount })}
+            {stats.missingSourceCount > 0
+              ? t('missingSources', { count: stats.missingSourceCount })
+              : ''}
           </p>
         )}
         <div className="flex flex-wrap gap-2">
@@ -314,10 +320,10 @@ export function LibrarySettingsPanel(): React.ReactElement {
             disabled={busy}
             onClick={() => openFolder(state.activeLibraryRoot)}
           >
-            在资源管理器中打开
+            {t('openInExplorer')}
           </button>
           <button type="button" className="btn-primary text-xs" disabled={busy} onClick={() => void handlePick()}>
-            打开其他资料库…
+            {t('openOther')}
           </button>
           {(state.libraryMode === 'archive' || state.libraryMode === 'catalog') && (
             <button
@@ -326,16 +332,16 @@ export function LibrarySettingsPanel(): React.ReactElement {
               disabled={busy}
               onClick={() => void handleImportFromLibrary()}
             >
-              从其它资料库导入…
+              {t('importFromOther')}
             </button>
           )}
           {state.libraryMode === 'catalog' && (
             <>
               <button type="button" className="btn-primary text-xs" disabled={busy} onClick={() => void handleUpgrade()}>
-                转为完整库…
+                {t('upgradeToArchive')}
               </button>
               <button type="button" className="btn-secondary text-xs" disabled={busy} onClick={() => void handleVerifySources()}>
-                检查引用路径
+                {t('checkReferences')}
               </button>
             </>
           )}
@@ -343,7 +349,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
       </div>
 
       <div className="space-y-2">
-        <div className="text-xs font-medium text-av-text-muted uppercase tracking-wide">新建资料库</div>
+        <div className="text-xs font-medium text-av-text-muted uppercase tracking-wide">{t('sectionNew')}</div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -351,7 +357,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
             disabled={busy}
             onClick={() => void handleCreate('archive')}
           >
-            新建完整库…
+            {t('newArchive')}
           </button>
           <button
             type="button"
@@ -359,16 +365,14 @@ export function LibrarySettingsPanel(): React.ReactElement {
             disabled={busy}
             onClick={() => void handleCreate('catalog')}
           >
-            新建索引库…
+            {t('newCatalog')}
           </button>
         </div>
       </div>
 
       <div className="space-y-2">
-        <div className="text-xs font-medium text-av-text-muted uppercase tracking-wide">内容指纹（SHA-256）</div>
-        <p className="text-sm text-av-text-secondary leading-relaxed">
-          导入时会按文件大小与 SHA-256 检测重复，并询问是否使用已有资产。对已入库但尚未计算指纹的文件，可手动增量扫描。
-        </p>
+        <div className="text-xs font-medium text-av-text-muted uppercase tracking-wide">{t('sectionFingerprint')}</div>
+        <p className="text-sm text-av-text-secondary leading-relaxed">{t('fingerprintDesc')}</p>
         <ContentHashScanButton disabled={busy} />
         <FontSettingsSection />
         <FontThumbRegenerateButton disabled={busy} />
@@ -376,7 +380,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
       </div>
 
       <div className="space-y-2">
-        <div className="text-xs font-medium text-av-text-muted uppercase tracking-wide">最近使用</div>
+        <div className="text-xs font-medium text-av-text-muted uppercase tracking-wide">{t('sectionRecent')}</div>
         <ul className="space-y-2 max-h-56 overflow-y-auto">
           {state.recentLibraries.map((p) => {
             const isActive = p.toLowerCase() === state.activeLibraryRoot.toLowerCase()
@@ -394,17 +398,17 @@ export function LibrarySettingsPanel(): React.ReactElement {
                       disabled={busy}
                       onClick={() => void handleSwitch(p)}
                     >
-                      切换
+                      {t('switch')}
                     </button>
                   )}
-                  {isActive && <span className="text-xs text-av-accent-blue py-1 px-2">当前</span>}
+                  {isActive && <span className="text-xs text-av-accent-blue py-1 px-2">{t('current')}</span>}
                   <button
                     type="button"
                     className="btn-secondary text-xs py-1 px-2"
                     disabled={busy}
                     onClick={() => openFolder(p)}
                   >
-                    打开文件夹
+                    {t('openFolder')}
                   </button>
                   {!isActive && (
                     <button
@@ -413,7 +417,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
                       disabled={busy}
                       onClick={() => void handleRemoveRecent(p)}
                     >
-                      从列表移除
+                      {t('removeFromList')}
                     </button>
                   )}
                 </div>
@@ -423,9 +427,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
         </ul>
       </div>
 
-      <p className="text-[11px] text-av-text-muted">
-        当前与最近列表保存在应用目录下的 active-library.json（与资料库文件夹分离）。
-      </p>
+      <p className="text-[11px] text-av-text-muted">{t('recentListHint')}</p>
     </div>
   )
 }

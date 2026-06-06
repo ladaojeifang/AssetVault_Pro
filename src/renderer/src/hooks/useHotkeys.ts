@@ -2,6 +2,9 @@ import { useEffect } from 'react'
 import { useApp } from '../stores/AppContext'
 import { useAiCanvasNavOptional, type AppScreen } from '../stores/AiCanvasNavContext'
 import { notify } from '../components/Common/notify'
+import { i18n } from '../i18n'
+
+const ta = () => i18n.getFixedT(i18n.language, 'assets')
 
 /**
  * Window-local shortcuts (only while AssetVault is focused).
@@ -106,10 +109,10 @@ const HOTKEY_MAP: Record<string, (ctx: ReturnType<typeof useApp>) => void> = {
       const source = paths[0]
       if (!source) return
       await window.assetVaultAPI.assets.setCustomThumbnailFile(id, source)
-      notify.success('已设置自定义缩略图')
+      notify.success(ta()('notify.customThumbSet'))
       await ctx.refreshAssets()
     } catch (err) {
-      notify.error(err instanceof Error ? err.message : '设置缩略图失败')
+      notify.error(err instanceof Error ? err.message : ta()('notify.thumbSetFailed'))
     }
   },
 
@@ -118,10 +121,10 @@ const HOTKEY_MAP: Record<string, (ctx: ReturnType<typeof useApp>) => void> = {
     const id = Array.from(ctx.selectedAssetIds)[0]!
     try {
       await window.assetVaultAPI.assets.setCustomThumbnailFromClipboard(id)
-      notify.success('已从剪贴板设置自定义缩略图')
+      notify.success(ta()('notify.customThumbFromClipboard'))
       await ctx.refreshAssets()
     } catch (err) {
-      notify.error(err instanceof Error ? err.message : '设置缩略图失败')
+      notify.error(err instanceof Error ? err.message : ta()('notify.thumbSetFailed'))
     }
   },
 
@@ -130,10 +133,10 @@ const HOTKEY_MAP: Record<string, (ctx: ReturnType<typeof useApp>) => void> = {
     if (ids.length === 0) return
     try {
       const { updated } = await window.assetVaultAPI.assets.refreshThumbnail(ids)
-      notify.success(`已刷新 ${updated}/${ids.length} 个缩略图`)
+      notify.success(ta()('notify.thumbsRefreshed', { updated, total: ids.length }))
       await ctx.refreshAssets()
     } catch (err) {
-      notify.error(err instanceof Error ? err.message : '刷新缩略图失败')
+      notify.error(err instanceof Error ? err.message : ta()('notify.refreshThumbFailed'))
     }
   }
 }

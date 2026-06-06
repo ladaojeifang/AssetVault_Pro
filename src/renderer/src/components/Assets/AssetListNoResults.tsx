@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 
 type Props = {
   onClearFilters: () => void
@@ -12,6 +13,7 @@ export function AssetListNoResults({
   onBackToParent,
   parentLabel
 }: Props): React.ReactElement {
+  const { t } = useTranslation('assets')
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center min-h-[min(100%,320px)] w-full">
       <div className="w-14 h-14 rounded-xl bg-av-bg-secondary border border-av-border/60 flex items-center justify-center mb-4">
@@ -30,17 +32,15 @@ export function AssetListNoResults({
           <path d="M8 11h6" strokeLinecap="round" />
         </svg>
       </div>
-      <h3 className="text-base font-semibold text-av-text-primary">没有匹配的资产</h3>
-      <p className="text-sm text-av-text-muted mt-1 max-w-sm">
-        当前筛选或搜索条件下没有结果，可清除条件或返回上级目录查看全部内容。
-      </p>
+      <h3 className="text-base font-semibold text-av-text-primary">{t('noMatchTitle')}</h3>
+      <p className="text-sm text-av-text-muted mt-1 max-w-sm">{t('noMatchDesc')}</p>
       <div className="flex flex-wrap items-center justify-center gap-2 mt-5">
         <button type="button" onClick={onClearFilters} className="btn-primary text-xs">
-          清除全部筛选
+          {t('clearFilters')}
         </button>
         {onBackToParent && parentLabel ? (
           <button type="button" onClick={onBackToParent} className="btn-secondary text-xs">
-            返回「{parentLabel}」
+            {t('backTo', { name: parentLabel })}
           </button>
         ) : null}
       </div>

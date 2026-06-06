@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { AssetItem } from '@/shared/types'
 import type { FontFaceSummary, FontPreviewRenderRequest } from '@/shared/fontTypes'
 import { FONT_PREVIEW_TEMPLATES } from '@/shared/fontSettings'
@@ -20,6 +21,7 @@ const PREVIEW_W = 1200
 const PREVIEW_H = 720
 
 const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
+  const { t } = useTranslation('preview')
   const { assets, closeFontPreview, openFontPreview, refreshAssets } = useApp()
   const [asset, setAsset] = useState<AssetItem | null>(() => assets.find((a) => a.id === assetId) ?? null)
   const [loadingAsset, setLoadingAsset] = useState(!asset)
@@ -134,7 +136,7 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
       const res = await window.assetVaultAPI.fonts.updateFaceIndex(asset.id, index, true)
       if (res.ok) {
         await refreshAssets()
-        notify.success('已切换 TTC 字重')
+        notify.success(t('fontPreview.ttcSwitched'))
       } else {
         notify.error(res.error)
       }
@@ -158,21 +160,21 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
   const handleInstall = async () => {
     if (!asset) return
     const res = await window.assetVaultAPI.fonts.installToSystem(asset.id)
-    if (res.ok) notify.success(`已安装到用户字体目录${res.dest ? `\n${res.dest}` : ''}`)
+    if (res.ok) notify.success(t('fontPreview.installedUserDir', { dest: res.dest ? `\n${res.dest}` : '' }))
     else notify.error(res.error)
   }
 
   const handleExport = async () => {
     if (!asset) return
     const res = await window.assetVaultAPI.fonts.exportCopy(asset.id)
-    if (res.ok) notify.success('字体已导出')
+    if (res.ok) notify.success(t('fontPreview.exported'))
     else if (res.error !== 'cancelled') notify.error(res.error)
   }
 
   if (loadingAsset) {
     return (
       <div className="flex flex-1 items-center justify-center text-av-text-secondary text-sm">
-        加载字体…
+        {t('loadingFont')}
       </div>
     )
   }
@@ -180,9 +182,9 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
   if (!asset || asset.fileType !== 'font') {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-av-text-secondary">
-        <p>找不到该字体资产</p>
+        <p>{t('notFoundFont')}</p>
         <button type="button" className="btn-secondary text-sm" onClick={handleBack}>
-          返回资源库
+          {t('backToLibrary')}
         </button>
       </div>
     )
@@ -191,7 +193,7 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-av-bg-primary">
       <header className="flex items-center gap-3 px-4 h-12 border-b border-av-border bg-av-bg-secondary shrink-0">
-        <button type="button" className="btn-ghost p-2 rounded-lg" onClick={handleBack} title="返回 (Esc)">
+        <button type="button" className="btn-ghost p-2 rounded-lg" onClick={handleBack} title={t('backTitle')}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M15 18l-6-6 6-6" />
           </svg>
@@ -206,10 +208,10 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
           </p>
         </div>
         <button type="button" className="btn-secondary text-xs" onClick={() => void handleExport()}>
-          导出
+          {t('export')}
         </button>
         <button type="button" className="btn-secondary text-xs" onClick={() => void handleInstall()}>
-          安装到系统
+          {t('installSystem')}
         </button>
       </header>
 
@@ -218,7 +220,7 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
           <div className="p-4 space-y-4">
             {faces.length > 1 ? (
               <div>
-                <label className="block text-xs font-medium text-av-text-muted mb-2">TTC 字重</label>
+                <label className="block text-xs font-medium text-av-text-muted mb-2">{t('fontPreview.ttcWeight')}</label>
                 <select
                   className="input-base w-full text-xs"
                   value={ttcIndex}
@@ -234,7 +236,7 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
             ) : null}
 
             <div>
-              <label className="block text-xs font-medium text-av-text-muted mb-2">预览文字</label>
+              <label className="block text-xs font-medium text-av-text-muted mb-2">{t('fontPreview.previewText')}</label>
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -245,27 +247,27 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
             </div>
 
             <div>
-              <p className="text-xs font-medium text-av-text-muted mb-2">场景模板</p>
+              <p className="text-xs font-medium text-av-text-muted mb-2">{t('fontPreview.sceneTemplates')}</p>
               <div className="flex flex-wrap gap-1.5">
-                {FONT_PREVIEW_TEMPLATES.map((t) => (
+                {FONT_PREVIEW_TEMPLATES.map((tpl) => (
                   <button
-                    key={t.id}
+                    key={tpl.id}
                     type="button"
                     className="px-2 py-1 rounded-md text-[11px] bg-av-bg-elevated border border-av-border hover:bg-av-bg-hover"
-                    onClick={() => setText(t.text)}
+                    onClick={() => setText(tpl.text)}
                   >
-                    {t.label}
+                    {t(`fontPreview.templates.${tpl.id}`, { defaultValue: tpl.label })}
                   </button>
                 ))}
               </div>
             </div>
 
-            <Slider label="字号" value={fontSize} min={12} max={160} onChange={setFontSize} suffix="px" />
-            <Slider label="行高" value={lineHeight} min={1} max={2.5} step={0.05} onChange={setLineHeight} />
-            <Slider label="字距" value={letterSpacing} min={-2} max={20} step={0.5} onChange={setLetterSpacing} suffix="px" />
+            <Slider label={t('fontPreview.fontSize')} value={fontSize} min={12} max={160} onChange={setFontSize} suffix="px" />
+            <Slider label={t('fontPreview.lineHeight')} value={lineHeight} min={1} max={2.5} step={0.05} onChange={setLineHeight} />
+            <Slider label={t('fontPreview.letterSpacing')} value={letterSpacing} min={-2} max={20} step={0.5} onChange={setLetterSpacing} suffix="px" />
 
             <div>
-              <label className="block text-xs font-medium text-av-text-muted mb-2">对齐</label>
+              <label className="block text-xs font-medium text-av-text-muted mb-2">{t('fontPreview.align')}</label>
               <div className="flex gap-1">
                 {(['left', 'center', 'right'] as const).map((a) => (
                   <button
@@ -276,7 +278,7 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
                     }`}
                     onClick={() => setTextAlign(a)}
                   >
-                    {a === 'left' ? '左' : a === 'center' ? '中' : '右'}
+                    {a === 'left' ? t('fontPreview.alignLeft') : a === 'center' ? t('fontPreview.alignCenter') : t('fontPreview.alignRight')}
                   </button>
                 ))}
               </div>
@@ -284,18 +286,18 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
 
             <label className="flex items-center gap-2 text-xs text-av-text-secondary cursor-pointer">
               <input type="checkbox" checked={lightBg} onChange={(e) => setLightBg(e.target.checked)} />
-              浅色背景
+              {t('fontPreview.lightBackground')}
             </label>
 
             {familyOptions.length > 0 ? (
               <div>
-                <label className="block text-xs font-medium text-av-text-muted mb-2">对比字体（同族）</label>
+                <label className="block text-xs font-medium text-av-text-muted mb-2">{t('fontPreview.compareFont')}</label>
                 <select
                   className="input-base w-full text-xs"
                   value={compareAssetId ?? ''}
                   onChange={(e) => setCompareAssetId(e.target.value || null)}
                 >
-                  <option value="">不对比</option>
+                  <option value="">{t('fontPreview.noCompare')}</option>
                   {familyOptions.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.filename}
@@ -307,10 +309,10 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
 
             {meta?.variationAxes?.length ? (
               <div className="pt-2 border-t border-av-border">
-                <p className="text-xs font-medium text-av-text-muted mb-1">可变轴</p>
+                <p className="text-xs font-medium text-av-text-muted mb-1">{t('fontPreview.variableAxes')}</p>
                 {meta.variationAxes.map((ax) => (
                   <p key={ax.tag} className="text-[11px] text-av-text-secondary font-mono">
-                    {ax.tag} {ax.min}–{ax.max} (默认 {ax.default})
+                    {ax.tag} {ax.min}–{ax.max} ({t('fontPreview.axisDefault', { value: ax.default })})
                   </p>
                 ))}
               </div>
@@ -318,7 +320,7 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
 
             {meta?.unicodeCoverage ? (
               <div className="pt-2 border-t border-av-border text-[11px] text-av-text-secondary space-y-0.5">
-                <p className="text-xs font-medium text-av-text-muted mb-1">字符覆盖（抽样）</p>
+                <p className="text-xs font-medium text-av-text-muted mb-1">{t('fontPreview.charCoverage')}</p>
                 <p>Latin: {meta.unicodeCoverage.latinBasic}</p>
                 <p>CJK: {meta.unicodeCoverage.cjkUnified}</p>
                 <p>Digits: {meta.unicodeCoverage.digits}</p>
@@ -330,15 +332,15 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
         <main className="flex-1 min-w-0 overflow-auto p-6" style={{ backgroundColor: bg }}>
           {loading && !dataUrl ? (
             <div className="h-full flex items-center justify-center text-sm" style={{ color: fg }}>
-              渲染预览…
+              {t('fontPreview.rendering')}
             </div>
           ) : error ? (
             <div className="h-full flex flex-col items-center justify-center gap-2 text-center">
               <p className="text-sm" style={{ color: fg }}>
-                预览渲染失败
+                {t('fontPreview.renderFailed')}
               </p>
               <p className="text-xs opacity-70">{error}</p>
-              <p className="text-xs opacity-60">主进程 fontkit 无法解析该格式时会出现此错误。</p>
+              <p className="text-xs opacity-60">{t('fontPreview.renderFailedHint')}</p>
             </div>
           ) : (
             <div className={`mx-auto space-y-4 ${compareAsset ? 'max-w-[1200px]' : 'max-w-[1200px]'}`}>
@@ -348,7 +350,7 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
               {compareAsset && comparePreview.dataUrl ? (
                 <div>
                   <p className="text-xs mb-2 opacity-70" style={{ color: fg }}>
-                    对比：{compareAsset.filename}
+                    {t('fontPreview.compareLabel', { name: compareAsset.filename })}
                   </p>
                   <img
                     src={comparePreview.dataUrl}

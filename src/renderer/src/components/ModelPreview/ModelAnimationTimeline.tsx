@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ModelAnimationClipInfo } from '@/shared/model3dFormats'
 
 function formatTime(seconds: number): string {
@@ -30,6 +31,7 @@ export function ModelAnimationTimeline({
   onLoopChange: (loop: boolean) => void
   onSeek: (seconds: number) => void
 }): React.ReactElement | null {
+  const { t } = useTranslation('preview')
   if (clips.length === 0) return null
 
   const safeDuration = Math.max(duration, 0.001)
@@ -40,7 +42,7 @@ export function ModelAnimationTimeline({
       <button
         type="button"
         className="btn-secondary w-8 h-8 p-0 flex items-center justify-center shrink-0"
-        title={playing ? '暂停' : '播放'}
+        title={playing ? t('model3d.pause') : t('model3d.play')}
         onClick={() => onPlayingChange(!playing)}
       >
         {playing ? (
@@ -94,7 +96,7 @@ export function ModelAnimationTimeline({
           onChange={(e) => onLoopChange(e.target.checked)}
           className="rounded border-av-border"
         />
-        循环
+        {t('model3d.loop')}
       </label>
     </div>
   )
