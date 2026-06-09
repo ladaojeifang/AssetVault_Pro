@@ -192,6 +192,9 @@ body {
   --color-bg-1: var(--av-arco-bg-1) !important;
   --color-bg-2: var(--av-arco-bg-2) !important;
   --color-bg-3: var(--av-arco-bg-3) !important;
+  --color-fill-1: var(--av-bg-elevated) !important;
+  --color-fill-2: var(--av-arco-input-bg) !important;
+  --color-fill-3: var(--av-bg-hover) !important;
   --color-border: var(--av-border) !important;
   --color-text-1: var(--av-text-primary) !important;
   --color-text-2: var(--av-text-secondary) !important;
@@ -213,8 +216,22 @@ body {
 .arco-input-wrapper,
 .arco-select-view-single {
   background-color: var(--av-arco-input-bg) !important;
-  border-color: var(--av-border) !important;
+  border-color: var(--av-border-light) !important;
   color: var(--av-text-primary) !important;
+}
+.arco-input-wrapper .arco-input {
+  background-color: transparent !important;
+  color: var(--av-text-primary) !important;
+  caret-color: var(--av-text-primary);
+  -webkit-text-fill-color: var(--av-text-primary);
+}
+.arco-input-wrapper .arco-input::placeholder {
+  color: var(--av-text-muted) !important;
+  -webkit-text-fill-color: var(--av-text-muted);
+}
+.arco-modal-wrapper .arco-input-wrapper {
+  background-color: var(--av-arco-input-bg) !important;
+  border-color: var(--av-border-light) !important;
 }
 .arco-input-wrapper:focus-within,
 .arco-select-view-single:focus,
@@ -225,6 +242,10 @@ body {
 .arco-modal-wrapper .arco-modal {
   background-color: var(--av-arco-modal-bg) !important;
   border: 1px solid var(--av-border) !important;
+  color: var(--av-text-primary) !important;
+}
+.arco-modal-wrapper .arco-modal-title {
+  color: var(--av-text-primary) !important;
 }
 
 /* 修复：非最大化时 TitleBar drag 区域会拦截 Modal 关闭按钮的点击 */

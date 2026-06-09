@@ -23,8 +23,10 @@ import { importLibraryFromPath } from '../../services/importLibraryFromPath'
 import {
   switchActiveLibrary,
   assertEmptyDirectoryForNewLibrary,
-  prepareNewLibrarySkeleton
+  prepareNewLibrarySkeleton,
+  notifyLibraryRecentsChanged
 } from '../../services/librarySwitch'
+import { createEmbeddedLibrary } from '../../services/importEmbeddedLibrary'
 import { assertOptionalPlainObject, assertOptionalBoolean } from '../ipcGuards'
 
 function dialogParent(event: Electron.IpcMainInvokeEvent): BrowserWindow | undefined {
@@ -92,6 +94,7 @@ export function handleLibraryOperations(ipc: typeof ipcMain): void {
     const ud = app.getPath('userData')
     try {
       removeFromRecentList(ud, pathToRemove.trim())
+      notifyLibraryRecentsChanged()
       return { ok: true as const }
     } catch (e) {
       return { ok: false as const, error: e instanceof Error ? e.message : String(e) }
@@ -143,5 +146,19 @@ export function handleLibraryOperations(ipc: typeof ipcMain): void {
     const row = await database.select({ count: count() }).from(assets).get()
     const assetRowCount = Number(row?.count ?? 0)
     return { assetRowCount, itemPackCount, itemsDir }
+  })
+
+  ipc.handle('library:create-embedded', async (event) => {
+    const parent = dialogParent(event)
+    const r = await dialog.showOpenDialog(parent, {
+      properties: ['openDirectory'],
+      title: '选择文件夹创建内嵌资料库（文件不复制，原地管理）'
+    })
+    if (r.canceled || !r.filePaths[0]) {
+      return { ok: false as const, error: 'cancelled' }
+    }
+    const folderPath = r.filePaths[0]
+    // createEmbeddedLibrary handles skeleton creation, switching, scan, and import
+    return createEmbeddedLibrary(folderPath, { win: parent })
   })
 }

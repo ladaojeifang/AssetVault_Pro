@@ -37,6 +37,7 @@ export function AssetContextMenu({
   folderTree,
   currentFolderId,
   recentLibraries,
+  recentLibraryDisplayNames,
   activeLibraryRoot,
   onClose,
   onAction
@@ -45,6 +46,7 @@ export function AssetContextMenu({
   folderTree: FolderItem[]
   currentFolderId: string | null
   recentLibraries: string[]
+  recentLibraryDisplayNames?: string[]
   activeLibraryRoot: string
   onClose: () => void
   onAction: (key: string, assetIds: string[], extra?: string) => void
@@ -266,20 +268,32 @@ export function AssetContextMenu({
                 maxHeight: SUBMENU_MAX_HEIGHT
               }}
             >
-              {otherLibraries.map((lib) => (
-                <button
-                  key={lib}
-                  type="button"
-                  title={lib}
-                  className="w-full text-left px-3 py-1.5 text-sm text-av-text-primary hover:bg-av-bg-hover truncate"
-                  onClick={() => {
-                    onAction('add-library', assetIds, lib)
-                    onClose()
-                  }}
-                >
-                  {folderBasename(lib)}
-                </button>
-              ))}
+              {(() => {
+                // Build a lookup map: path → display name
+                const nameMap = new Map<string, string>()
+                if (recentLibraryDisplayNames) {
+                  for (let i = 0; i < recentLibraries.length; i++) {
+                    nameMap.set(recentLibraries[i]!.toLowerCase(), recentLibraryDisplayNames[i] ?? folderBasename(recentLibraries[i]!))
+                  }
+                }
+                return otherLibraries.map((lib) => {
+                  const lbl = recentLibraryDisplayNames ? (nameMap.get(lib.toLowerCase()) ?? folderBasename(lib)) : folderBasename(lib)
+                  return (
+                    <button
+                      key={lib}
+                      type="button"
+                      title={lib}
+                      className="w-full text-left px-3 py-1.5 text-sm text-av-text-primary hover:bg-av-bg-hover truncate"
+                      onClick={() => {
+                        onAction('add-library', assetIds, lib)
+                        onClose()
+                      }}
+                    >
+                      {lbl}
+                    </button>
+                  )
+                })
+              })()}
             </div>
           ) : null}
         </div>

@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
+  EmbeddedImportProgress,
+  CreateEmbeddedLibraryResult,
   ImportLibraryProgress,
   ImportLibrarySuccess,
   LibraryMode,
@@ -28,6 +30,8 @@ export function LibrarySettingsPanel(): React.ReactElement {
   const [upgradeProgress, setUpgradeProgress] = useState<string | null>(null)
   const [importProgress, setImportProgress] = useState<string | null>(null)
   const [importResult, setImportResult] = useState<ImportLibrarySuccess | null>(null)
+  const [embeddedImportProgress, setEmbeddedImportProgress] = useState<string | null>(null)
+  const [embeddedImportResult, setEmbeddedImportResult] = useState<CreateEmbeddedLibraryResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -59,10 +63,19 @@ export function LibrarySettingsPanel(): React.ReactElement {
         setImportProgress(phaseLabel)
       }
     })
+    const unsubEmbedded = window.assetVaultAPI.library.onEmbeddedImportProgress((p: EmbeddedImportProgress) => {
+      const phaseLabel = t(`embeddedImportPhase.${p.phase}`)
+      if (p.phase === 'import' && p.total > 0) {
+        setEmbeddedImportProgress(t('importPhaseProgress', { phase: phaseLabel, current: p.current, total: p.total, filename: p.filename }))
+      } else {
+        setEmbeddedImportProgress(phaseLabel)
+      }
+    })
     return () => {
       unsubSwitch()
       unsubUpgrade()
       unsubImport()
+      unsubEmbedded()
     }
   }, [load, t])
 
@@ -120,6 +133,24 @@ export function LibrarySettingsPanel(): React.ReactElement {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
+    }
+  }
+
+  const handleCreateEmbedded = async () => {
+    if (!confirm(t('embeddedCreateConfirm'))) return
+    setBusy(true)
+    setEmbeddedImportProgress(t('preparing'))
+    setError(null)
+    setEmbeddedImportResult(null)
+    try {
+      const res = await window.assetVaultAPI.library.createEmbedded()
+      setEmbeddedImportResult(res)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+      setEmbeddedImportProgress(null)
     }
   }
 
@@ -220,7 +251,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
     <div className="space-y-6">
       <h3 className="text-base font-semibold mb-2">{t('panelTitle')}</h3>
       <p className="text-sm text-av-text-secondary leading-relaxed">
-        {t('panelArchiveDesc')} {t('panelCatalogDesc')}
+        {t('panelArchiveDesc')} {t('panelCatalogDesc')} {t('panelEmbeddedDesc')}
       </p>
 
       {error && (
@@ -236,6 +267,43 @@ export function LibrarySettingsPanel(): React.ReactElement {
       {importProgress && (
         <div className="text-sm text-av-accent-blue bg-av-bg-elevated border border-av-border rounded-lg px-3 py-2">
           {t('importing', { progress: importProgress })}
+        </div>
+      )}
+
+      {embeddedImportProgress && (
+        <div className="text-sm text-av-accent-blue bg-av-bg-elevated border border-av-border rounded-lg px-3 py-2">
+          {t('embeddedImporting', { progress: embeddedImportProgress })}
+        </div>
+      )}
+
+      {embeddedImportResult && embeddedImportResult.ok && (
+        <div className="text-sm text-av-text-secondary bg-av-bg-elevated border border-av-border rounded-lg px-3 py-2 space-y-1">
+          <div className="font-medium text-av-text-primary">
+            {t('embeddedImportResult', {
+              added: embeddedImportResult.assetsAdded,
+              skipped: embeddedImportResult.assetsSkippedDuplicate,
+              failed: embeddedImportResult.assetsFailed
+            })}
+          </div>
+          {embeddedImportResult.errors.length > 0 && (
+            <details className="text-xs text-amber-300/90">
+              <summary>{t('failureDetails', { count: embeddedImportResult.errors.length })}</summary>
+              <ul className="mt-1 list-disc pl-4 max-h-32 overflow-y-auto">
+                {embeddedImportResult.errors.map((e, idx) => (
+                  <li key={idx}>{e.filename}: {e.reason}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+          <button type="button" className="btn-secondary text-xs mt-2" onClick={() => setEmbeddedImportResult(null)}>
+            {t('dismiss')}
+          </button>
+        </div>
+      )}
+
+      {embeddedImportResult && !embeddedImportResult.ok && (
+        <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded-lg px-3 py-2">
+          {embeddedImportResult.error}
         </div>
       )}
 
@@ -297,10 +365,12 @@ export function LibrarySettingsPanel(): React.ReactElement {
             className={`text-[10px] font-medium px-2 py-0.5 rounded ${
               state.libraryMode === 'catalog'
                 ? 'bg-amber-950/50 text-amber-300 border border-amber-800/50'
-                : 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/40'
+                : state.libraryMode === 'embedded'
+                  ? 'bg-blue-950/40 text-blue-300 border border-blue-800/40'
+                  : 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/40'
             }`}
           >
-            {state.libraryMode === 'catalog' ? t('catalogIndex') : t('archiveFull')}
+            {state.libraryMode === 'catalog' ? t('catalogIndex') : state.libraryMode === 'embedded' ? t('embeddedLibrary') : t('archiveFull')}
           </span>
           <span className="text-sm text-av-text-secondary">{state.libraryDisplayName}</span>
         </div>
@@ -368,6 +438,14 @@ export function LibrarySettingsPanel(): React.ReactElement {
             onClick={() => void handleCreate('catalog')}
           >
             {t('newCatalog')}
+          </button>
+          <button
+            type="button"
+            className="btn-primary text-xs"
+            disabled={busy}
+            onClick={() => void handleCreateEmbedded()}
+          >
+            {t('newEmbedded')}
           </button>
         </div>
       </div>

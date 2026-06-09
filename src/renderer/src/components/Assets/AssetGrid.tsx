@@ -156,18 +156,23 @@ const AssetGrid: React.FC = () => {
   const [renameAssetId, setRenameAssetId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [renameBusy, setRenameBusy] = useState(false)
-  const [libraryRoots, setLibraryRoots] = useState<{ active: string; recent: string[] }>({
+  const [libraryRoots, setLibraryRoots] = useState<{
+    active: string
+    recent: string[]
+    recentDisplayNames: string[]
+  }>({
     active: '',
-    recent: []
+    recent: [],
+    recentDisplayNames: []
   })
 
   useEffect(() => {
     void window.assetVaultAPI.library.getState().then((s) => {
-      setLibraryRoots({ active: s.activeLibraryRoot, recent: s.recentLibraries })
+      setLibraryRoots({ active: s.activeLibraryRoot, recent: s.recentLibraries, recentDisplayNames: s.recentLibraryDisplayNames })
     })
     const unsub = window.assetVaultAPI.library.onLibrarySwitched(() => {
       void window.assetVaultAPI.library.getState().then((s) => {
-        setLibraryRoots({ active: s.activeLibraryRoot, recent: s.recentLibraries })
+        setLibraryRoots({ active: s.activeLibraryRoot, recent: s.recentLibraries, recentDisplayNames: s.recentLibraryDisplayNames })
       })
     })
     return unsub
@@ -198,12 +203,7 @@ const AssetGrid: React.FC = () => {
     setContentOpen(true)
   }, [currentFolderId])
 
-  const listVirtualizer = useVirtualizer<Element, Element>({
-    count: assets.length,
-    getScrollElement: () => containerRef.current,
-    estimateSize: () => 60,
-    overscan: 10
-  })
+  const listAreaEmpty = !isLoading && assets.length === 0
 
   useEffect(() => {
     const root = containerRef.current
@@ -546,8 +546,6 @@ const AssetGrid: React.FC = () => {
     )
   }
 
-  const listAreaEmpty = !isLoading && assets.length === 0
-
   const parentNavLabel = !currentFolderNode
     ? t('allAssets')
     : currentFolderNode.parentId == null || currentFolderNode.parentId === undefined
@@ -710,9 +708,9 @@ const AssetGrid: React.FC = () => {
                   onAssetContextMenu={handleAssetContextMenu}
                 />
               ) : (
-                <ListContent
+                <AssetListVirtualView
                   assets={assets}
-                  virtualizer={listVirtualizer}
+                  scrollElementRef={containerRef}
                   gridTemplateColumns={listGridTemplateColumns}
                   rowGridClass={listRowGridClass}
                   selectedIds={selectedAssetIds}
@@ -755,6 +753,7 @@ const AssetGrid: React.FC = () => {
         folderTree={folderTree}
         currentFolderId={currentFolderId}
         recentLibraries={libraryRoots.recent}
+        recentLibraryDisplayNames={libraryRoots.recentDisplayNames}
         activeLibraryRoot={libraryRoots.active}
         onClose={() => setContextMenu(null)}
         onAction={handleAssetMenuAction}
@@ -771,6 +770,54 @@ const AssetGrid: React.FC = () => {
         <Input value={renameValue} onChange={setRenameValue} placeholder={t('renamePlaceholder')} />
       </Modal>
     </div>
+  )
+}
+
+// List view only — keeps useVirtualizer out of grid mode and avoids flushSync during parent render.
+function AssetListVirtualView({
+  assets,
+  scrollElementRef,
+  gridTemplateColumns,
+  rowGridClass,
+  selectedIds,
+  onAssetClick,
+  onAssetDoubleClick,
+  onDragStart,
+  onAssetContextMenu
+}: {
+  assets: AssetItem[]
+  scrollElementRef: React.RefObject<HTMLDivElement | null>
+  gridTemplateColumns: string
+  rowGridClass: string
+  selectedIds: Set<string>
+  onAssetClick: (id: string, e: React.MouseEvent) => void
+  onAssetDoubleClick: (id: string) => void
+  onDragStart: (
+    e: React.DragEvent,
+    asset: { id: string; filename: string; filePath: string; resolvedFilePath?: string }
+  ) => void
+  onAssetContextMenu: (e: React.MouseEvent, asset: AssetItem) => void
+}) {
+  const listVirtualizer = useVirtualizer<Element, Element>({
+    count: assets.length,
+    getScrollElement: () => scrollElementRef.current,
+    estimateSize: () => 60,
+    overscan: 10,
+    useFlushSync: false
+  })
+
+  return (
+    <ListContent
+      assets={assets}
+      virtualizer={listVirtualizer}
+      gridTemplateColumns={gridTemplateColumns}
+      rowGridClass={rowGridClass}
+      selectedIds={selectedIds}
+      onAssetClick={onAssetClick}
+      onAssetDoubleClick={onAssetDoubleClick}
+      onDragStart={onDragStart}
+      onAssetContextMenu={onAssetContextMenu}
+    />
   )
 }
 

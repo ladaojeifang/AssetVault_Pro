@@ -1,8 +1,8 @@
 /** Portable library bundle mode (manifest.libraryMode). */
-export type LibraryMode = 'archive' | 'catalog'
+export type LibraryMode = 'archive' | 'catalog' | 'embedded'
 
-/** Per-asset storage: copy inside library vs external reference. */
-export type StorageMode = 'local' | 'referenced'
+/** Per-asset storage: copy inside library vs external reference vs embedded (file stays in-place). */
+export type StorageMode = 'local' | 'referenced' | 'embedded'
 
 export type LocalizationState = 'idle' | 'pending' | 'done' | 'failed'
 
@@ -92,3 +92,26 @@ export type ImportLibraryFailure = {
 }
 
 export type ImportLibraryResult = ImportLibrarySuccess | ImportLibraryFailure
+
+export type EmbeddedImportPhase = 'scan' | 'import' | 'finalize'
+
+export interface EmbeddedImportProgress {
+  phase: EmbeddedImportPhase
+  current: number
+  total: number
+  filename: string
+  status: 'processing' | 'done' | 'error'
+}
+
+export type CreateEmbeddedLibraryResult = {
+  ok: true
+  libraryRoot: string
+  assetsAdded: number
+  assetsSkippedDuplicate: number
+  assetsFailed: number
+  errors: Array<{ filename: string; reason: string }>
+} | {
+  ok: false
+  error: string
+  code?: 'INVALID_PATH' | 'ALREADY_EMBEDDED' | 'WRONG_MODE' | 'NOT_WRITABLE'
+}

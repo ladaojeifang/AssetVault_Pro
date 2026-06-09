@@ -174,14 +174,9 @@ const api = {
         stats: import('../../shared/libraryTypes').LibraryModeStats
       }>,
     getState: () =>
-      ipcRenderer.invoke('library:get-state') as Promise<{
-        activeLibraryRoot: string
-        recentLibraries: string[]
-        libraryDisplayName: string
-        libraryMode: import('../../shared/libraryTypes').LibraryMode
-        manifestPath: string
-        dbPath: string
-      }>,
+      ipcRenderer.invoke('library:get-state') as Promise<
+        import('../../shared/webApiTypes').LibraryStateResponse
+      >,
     getModeStats: () =>
       ipcRenderer.invoke('library:get-mode-stats') as Promise<
         import('../../shared/libraryTypes').LibraryModeStats
@@ -190,6 +185,10 @@ const api = {
     pickAndSwitch: () => ipcRenderer.invoke('library:pick-and-switch'),
     createAndSwitch: (libraryMode?: import('../../shared/libraryTypes').LibraryMode) =>
       ipcRenderer.invoke('library:create-and-switch', libraryMode ?? 'archive'),
+    createEmbedded: () =>
+      ipcRenderer.invoke('library:create-embedded') as Promise<
+        import('../../shared/libraryTypes').CreateEmbeddedLibraryResult
+      >,
     upgradeToArchive: (options?: { preferHardlink?: boolean }) =>
       ipcRenderer.invoke('library:upgrade-to-archive', options) as Promise<
         { ok: true } | { ok: false; error: string }
@@ -227,6 +226,12 @@ const api = {
         callback(data)
       ipcRenderer.on('library:import-progress', handler)
       return () => ipcRenderer.removeListener('library:import-progress', handler)
+    },
+    onEmbeddedImportProgress: (callback: (data: import('../../shared/libraryTypes').EmbeddedImportProgress) => void) => {
+      const handler = (_: unknown, data: import('../../shared/libraryTypes').EmbeddedImportProgress) =>
+        callback(data)
+      ipcRenderer.on('embedded-import:progress', handler)
+      return () => ipcRenderer.removeListener('embedded-import:progress', handler)
     }
   },
 

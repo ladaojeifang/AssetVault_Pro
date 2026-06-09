@@ -38,6 +38,15 @@ function broadcastLibrarySwitched(root: string): void {
   }
 }
 
+/** Notify renderers that recent-library list changed without switching active library. */
+export function notifyLibraryRecentsChanged(): void {
+  try {
+    broadcastLibrarySwitched(getLibraryRoot())
+  } catch {
+    broadcastLibrarySwitched('')
+  }
+}
+
 /**
  * Switch to another library root: flush/close DB, point session + thumbs at new root, reopen DB, persist user state.
  * Rolls back to previous root if reopen fails.

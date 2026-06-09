@@ -2,11 +2,14 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LibraryMode } from '@/shared/libraryTypes'
 import { useToast } from '../Common/Toast'
+import { LibraryModeBadge } from '../Common/LibraryModeBadge'
 import { CreateLibraryModal } from './CreateLibraryModal'
 
 type LibraryState = {
   activeLibraryRoot: string
   recentLibraries: string[]
+  recentLibraryDisplayNames: string[]
+  recentLibraryModes: LibraryMode[]
   libraryDisplayName: string
   libraryMode: LibraryMode
   manifestPath: string
@@ -131,6 +134,36 @@ export function LibrarySwitcherBar(): React.ReactElement {
   }
 
   const handleCreateWithMode = async (mode: LibraryMode) => {
+    if (mode === 'embedded') {
+      if (!confirm(t('embeddedCreateConfirm'))) return
+      setBusy(true)
+      try {
+        const res = await window.assetVaultAPI.library.createEmbedded()
+        if (!res.ok) {
+          if (res.error !== 'cancelled') {
+            showToast({ type: 'error', title: t('createFailed'), description: res.error })
+          }
+          return
+        }
+        setMenuOpen(false)
+        setCreateOpen(false)
+        showToast({
+          type: 'success',
+          title: t('switchedNew'),
+          description: t('switchedEmbeddedDesc')
+        })
+      } catch (e) {
+        showToast({
+          type: 'error',
+          title: t('createFailed'),
+          description: e instanceof Error ? e.message : String(e)
+        })
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
+
     setBusy(true)
     try {
       const res = (await window.assetVaultAPI.library.createAndSwitch(mode)) as
@@ -197,16 +230,7 @@ export function LibrarySwitcherBar(): React.ReactElement {
             </svg>
           </span>
           <span className="truncate flex-1 text-left font-medium text-av-text-primary min-w-0">{title}</span>
-          <span
-            className={`shrink-0 text-[9px] font-medium px-1 py-0.5 rounded border ${
-              state.libraryMode === 'catalog'
-                ? 'bg-amber-950/50 text-amber-300 border-amber-800/50'
-                : 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40'
-            }`}
-            title={state.libraryMode === 'catalog' ? t('catalogIndex') : t('archiveFull')}
-          >
-            {state.libraryMode === 'catalog' ? t('catalog') : t('archive')}
-          </span>
+          <LibraryModeBadge mode={state.libraryMode} />
           <svg
             width="12"
             height="12"
@@ -239,9 +263,13 @@ export function LibrarySwitcherBar(): React.ReactElement {
           <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-av-text-muted">
             {t('recent')}
           </div>
-          {state.recentLibraries.map((p) => {
+          {state.recentLibraries.map((p, i) => {
             const active = p.toLowerCase() === state.activeLibraryRoot.toLowerCase()
-            const label = folderBasename(p)
+            const label = resolvePrimaryLibraryLabel(
+              p,
+              state.recentLibraryDisplayNames[i] ?? folderBasename(p)
+            )
+            const mode = state.recentLibraryModes[i] ?? 'archive'
             return (
               <button
                 key={p}
@@ -256,7 +284,10 @@ export function LibrarySwitcherBar(): React.ReactElement {
                     : 'text-av-text-secondary hover:bg-av-bg-hover hover:text-av-text-primary'
                 }`}
               >
-                <span className="font-medium truncate">{label}</span>
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-medium truncate flex-1 min-w-0">{label}</span>
+                  <LibraryModeBadge mode={mode} />
+                </span>
                 {!active && <span className="text-[10px] text-av-text-muted font-mono truncate opacity-80">{p}</span>}
                 {active && <span className="text-[10px] text-av-accent-blue">{t('current')}</span>}
               </button>

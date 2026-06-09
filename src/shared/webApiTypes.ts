@@ -90,6 +90,8 @@ export type LibraryInfoResponse = {
 export type LibraryStateResponse = {
   activeLibraryRoot: string
   recentLibraries: string[]
+  recentLibraryDisplayNames: string[]
+  recentLibraryModes: LibraryMode[]
   libraryDisplayName: string
   libraryMode: LibraryMode
   manifestPath: string

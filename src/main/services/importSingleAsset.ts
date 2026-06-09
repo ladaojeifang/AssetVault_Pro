@@ -1,5 +1,5 @@
 import { statSync, readFileSync, mkdirSync, rmSync, existsSync, renameSync } from 'fs'
-import { basename, extname, join, sep } from 'path'
+import { basename, extname, join, relative, sep } from 'path'
 import { toCanonicalFilePath, isSqliteUniqueConstraintError } from '../utils/pathUtils'
 import { v4 as uuidv4 } from 'uuid'
 import mime from 'mime-types'
@@ -45,6 +45,7 @@ import { schedule3dThumbnailAfterImport } from './regenerateModelThumbnails'
 import { scheduleEmbeddedDccThumbnailAfterImport } from './regenerateEmbeddedDccThumbnails'
 import { scheduleTextPreviewThumbnailAfterImport } from './regenerateTextPreviewThumbnails'
 import { buildDuplicatePromptPayload, findAssetIdByContentHash } from './contentHashService'
+import { isEmbeddedInPlaceImport } from './embeddedAssetImport'
 
 export interface ImportSingleAssetOptions extends ImportAssetOptions {
   resolveDuplicate?: (payload: Omit<DuplicateImportPromptPayload, 'requestId'>) => Promise<DuplicateImportAnswer>
@@ -125,6 +126,7 @@ export async function importSingleAsset(
 
   const libraryRoot = getLibraryRoot()
   const catalogMode = getLibraryMode() === 'catalog'
+  const embeddedMode = getLibraryMode() === 'embedded'
   const itemDirAbs = join(libraryRoot, 'items', id)
   mkdirSync(itemDirAbs, { recursive: true })
   const remoteImportsRoot = toCanonicalFilePath(join(libraryRoot, 'remote-imports'))
@@ -137,9 +139,33 @@ export async function importSingleAsset(
 
   let storedFilePath: string
   let destAbs: string
-  let storageMode: 'local' | 'referenced'
+  let storageMode: 'local' | 'referenced' | 'embedded'
 
-  if (catalogMode) {
+  if (embeddedMode) {
+    if (isEmbeddedInPlaceImport(libraryRoot, filePathCanonical)) {
+      const libraryRootNorm = toCanonicalFilePath(libraryRoot)
+      storedFilePath = relative(libraryRootNorm, filePathCanonical).split(sep).join('/')
+      destAbs = filePathCanonical
+      importSourcePath = toCanonicalFilePath(filePathCanonical)
+      storageMode = 'embedded'
+    } else {
+      const relOriginal = itemPackFileRelative(id, storageFileName)
+      storedFilePath = relOriginal
+      destAbs = posixRelToFsAbs(libraryRoot, relOriginal)
+      if (skipCopyIntoPack) {
+        if (toCanonicalFilePath(destAbs) !== filePathCanonical || !existsSync(destAbs)) {
+          throw new Error('FILE_NOT_FOUND')
+        }
+      } else {
+        copyOrHardlinkIntoLibrary(filePathCanonical, destAbs, true)
+      }
+      importSourcePath = toCanonicalFilePath(destAbs)
+      storageMode = 'local'
+    }
+    if (extNoDot === 'obj') {
+      copyObjCompanionMtlForImport(filePathCanonical, itemDirAbs)
+    }
+  } else if (catalogMode) {
     if (policy === 'import_copy' || fromManagedRemoteImport) {
       // In catalog mode, import_copy should create an actual local copy in items/{id}/
       // and mark it as local to keep localization semantics consistent.

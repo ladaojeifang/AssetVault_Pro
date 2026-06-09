@@ -15,6 +15,7 @@
 | [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) | 开发计划 |
 | [library-import-from-library-spec.md](./library-import-from-library-spec.md) | **从其它资料库导入**（archive→archive 整库合并，LIM V1） |
 | [library-import-catalog-to-catalog-spec.md](./library-import-catalog-to-catalog-spec.md) | **索引库→索引库（同机）**整库导入（CC-V1，含 A 已本地化时的 hash 三分支） |
+| [embedded-library-spec.md](./embedded-library-spec.md) | **内嵌库**功能规格（文件夹原地转资料库：文件不复制、相对路径、items 只存元数据） |
 
 ---
 

@@ -32,8 +32,19 @@ export function CreateLibraryModal({ visible, busy, onClose, onConfirm }: Props)
       title: t('catalogOptionTitle'),
       desc: t('catalogOptionDesc'),
       badgeClass: 'bg-amber-950/50 text-amber-300 border-amber-800/50'
+    },
+    {
+      id: 'embedded',
+      title: t('embeddedOptionTitle'),
+      desc: t('embeddedOptionDesc'),
+      badgeClass: 'bg-blue-950/40 text-blue-300 border-blue-800/40'
     }
   ]
+
+  const intro =
+    mode === 'embedded' ? t('createModalIntroEmbedded') : t('createModalIntro')
+  const confirmLabel =
+    mode === 'embedded' ? t('embeddedPickFolderCreate') : t('pickFolderCreate')
 
   return (
     <Modal
@@ -46,9 +57,7 @@ export function CreateLibraryModal({ visible, busy, onClose, onConfirm }: Props)
       className="av-create-library-modal"
       style={{ width: 420 }}
     >
-      <p className="text-sm text-av-text-secondary mb-4 leading-relaxed">
-        {t('createModalIntro')}
-      </p>
+      <p className="text-sm text-av-text-secondary mb-4 leading-relaxed">{intro}</p>
 
       <div className="space-y-2 mb-5">
         {modeOptions.map((opt) => {
@@ -91,7 +100,7 @@ export function CreateLibraryModal({ visible, busy, onClose, onConfirm }: Props)
           disabled={busy}
           onClick={() => onConfirm(mode)}
         >
-          {t('pickFolderCreate')}
+          {confirmLabel}
         </button>
       </div>
     </Modal>

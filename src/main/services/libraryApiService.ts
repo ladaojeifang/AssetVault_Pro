@@ -1,26 +1,15 @@
 import { app } from 'electron'
-import { join, basename } from 'path'
-import { existsSync, readFileSync } from 'fs'
+import { join } from 'path'
 import {
   getLibraryRoot,
   LIBRARY_DB_NAME,
+  libraryPathKey,
   readLibraryUserState
 } from './libraryBundle'
-import { getLibraryMode, readLibraryManifestFile } from './libraryManifest'
+import type { LibraryMode } from '@/shared/libraryTypes'
+import { getLibraryMode, readLibraryManifestFile, readLibraryDisplayName, readLibraryModeForRoot } from './libraryManifest'
 import { getLibraryModeStats } from './libraryUpgrade'
 import type { LibraryInfoResponse, LibraryStateResponse } from '@/shared/webApiTypes'
-
-function readLibraryDisplayName(root: string): string {
-  const mf = join(root, 'manifest.json')
-  if (!existsSync(mf)) return basename(root)
-  try {
-    const j = JSON.parse(readFileSync(mf, 'utf-8')) as { displayName?: unknown }
-    if (typeof j.displayName === 'string' && j.displayName.trim()) return j.displayName.trim()
-  } catch {
-    // ignore
-  }
-  return basename(root)
-}
 
 export async function getLibraryInfo(): Promise<LibraryInfoResponse> {
   const root = getLibraryRoot()
@@ -39,25 +28,35 @@ export async function getLibraryInfo(): Promise<LibraryInfoResponse> {
 
 export function getLibraryState(): LibraryStateResponse {
   const ud = app.getPath('userData')
-  const active = getLibraryRoot()
+  const sessionActive = getLibraryRoot()
   const st = readLibraryUserState(ud)
-  const raw = st?.recentLibraries ?? []
-  const merged = [active, ...raw.filter((r) => r.toLowerCase() !== active.toLowerCase())]
+  const raw = st?.recentLibraries ?? [sessionActive]
+  const sessionKey = libraryPathKey(sessionActive)
+  const merged =
+    raw.some((r) => libraryPathKey(r) === sessionKey)
+      ? raw
+      : [sessionActive, ...raw.filter((r) => libraryPathKey(r) !== sessionKey)]
   const dedup: string[] = []
+  const displayNames: string[] = []
+  const modes: LibraryMode[] = []
   const seen = new Set<string>()
   for (const r of merged) {
-    const k = r.toLowerCase()
-    if (seen.has(k)) continue
+    const k = libraryPathKey(r)
+    if (!k || seen.has(k)) continue
     seen.add(k)
     dedup.push(r)
+    displayNames.push(readLibraryDisplayName(r))
+    modes.push(readLibraryModeForRoot(r))
   }
-  const manifest = readLibraryManifestFile(active)
+  const manifest = readLibraryManifestFile(sessionActive)
   return {
-    activeLibraryRoot: active,
+    activeLibraryRoot: sessionActive,
     recentLibraries: dedup,
-    libraryDisplayName: readLibraryDisplayName(active),
+    recentLibraryDisplayNames: displayNames,
+    recentLibraryModes: modes,
+    libraryDisplayName: readLibraryDisplayName(sessionActive),
     libraryMode: manifest?.libraryMode ?? getLibraryMode(),
-    manifestPath: join(active, 'manifest.json'),
-    dbPath: join(active, LIBRARY_DB_NAME)
+    manifestPath: join(sessionActive, 'manifest.json'),
+    dbPath: join(sessionActive, LIBRARY_DB_NAME)
   }
 }

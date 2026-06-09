@@ -7,14 +7,15 @@ import {
   copyFileSync,
   rmSync,
   renameSync,
-  unlinkSync
+  unlinkSync,
+  realpathSync
 } from 'fs'
 import type { LibraryMode } from '@/shared/libraryTypes'
 import { loadLibraryModeFromManifest, writeLibraryManifest } from './libraryManifest'
 
 const ACTIVE_LIBRARY_JSON = 'active-library.json'
 export const LIBRARY_DB_NAME = 'library.sqlite'
-const MANIFEST_NAME = 'manifest.json'
+export const MANIFEST_NAME = 'manifest.json'
 export const ITEMS_DIR = 'items'
 
 const MAX_RECENT = 20
@@ -45,6 +46,35 @@ function normalizeRoot(p: string): string {
   return normalize(p.trim())
 }
 
+/** Case-insensitive dedup key; resolves symlinks / short vs long paths when the folder exists. */
+export function libraryPathKey(p: string): string {
+  const trimmed = p.trim()
+  if (!trimmed) return ''
+  try {
+    if (existsSync(trimmed)) {
+      return normalize(realpathSync.native(trimmed)).toLowerCase()
+    }
+  } catch {
+    /* fall through */
+  }
+  return normalizeRoot(trimmed).toLowerCase()
+}
+
+function dedupeLibraryRoots(paths: string[]): string[] {
+  const uniq: string[] = []
+  const seen = new Set<string>()
+  for (const r of paths) {
+    const n = normalizeRoot(r)
+    if (!n) continue
+    const k = libraryPathKey(n)
+    if (seen.has(k)) continue
+    seen.add(k)
+    uniq.push(n)
+    if (uniq.length >= MAX_RECENT) break
+  }
+  return uniq
+}
+
 /**
  * Read persisted library selection + recent list. Supports legacy `{ libraryRoot }` file.
  */
@@ -65,17 +95,8 @@ export function readLibraryUserState(userData: string): LibraryUserState | null 
         ? (raw.recentLibraries as unknown[]).filter((x): x is string => typeof x === 'string')
         : []
       const recent = recentRaw.map(normalizeRoot).filter(Boolean)
-      const merged = [active, ...recent.filter((r) => r.toLowerCase() !== active.toLowerCase())]
-      const uniq: string[] = []
-      const seen = new Set<string>()
-      for (const r of merged) {
-        const k = r.toLowerCase()
-        if (seen.has(k)) continue
-        seen.add(k)
-        uniq.push(r)
-        if (uniq.length >= MAX_RECENT) break
-      }
-      return { activeLibraryRoot: active, recentLibraries: uniq }
+      const merged = [active, ...recent.filter((r) => libraryPathKey(r) !== libraryPathKey(active))]
+      return { activeLibraryRoot: active, recentLibraries: dedupeLibraryRoots(merged) }
     }
 
     return null
@@ -87,17 +108,13 @@ export function readLibraryUserState(userData: string): LibraryUserState | null 
 export function writeLibraryUserState(userData: string, state: LibraryUserState): void {
   const p = join(userData, ACTIVE_LIBRARY_JSON)
   const active = normalizeRoot(state.activeLibraryRoot)
-  const merged = [active, ...state.recentLibraries.map(normalizeRoot).filter((r) => r.toLowerCase() !== active.toLowerCase())]
-  const uniq: string[] = []
-  const seen = new Set<string>()
-  for (const r of merged) {
-    const k = r.toLowerCase()
-    if (seen.has(k)) continue
-    seen.add(k)
-    uniq.push(r)
-    if (uniq.length >= MAX_RECENT) break
-  }
-  const body: LibraryUserState = { activeLibraryRoot: active, recentLibraries: uniq }
+  const merged = [
+    active,
+    ...state.recentLibraries
+      .map(normalizeRoot)
+      .filter((r) => r && libraryPathKey(r) !== libraryPathKey(active))
+  ]
+  const body: LibraryUserState = { activeLibraryRoot: active, recentLibraries: dedupeLibraryRoots(merged) }
   const payload = JSON.stringify(body, null, 2)
   const tmp = join(userData, `${ACTIVE_LIBRARY_JSON}.${process.pid}.tmp`)
   try {
@@ -121,53 +138,47 @@ export function buildStateAfterSwitch(userData: string, newActiveRoot: string): 
 
   /** Preserve previous active root in recents (even if missing from recentLibraries), so unplugged drives / dev restarts do not erase the last path. */
   const merged: string[] = [active]
-  const seen = new Set<string>([active.toLowerCase()])
-  if (prevActive && !seen.has(prevActive.toLowerCase())) {
+  const seen = new Set<string>([libraryPathKey(active)])
+  if (prevActive && !seen.has(libraryPathKey(prevActive))) {
     merged.push(prevActive)
-    seen.add(prevActive.toLowerCase())
+    seen.add(libraryPathKey(prevActive))
   }
   for (const r of prevRecent) {
     const n = normalizeRoot(r)
-    const k = n.toLowerCase()
-    if (seen.has(k)) continue
+    const k = libraryPathKey(n)
+    if (!n || seen.has(k)) continue
     seen.add(k)
     merged.push(n)
   }
 
-  const uniq: string[] = []
-  seen.clear()
-  for (const r of merged) {
-    const k = r.toLowerCase()
-    if (seen.has(k)) continue
-    seen.add(k)
-    uniq.push(r)
-    if (uniq.length >= MAX_RECENT) break
-  }
-  return { activeLibraryRoot: active, recentLibraries: uniq }
+  return { activeLibraryRoot: active, recentLibraries: dedupeLibraryRoots(merged) }
 }
 
-export function removeFromRecentList(userData: string, pathToRemove: string): LibraryUserState | null {
+export function removeFromRecentList(userData: string, pathToRemove: string): LibraryUserState {
   const prev = readLibraryUserState(userData)
-  if (!prev) return null
-  const target = normalizeRoot(pathToRemove)
-  if (target.toLowerCase() === prev.activeLibraryRoot.toLowerCase()) {
+  if (!prev) {
+    throw new Error('无法读取资料库列表')
+  }
+  const targetKey = libraryPathKey(pathToRemove)
+  if (!targetKey) {
+    throw new Error('无效路径')
+  }
+  if (libraryPathKey(prev.activeLibraryRoot) === targetKey) {
     throw new Error('无法从列表移除当前正在使用的资料库，请先切换到其他资料库')
   }
-  const filtered = prev.recentLibraries.filter((r) => r.toLowerCase() !== target.toLowerCase())
+  const beforeLen = prev.recentLibraries.length
+  const filtered = prev.recentLibraries.filter((r) => libraryPathKey(r) !== targetKey)
+  if (filtered.length === beforeLen) {
+    throw new Error('该资料库不在最近列表中')
+  }
   const nextRecent = [
     prev.activeLibraryRoot,
-    ...filtered.filter((r) => r.toLowerCase() !== prev.activeLibraryRoot.toLowerCase())
+    ...filtered.filter((r) => libraryPathKey(r) !== libraryPathKey(prev.activeLibraryRoot))
   ]
-  const uniq: string[] = []
-  const seen = new Set<string>()
-  for (const r of nextRecent) {
-    const k = r.toLowerCase()
-    if (seen.has(k)) continue
-    seen.add(k)
-    uniq.push(r)
-    if (uniq.length >= MAX_RECENT) break
+  const next: LibraryUserState = {
+    activeLibraryRoot: prev.activeLibraryRoot,
+    recentLibraries: dedupeLibraryRoots(nextRecent)
   }
-  const next: LibraryUserState = { activeLibraryRoot: prev.activeLibraryRoot, recentLibraries: uniq }
   writeLibraryUserState(userData, next)
   return next
 }
@@ -264,8 +275,8 @@ export function prepareOnStartup(userData: string): { libraryRoot: string; dbPat
   const pushCand = (p?: string | null) => {
     if (typeof p !== 'string' || !p.trim()) return
     const n = normalizeRoot(p)
-    const k = n.toLowerCase()
-    if (seenCand.has(k)) return
+    const k = libraryPathKey(n)
+    if (!k || seenCand.has(k)) return
     seenCand.add(k)
     candidates.push(n)
   }

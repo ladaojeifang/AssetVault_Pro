@@ -8,6 +8,10 @@ describe('tokenizeSearchQuery', () => {
     ])
   })
 
+  it('preserves ComfyUI-style filename tokens', () => {
+    expect(tokenizeSearchQuery('ComfyUI_00160_')).toEqual(['comfyui_00160_'])
+  })
+
   it('splits multi-word queries for AND semantics', () => {
     expect(tokenizeSearchQuery('camera stop')).toEqual(['camera', 'stop'])
   })

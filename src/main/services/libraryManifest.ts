@@ -1,9 +1,10 @@
-import { basename, join } from 'path'
+import { basename, dirname, join } from 'path'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { v4 as uuidv4 } from 'uuid'
 import type { LibraryManifest, LibraryMode } from '@/shared/libraryTypes'
 
 const MANIFEST_NAME = 'manifest.json'
+const DEFAULT_LIBRARY_DISPLAY_NAME = 'assetvault library'
 
 let sessionLibraryMode: LibraryMode = 'archive'
 
@@ -20,7 +21,11 @@ export function readLibraryManifestFile(root: string): LibraryManifest | null {
   if (!existsSync(mf)) return null
   try {
     const raw = JSON.parse(readFileSync(mf, 'utf-8')) as Record<string, unknown>
-    const mode = raw.libraryMode === 'catalog' ? 'catalog' : 'archive'
+    const modeValid = (v: unknown): LibraryMode => {
+      if (v === 'catalog' || v === 'embedded') return v
+      return 'archive'
+    }
+    const mode = modeValid(raw.libraryMode)
     return {
       formatVersion: typeof raw.formatVersion === 'string' ? raw.formatVersion : '1.0',
       appId: typeof raw.appId === 'string' ? raw.appId : 'com.assetvault.library',
@@ -39,19 +44,34 @@ export function readLibraryManifestFile(root: string): LibraryManifest | null {
   }
 }
 
-/** Human-readable library name for UI and import source tag (manifest displayName, else folder basename). */
+/** Human-readable library name for UI (folder basename when manifest still has the factory default). */
 export function readLibraryDisplayName(root: string): string {
+  const folderBase = basename(root)
   const mf = join(root, MANIFEST_NAME)
-  if (!existsSync(mf)) return basename(root)
+  if (!existsSync(mf)) return folderBase
   try {
-    const raw = JSON.parse(readFileSync(mf, 'utf-8')) as { displayName?: unknown }
-    if (typeof raw.displayName === 'string' && raw.displayName.trim()) {
-      return raw.displayName.trim()
+    const raw = JSON.parse(readFileSync(mf, 'utf-8')) as {
+      displayName?: unknown
+      libraryMode?: unknown
+    }
+    const dn = typeof raw.displayName === 'string' ? raw.displayName.trim() : ''
+    if (dn && dn.toLowerCase() !== DEFAULT_LIBRARY_DISPLAY_NAME && dn.toLowerCase() !== folderBase.toLowerCase()) {
+      return dn
+    }
+    // For embedded libraries, the metadata folder is `{projectName}-{uuid}`.
+    // Use the parent folder name as the display name instead of the UUID folder name.
+    if (raw.libraryMode === 'embedded') {
+      const parentBase = basename(dirname(root))
+      if (parentBase && parentBase !== folderBase) return parentBase
     }
   } catch {
     /* ignore malformed manifest */
   }
-  return basename(root)
+  return folderBase
+}
+
+export function readLibraryModeForRoot(root: string): LibraryMode {
+  return readLibraryManifestFile(root)?.libraryMode ?? 'archive'
 }
 
 export function loadLibraryModeFromManifest(root: string): LibraryMode {

@@ -8,12 +8,13 @@ export type AssetPathRow = {
   storageMode?: string | null
 }
 
-/** Absolute path to the asset's content file (library copy or external source). */
+/** Absolute path to the asset's content file (library copy, external source, or embedded in-place). */
 export function resolveAssetContentPath(row: AssetPathRow): string {
   const mode = row.storageMode ?? (isAbsolute(row.filePath.trim()) ? 'referenced' : 'local')
   if (mode === 'referenced' || isAbsolute(row.filePath.trim())) {
     return normalize(row.filePath.trim())
   }
+  // 'local' or 'embedded' — both use library-relative path resolution
   return resolveLibraryPath(row.filePath)
 }
 
