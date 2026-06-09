@@ -119,8 +119,8 @@ const DetailPanel: React.FC = () => {
     const sel = assets.find((a) => selectedAssetIds.has(a.id))
     if (!sel) return
     if (!notesDirtyRef.current || savingNotesRef.current) return
-    const prev = sel.notes ?? ''
-    if (notesDraft === prev) {
+    const prev = sel.notes?.trim() ?? ''
+    if (notesDraft.trim() === prev) {
       notesDirtyRef.current = false
       return
     }

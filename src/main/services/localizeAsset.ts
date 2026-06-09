@@ -65,10 +65,14 @@ export async function localizeAssetFromSource(
       copyObjCompanionMtlForImport(sourceAbs, itemDirAbs)
     }
   } catch (e) {
-    await database
-      .update(assets)
-      .set({ localizationState: 'failed', updatedAt: new Date() })
-      .where(eq(assets.id, assetId))
+    try {
+      await database
+        .update(assets)
+        .set({ localizationState: 'failed', updatedAt: new Date() })
+        .where(eq(assets.id, assetId))
+    } catch (dbErr) {
+      console.error(`[localizeAssetFromSource] Failed to persist 'failed' state for ${assetId}:`, dbErr)
+    }
     return { ok: false, reason: e instanceof Error ? e.message : String(e) }
   }
 
@@ -128,10 +132,14 @@ export async function localizeOneAsset(
       copyObjCompanionMtlForImport(sourceAbs, itemDirAbs)
     }
   } catch (e) {
-    await database
-      .update(assets)
-      .set({ localizationState: 'failed', updatedAt: new Date() })
-      .where(eq(assets.id, assetId))
+    try {
+      await database
+        .update(assets)
+        .set({ localizationState: 'failed', updatedAt: new Date() })
+        .where(eq(assets.id, assetId))
+    } catch (dbErr) {
+      console.error(`[localizeOneAsset] Failed to persist 'failed' state for ${assetId}:`, dbErr)
+    }
     return { ok: false, reason: e instanceof Error ? e.message : String(e) }
   }
 

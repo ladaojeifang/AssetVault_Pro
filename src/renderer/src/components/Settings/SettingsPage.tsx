@@ -17,6 +17,7 @@ import {
   type AppPreferences
 } from '@/shared/appPreferences'
 import type { WebApiPreferences } from '@/shared/webApiPreferences'
+import { LOG_LEVELS, type LogLevel } from '@/shared/logLevel'
 import { WebApiSettingsSection } from './WebApiSettingsSection'
 
 const GRID_SIZE_COLUMN_WIDTH: Record<string, number> = {
@@ -456,6 +457,29 @@ function AdvancedSettings({
       <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
         <p className="text-sm text-yellow-400/80">⚠️ {t('advanced.warning')}</p>
       </div>
+
+      <SettingField
+        label={t('advanced.logLevel')}
+        description={t('advanced.logLevelDesc')}
+      >
+        <select
+          value={prefs.logLevel}
+          onChange={(e) => onUpdate('logLevel', e.target.value as LogLevel)}
+          className="input-base w-auto min-w-[240px]"
+        >
+          {LOG_LEVELS.map((lvl) => (
+            <option key={lvl} value={lvl}>
+              {lvl === 'error'
+                ? t('advanced.logLevelError')
+                : lvl === 'warn'
+                  ? t('advanced.logLevelWarn')
+                  : lvl === 'info'
+                    ? t('advanced.logLevelInfo')
+                    : t('advanced.logLevelDebug')}
+            </option>
+          ))}
+        </select>
+      </SettingField>
 
       <SettingField
         label={t('advanced.searchDebounce')}

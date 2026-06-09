@@ -8,6 +8,7 @@ import {
   type PageVideoFormatPreset
 } from './pageVideoFormatPolicy'
 import { DEFAULT_APP_LOCALE, normalizeAppLocale, type AppLocale } from './appLocale'
+import { parseLogLevel, type LogLevel } from './logLevel'
 import { PAGE_VIDEO_IMPORT_LIMITS } from './pageVideoImportTypes'
 
 export type { AppLocale }
@@ -27,6 +28,8 @@ export type AppPreferences = {
   defaultImportPath: string
   /** After import, watch the source folder for add/change/delete. */
   autoWatchFolders: boolean
+  /** Main-process log verbosity: "error" | "warn" | "info" | "debug". */
+  logLevel: LogLevel
   thumbnailQuality: number
   thumbnailMaxEdge: number
   maxCacheSizeMB: number
@@ -39,6 +42,9 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   locale: DEFAULT_APP_LOCALE,
   defaultImportPath: '',
   autoWatchFolders: true,
+  // Shared default is "info". At startup, initLogger() in main/index.ts
+  // upgrades to "debug" in dev mode or uses ASSETVAULT_LOG_LEVEL env var.
+  logLevel: 'info',
   thumbnailQuality: 80,
   thumbnailMaxEdge: 256,
   maxCacheSizeMB: 2048,
@@ -78,6 +84,7 @@ export function normalizeAppPreferences(raw: unknown): AppPreferences {
     ),
     maxCacheSizeMB: clamp(Number(o.maxCacheSizeMB), 256, 10240),
     searchDebounceMs: clamp(Number(o.searchDebounceMs ?? o.debounceMs), 100, 800),
+    logLevel: parseLogLevel(o.logLevel, d.logLevel),
     webApi: normalizeWebApiPreferences(o.webApi),
     pageVideoImport: normalizePageVideoImportPreferences(o.pageVideoImport)
   }

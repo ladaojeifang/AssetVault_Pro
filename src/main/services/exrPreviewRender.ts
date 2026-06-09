@@ -70,6 +70,16 @@ async function renderViaNapi(
   exposure: number,
   maxEdge: number
 ): Promise<Buffer | null> {
+  // Guard against loading huge EXR files into memory (multi-layer EXRs can exceed 2GB)
+  try {
+    const st = statSync(absPath)
+    const MAX_EXR_MEMORY = 1024 * 1024 * 1024 // 1GB
+    if (st.size > MAX_EXR_MEMORY) {
+      console.warn(`[exrPreview] Skipping oversized EXR (${(st.size / 1024 / 1024).toFixed(1)}MB): ${absPath}`)
+      return null
+    }
+  } catch { /* if stat fails, let readFileSync report the error */ }
+
   const fileBuffer = readFileSync(absPath)
   const transformer = new Transformer(fileBuffer)
   const meta = await transformer.metadata()

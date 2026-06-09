@@ -9,8 +9,12 @@ import { handleWindowOperations } from './handlers/window'
 import { handleFontOperations } from './handlers/fonts'
 import { handleExrOperations } from './handlers/exr'
 import { handleSettingsOperations } from './handlers/settings'
+import { installIpcTrace } from '../utils/logger'
 
 export function registerIpcHandlers(ipc: typeof ipcMain): void {
+  // Dev mode: install IPC tracing BEFORE registering handlers
+  // so every ipcMain.handle/on call gets wrapped
+  installIpcTrace(ipc)
   // Window controls
   ipc.handle('window:minimize', () => {
     BrowserWindow.getFocusedWindow()?.minimize()

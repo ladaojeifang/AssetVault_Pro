@@ -22,8 +22,9 @@ function tryRemoveFolderIconFile(relativePath: string): void {
     const root = getLibraryRoot()
     const abs = join(root, relativePath.split('/').join(sep))
     if (existsSync(abs)) unlinkSync(abs)
-  } catch {
-    /* ignore */
+  } catch (err) {
+    /* best-effort cleanup — non-fatal if file is locked or missing */
+    console.warn(`[folders] Failed to remove folder icon ${relativePath}:`, err)
   }
 }
 

@@ -93,10 +93,14 @@ export function emitImportProgress(
   data: ImportLibraryProgress
 ) {
   onProgress?.(data)
+  if (!win) return
   try {
-    win?.webContents.send('library:import-progress', data)
-  } catch {
-    /* ignore */
+    if (win.isDestroyed()) return
+    win.webContents.send('library:import-progress', data)
+  } catch (err) {
+    if (!win.isDestroyed()) {
+      console.error(`[importLibrary] Failed to send progress:`, err)
+    }
   }
 }
 

@@ -1,0 +1,22 @@
+{
+  "name": "3d-thumb-extractor",
+  "version": "0.1.0",
+  "description": "Streaming-safe thumbnail extractor for C4D, MAX, BLEND, and text formats",
+  "bin": {
+    "3dthumb": "bin/cli.js"
+  },
+  "main": "src/index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "3d",
+    "thumbnail",
+    "c4d",
+    "3dsmax",
+    "blend",
+    "assets"
+  ],
+  "license": "MIT"
+}

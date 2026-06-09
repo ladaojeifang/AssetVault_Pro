@@ -75,7 +75,10 @@ export function runLibrarySchemaMigrations(sqlite: RawSqliteDb): void {
 
   if (v < 5) {
     // v5: add source_url column for external web link
-    // No data migration needed — new column defaults to NULL
+    // No ALTER here — the column is added via try/catch ALTER in
+    // createInitialSchemaOnSqlite (L201-204) which always runs before
+    // runLibrarySchemaMigrations. If this assumption ever changes,
+    // add: ALTER TABLE assets ADD COLUMN source_url TEXT
     v = 5
     setLibrarySchemaVersion(sqlite, v)
   }

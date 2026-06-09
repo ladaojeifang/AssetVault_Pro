@@ -69,9 +69,18 @@ export class FileWatcher {
 
     this.watcher = chokidar.watch(Array.from(this.watchedPaths), watchOptions)
 
-    this.watcher.on('add', (filePath) => this.handleFileAdd(filePath))
-    this.watcher.on('change', (filePath) => this.handleFileChange(filePath))
-    this.watcher.on('unlink', (filePath) => this.handleFileDelete(filePath))
+    this.watcher.on('add', (filePath) => {
+      console.debug(`[FileWatcher] chokidar add: ${basename(filePath)}`)
+      this.handleFileAdd(filePath)
+    })
+    this.watcher.on('change', (filePath) => {
+      console.debug(`[FileWatcher] chokidar change: ${basename(filePath)}`)
+      this.handleFileChange(filePath)
+    })
+    this.watcher.on('unlink', (filePath) => {
+      console.debug(`[FileWatcher] chokidar unlink: ${basename(filePath)}`)
+      this.handleFileDelete(filePath)
+    })
 
     this.watcher.on('ready', () => {
       console.log(`[FileWatcher] Ready - watching ${Array.from(this.watchedPaths).length} paths`)

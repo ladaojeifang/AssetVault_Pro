@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { mkdirSync } from 'fs'
+import { initLogger, setLogLevel, relayRendererConsole } from './utils/logger'
 import { initDatabase, flushDatabase, getDatabase } from './db'
 import { BETTER_SQLITE_REBUILD_HINT, isBetterSqliteBindingsError, probeBetterSqliteNative } from './db/betterSqliteNative'
 import { prepareOnStartup } from './services/libraryBundle'
@@ -9,6 +10,9 @@ import { getThumbnailService } from './services/ThumbnailService'
 import { runLegacyPathsMigrationIfNeeded } from './services/libraryMigration'
 import { repairOrphanItemPacks } from './services/repairOrphanItemPacks'
 import { processPending3dThumbnails } from './services/regenerateModelThumbnails'
+import { processPendingEmbeddedDccThumbnails } from './services/regenerateEmbeddedDccThumbnails'
+import { processPendingTextPreviewThumbnails } from './services/regenerateTextPreviewThumbnails'
+import { markStartupThumbnailPhaseComplete, runDeferredThumbnailWork } from './services/thumbnailStartup'
 import { migrateOriginalExtToDisplayFilenames } from './services/migrateStorageFileNames'
 import { registerIpcHandlers } from './ipc'
 import { setupGlobalErrorHandlers } from './services/ErrorHandler'
@@ -38,6 +42,11 @@ registerModelFileProtocol()
 registerExrPreviewProtocol()
 
 const isDev = !app.isPackaged
+
+// Initialize logger BEFORE any console.* calls so level filtering takes effect.
+// At this point we don't have app preferences yet — initLogger uses
+// ASSETVAULT_LOG_LEVEL env var > dev/prod default.
+initLogger()
 
 /**
  * Dev runs sometimes use a generic Electron userData dir, so `active-library.json` appears to reset
@@ -129,14 +138,19 @@ function createWindow(): BrowserWindow {
     }
   })
 
+  // 开发模式：将渲染进程 console 消息转发到主进程终端
   // 已知 Chromium DevTools 内部 bug（与业务代码无关）
-  mainWindow.webContents.on('console-message', (_event, _level, message) => {
+  mainWindow.webContents.on('console-message', (event, level, message) => {
     if (
       message.includes('dragEvent is not defined') ||
       (message.includes('Failed to fetch') && message.includes('devtools'))
     ) {
       return
     }
+    // Dev mode: relay renderer console → main terminal with [Renderer] tag
+    const levelName =
+      level === 3 ? 'error' : level === 2 ? 'warning' : level === 1 ? 'info' : 'verbose'
+    relayRendererConsole('Renderer', levelName, message)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -182,6 +196,9 @@ app.on('second-instance', () => {
 
 if (gotSingleInstanceLock) {
   app.whenReady().then(async () => {
+    const startupStart = performance.now()
+    console.debug('[Startup] app.whenReady() fired')
+
     setupModelFileProtocolHandler()
     setupExrPreviewProtocolHandler()
 
@@ -192,7 +209,9 @@ if (gotSingleInstanceLock) {
     setupGlobalErrorHandlers()
 
     const userData = app.getPath('userData')
+    console.debug(`[Startup] userData: ${userData}`)
     const { libraryRoot, dbPath } = prepareOnStartup(userData)
+    console.debug(`[Startup] prepareOnStartup done in ${(performance.now() - startupStart).toFixed(0)}ms`)
     getThumbnailService().setLibraryRoot(libraryRoot)
     readAppPreferences()
     applyAppPreferencesToRuntime()
@@ -220,10 +239,12 @@ if (gotSingleInstanceLock) {
       app.quit()
       return
     }
+    console.debug(`[Startup] initDatabase done in ${(performance.now() - startupStart).toFixed(0)}ms`)
     await runLegacyPathsMigrationIfNeeded()
     await migrateOriginalExtToDisplayFilenames()
     await repairOrphanItemPacks()
     await flushDatabase()
+    console.debug(`[Startup] migrations + flush done in ${(performance.now() - startupStart).toFixed(0)}ms`)
 
     console.log('[Library] Active library root:', libraryRoot)
 
@@ -265,11 +286,16 @@ if (gotSingleInstanceLock) {
     }
 
     createWindow()
+    console.debug(`[Startup] createWindow done, total ${(performance.now() - startupStart).toFixed(0)}ms`)
 
     void (async () => {
       const database = getDatabase()
       if (database) {
         await processPending3dThumbnails(database)
+        await processPendingEmbeddedDccThumbnails(database)
+        await processPendingTextPreviewThumbnails(database)
+        markStartupThumbnailPhaseComplete()
+        await runDeferredThumbnailWork()
       }
     })()
 

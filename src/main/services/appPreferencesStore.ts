@@ -7,6 +7,7 @@ import {
   type AppPreferences
 } from '@/shared/appPreferences'
 import { getThumbnailService } from './ThumbnailService'
+import { setLogLevel } from '../utils/logger'
 
 const PREFERENCES_FILE = 'app-preferences.json'
 
@@ -49,6 +50,7 @@ export function writeAppPreferences(next: AppPreferences): AppPreferences {
 
 export function applyAppPreferencesToRuntime(prefs: AppPreferences = snapshot): void {
   snapshot = normalizeAppPreferences(prefs)
+  setLogLevel(snapshot.logLevel)
   const thumb = getThumbnailService()
   thumb.setGenerationDefaults({
     maxEdge: snapshot.thumbnailMaxEdge,

@@ -1,8 +1,8 @@
 import { Transformer, ResizeFit } from '@napi-rs/image'
 import { LRUCache } from 'lru-cache'
 import { app } from 'electron'
-import { join } from 'path'
-import { existsSync, mkdirSync, unlinkSync, statSync, readdirSync, writeFileSync, readFileSync } from 'fs'
+import { join, basename } from 'path'
+import { existsSync, mkdirSync, unlinkSync, statSync, readdirSync, writeFileSync, renameSync, readFileSync } from 'fs'
 import {
   extractGifFramePngBestEffort,
   extractVideoFramePngBestEffort,
@@ -17,6 +17,8 @@ import {
   clearModelThumbnailSkip
 } from './modelThumbnailSkip'
 import { parseModel3dFormat } from '@/shared/model3dFormats'
+import { isTextPreviewExtension } from '@/shared/textPreviewFormats'
+import { isEmbeddedDccThumbExtension } from '@/shared/embeddedDccFormats'
 import { isSvgFilePath } from '@/shared/svgFormats'
 import { isExrFilePath } from '@/shared/exrFormats'
 import { renderExrThumbnailWebp } from './exrThumbnailRender'
@@ -35,6 +37,10 @@ export type ThumbnailGenerateResult = {
   path: string
   usedOriginal?: boolean
 }
+
+/** Max source file size to load into memory for thumbnail generation (500MB).
+ *  Larger files are skipped to prevent OOM. */
+const MAX_SOURCE_FILE_SIZE = 500 * 1024 * 1024
 
 /**
  * Three-level Thumbnail Cache System
@@ -156,6 +162,13 @@ export class ThumbnailService {
     assetId: string,
     options: { width?: number; height?: number; quality?: number } = {}
   ): Promise<ThumbnailGenerateResult | null> {
+    // Check memory cache first
+    const memCached = this.lruCache.get(assetId)
+    if (memCached) {
+      console.debug(`[ThumbnailService] L1 memory hit: ${basename(filePath)}`)
+      return { buffer: memCached, path: this.thumbDiskPath(assetId) }
+    }
+
     if (isSvgFilePath(filePath)) {
       return this.generateSvg(filePath, assetId, options)
     }
@@ -164,17 +177,20 @@ export class ThumbnailService {
       return this.generateExr(filePath, assetId, options)
     }
 
+    const startTime = performance.now()
     const maxEdge = options.width ?? this.generationMaxEdge
     const { height = maxEdge, quality = options.quality ?? this.generationQuality } = options
 
     try {
       if (isGifFilePath(filePath)) {
-        return await this.generateFromFfmpegFrame(
+        const result = await this.generateFromFfmpegFrame(
           filePath,
           assetId,
           options,
           extractGifFramePngBestEffort
         )
+        console.debug(`[ThumbnailService] GIF thumb ${result ? 'OK' : 'FAIL'}: ${basename(filePath)} (${(performance.now() - startTime).toFixed(0)}ms)`)
+        return result
       }
 
       if (isCustomThumbnail(assetId)) {
@@ -186,12 +202,25 @@ export class ThumbnailService {
         }
       }
 
+      // Guard against loading huge files into memory (PSD / TIFF / large PNG)
+      try {
+        const sourceStat = statSync(filePath)
+        if (sourceStat.size > MAX_SOURCE_FILE_SIZE) {
+          console.warn(
+            `[ThumbnailService] Skipping oversized source (${(sourceStat.size / 1024 / 1024).toFixed(1)}MB > ${MAX_SOURCE_FILE_SIZE / 1024 / 1024}MB): ${filePath}`
+          )
+          return null
+        }
+      } catch {
+        // stat failed — let readFileSync handle the error naturally
+      }
       const fileBuffer = readFileSync(filePath)
       const transformer = new Transformer(fileBuffer)
       const imgInfo = await transformer.metadata()
 
       if (shouldUseOriginalImageDimensions(imgInfo.width, imgInfo.height)) {
         this.lruCache.set(assetId, fileBuffer)
+        console.debug(`[ThumbnailService] Image small, using original: ${basename(filePath)} (${imgInfo.width}x${imgInfo.height})`)
         return { buffer: fileBuffer, path: filePath, usedOriginal: true }
       }
 
@@ -199,6 +228,7 @@ export class ThumbnailService {
       if (existsSync(outputPath)) {
         const diskBuffer = readFileSync(outputPath)
         this.lruCache.set(assetId, diskBuffer)
+        console.debug(`[ThumbnailService] L2 disk hit: ${basename(filePath)}`)
         return { buffer: diskBuffer, path: outputPath }
       }
 
@@ -209,6 +239,7 @@ export class ThumbnailService {
       writeFileSafely(outputPath, webpBuffer as Buffer)
       this.lruCache.set(assetId, webpBuffer as Buffer)
 
+      console.debug(`[ThumbnailService] Image thumb OK: ${basename(filePath)} (${imgInfo.width}x${imgInfo.height}→${maxEdge}, ${(performance.now() - startTime).toFixed(0)}ms)`)
       return { buffer: webpBuffer as Buffer, path: outputPath }
     } catch (error) {
       console.error(`[ThumbnailService] Failed to generate thumbnail for ${filePath}:`, error)
@@ -345,6 +376,98 @@ export class ThumbnailService {
     }
   }
 
+  /** Extract embedded thumbnail from C4D/Max/Blend DCC files. */
+  async generateEmbeddedDcc(
+    filePath: string,
+    assetId: string,
+    ext: string,
+    options: { width?: number; height?: number; quality?: number; force?: boolean } = {}
+  ): Promise<ThumbnailGenerateResult | null> {
+    const maxEdge = options.width ?? this.generationMaxEdge
+    const { quality = options.quality ?? this.generationQuality, force = false } = options
+    const outputPath = this.thumbDiskPath(assetId)
+    const dotExt = ext.startsWith('.') ? ext : `.${ext}`
+
+    if (!isEmbeddedDccThumbExtension(dotExt)) {
+      return null
+    }
+
+    if (force) {
+      this.invalidate(assetId)
+    } else if (existsSync(outputPath)) {
+      const diskBuffer = readFileSync(outputPath)
+      this.lruCache.set(assetId, diskBuffer)
+      return { buffer: diskBuffer, path: outputPath }
+    }
+
+    try {
+      const { extractEmbeddedDccThumbnail } = await import(
+        './embeddedDccThumbnail/extractEmbeddedDcc'
+      )
+      const result = await extractEmbeddedDccThumbnail(filePath)
+      if (!result.ok || !result.buffer?.length) {
+        return null
+      }
+
+      const transformer = new Transformer(result.buffer)
+      const webpBuffer = await transformer
+        .resize(maxEdge, maxEdge, undefined, ResizeFit.Inside)
+        .webp(quality)
+
+      writeFileSafely(outputPath, webpBuffer as Buffer)
+      this.lruCache.set(assetId, webpBuffer as Buffer)
+      return { buffer: webpBuffer as Buffer, path: outputPath }
+    } catch (error) {
+      console.warn(`[ThumbnailService] Embedded DCC thumbnail failed for ${filePath}:`, error)
+      return null
+    }
+  }
+
+  /** Paper-style preview for .json / .md / .txt → WebP via ffmpeg subprocess. */
+  async generateTextPreview(
+    filePath: string,
+    assetId: string,
+    ext: string,
+    options: { width?: number; height?: number; quality?: number; force?: boolean } = {}
+  ): Promise<ThumbnailGenerateResult | null> {
+    const maxEdge = options.width ?? this.generationMaxEdge
+    const { quality = options.quality ?? this.generationQuality, force = false } = options
+    const outputPath = this.thumbDiskPath(assetId)
+    const dotExt = ext.startsWith('.') ? ext : `.${ext}`
+
+    if (!isTextPreviewExtension(dotExt)) {
+      return null
+    }
+
+    if (force) {
+      this.invalidate(assetId)
+    } else if (existsSync(outputPath)) {
+      const diskBuffer = readFileSync(outputPath)
+      this.lruCache.set(assetId, diskBuffer)
+      return { buffer: diskBuffer, path: outputPath }
+    }
+
+    try {
+      const { renderTextPreviewWebpBuffer } = await import(
+        './textPreviewThumbnail/renderTextPreviewFfmpeg'
+      )
+      const webpBuffer = await renderTextPreviewWebpBuffer(filePath, {
+        size: maxEdge,
+        quality
+      })
+      if (!webpBuffer?.length) {
+        return null
+      }
+
+      writeFileSafely(outputPath, webpBuffer as Buffer)
+      this.lruCache.set(assetId, webpBuffer as Buffer)
+      return { buffer: webpBuffer as Buffer, path: outputPath }
+    } catch (error) {
+      console.warn(`[ThumbnailService] Text preview thumbnail failed for ${filePath}:`, error)
+      return null
+    }
+  }
+
   /** Font preview thumbnail ??renders sample text via fontkit + Skia canvas. */
   async generateFont(
     filePath: string,
@@ -421,7 +544,8 @@ export class ThumbnailService {
         const diskBuffer = readFileSync(diskPath)
         this.lruCache.set(assetId, diskBuffer)
         return diskBuffer
-      } catch {
+      } catch (err) {
+        console.error(`[ThumbnailService] Failed to read disk thumb for ${assetId}:`, err)
         this.invalidate(assetId)
       }
     }
@@ -444,8 +568,8 @@ export class ThumbnailService {
     const diskPath = this.thumbDiskPath(assetId)
     try {
       if (existsSync(diskPath)) unlinkSync(diskPath)
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error(`[ThumbnailService] Failed to unlink thumb ${diskPath}:`, err)
     }
   }
 
@@ -479,12 +603,12 @@ export class ThumbnailService {
             unlinkSync(fp)
             cleaned++
           }
-        } catch {
-          // skip
+        } catch (err) {
+          console.warn(`[ThumbnailService] Skip stale entry in legacy thumb dir ${fp}:`, err)
         }
       }
-    } catch {
-      // dir not readable
+    } catch (err) {
+      console.warn(`[ThumbnailService] Failed to read legacy thumb dir:`, err)
     }
 
     cleaned += this.cleanLibraryItemThumbs(maxAgeMs)
@@ -511,12 +635,12 @@ export class ThumbnailService {
             unlinkSync(thumbPath)
             cleaned++
           }
-        } catch {
-          /* skip */
+        } catch (err) {
+          console.warn(`[ThumbnailService] Skip stale entry in library item thumb ${thumbPath}:`, err)
         }
       }
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.warn(`[ThumbnailService] Failed to read library items dir:`, err)
     }
     return cleaned
   }
@@ -538,11 +662,12 @@ export class ThumbnailService {
         try {
           const stat = statSync(thumbPath)
           thumbs.push({ path: thumbPath, mtimeMs: stat.mtimeMs, size: stat.size })
-        } catch {
-          /* skip */
+        } catch (err) {
+          console.warn(`[ThumbnailService] Skip stat for library item thumb ${thumbPath}:`, err)
         }
       }
-    } catch {
+    } catch (err) {
+      console.warn(`[ThumbnailService] Failed to enumerate library items dir for budget:`, err)
       return
     }
 
@@ -555,8 +680,8 @@ export class ThumbnailService {
       try {
         unlinkSync(t.path)
         total -= t.size
-      } catch {
-        /* skip */
+      } catch (err) {
+        console.warn(`[ThumbnailService] Failed to evict thumb ${t.path} in budget:`, err)
       }
     }
   }
@@ -572,7 +697,18 @@ export function getThumbnailService(): ThumbnailService {
 }
 
 function writeFileSafely(path: string, data: Buffer): void {
-  const dirname_val = require('path').dirname(path)
+  const pathModule = require('path') as typeof import('path')
+  const dirname_val = pathModule.dirname(path)
   if (!existsSync(dirname_val)) mkdirSync(dirname_val, { recursive: true })
-  writeFileSync(path, data)
+  // Atomic write: write to temp file then rename, to avoid corrupting
+  // the target file on power loss or crash mid-write.
+  const tmpPath = path + '.tmp.' + Date.now()
+  try {
+    writeFileSync(tmpPath, data)
+    renameSync(tmpPath, path)
+  } catch (err) {
+    // Clean up temp file on failure
+    try { unlinkSync(tmpPath) } catch { /* best effort */ }
+    throw err
+  }
 }

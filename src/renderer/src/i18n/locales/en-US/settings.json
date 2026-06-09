@@ -116,7 +116,19 @@
     "fontSummary": "{{scanned}} font(s): updated {{updated}}, skipped {{skipped}}{{errorsPart}}",
     "hideFailures": "Hide failure details",
     "showFailures": "View failure details ({{count}})",
-    "failed": "Regeneration failed"
+    "failed": "Regeneration failed",
+    "embeddedBusy": "Extracting DCC embedded thumbnails...",
+    "embeddedBusyProgress": "Extracting DCC embedded thumbnails... {{current}}/{{total}}",
+    "embeddedIdle": "Regenerate C4D/Max/Blend thumbnails",
+    "embeddedSuccess": "Updated {{count}} embedded DCC thumbnail(s)",
+    "embeddedSummary": "{{scanned}} DCC file(s): updated {{updated}}, skipped {{skipped}}{{errorsPart}}",
+    "embeddedErrorsPart": ", failed {{errors}}",
+    "textPreviewBusy": "Generating text preview thumbnails...",
+    "textPreviewBusyProgress": "Generating text preview thumbnails... {{current}}/{{total}}",
+    "textPreviewIdle": "Regenerate JSON/MD/TXT thumbnails",
+    "textPreviewSuccess": "Updated {{count}} text preview thumbnail(s)",
+    "textPreviewSummary": "{{scanned}} text file(s): updated {{updated}}, skipped {{skipped}}{{errorsPart}}",
+    "textPreviewErrorsPart": ", failed {{errors}}"
   },
   "hashScan": {
     "busy": "Scanning…",
@@ -141,6 +153,12 @@
   "advanced": {
     "title": "Advanced settings",
     "warning": "These settings may affect performance or stability.",
+    "logLevel": "Main process log level",
+    "logLevelDesc": "Controls which log levels appear in the terminal. Dev defaults to debug, production to info. Can also be overridden via ASSETVAULT_LOG_LEVEL env var.",
+    "logLevelError": "Errors only (error)",
+    "logLevelWarn": "Errors + Warnings (warn)",
+    "logLevelInfo": "Info (info) — default",
+    "logLevelDebug": "Debug (debug) — dev default",
     "searchDebounce": "Search debounce",
     "searchDebounceDesc": "Delay before search runs (ms). Applies on save. Current: {{value}}ms",
     "maxCache": "Max cache size",

@@ -116,6 +116,14 @@ const api = {
       ipcRenderer.invoke('assets:regenerate-model-thumbnails') as Promise<
         import('../../shared/model3dFormats').ModelRegenerateResult
       >,
+    regenerateEmbeddedDccThumbnails: () =>
+      ipcRenderer.invoke('assets:regenerate-embedded-dcc-thumbnails') as Promise<
+        import('../../shared/embeddedDccFormats').EmbeddedDccRegenerateResult
+      >,
+    regenerateTextPreviewThumbnails: () =>
+      ipcRenderer.invoke('assets:regenerate-text-preview-thumbnails') as Promise<
+        import('../../shared/textPreviewFormats').TextPreviewRegenerateResult
+      >,
     delete: (ids: string[]) => ipcRenderer.invoke('assets:delete', ids),
     move: (ids: string[], targetFolderId: string) =>
       ipcRenderer.invoke('assets:move', ids, targetFolderId),
@@ -486,6 +494,28 @@ const api = {
     ) => callback(data)
     ipcRenderer.on('model-thumb:regenerate-progress', handler)
     return () => ipcRenderer.removeListener('model-thumb:regenerate-progress', handler)
+  },
+
+  onEmbeddedDccThumbRegenerateProgress: (
+    callback: (data: { current: number; total: number; assetId: string; status: string }) => void
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: { current: number; total: number; assetId: string; status: string }
+    ) => callback(data)
+    ipcRenderer.on('embedded-dcc-thumb:regenerate-progress', handler)
+    return () => ipcRenderer.removeListener('embedded-dcc-thumb:regenerate-progress', handler)
+  },
+
+  onTextPreviewThumbRegenerateProgress: (
+    callback: (data: { current: number; total: number; assetId: string; status: string }) => void
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: { current: number; total: number; assetId: string; status: string }
+    ) => callback(data)
+    ipcRenderer.on('text-preview-thumb:regenerate-progress', handler)
+    return () => ipcRenderer.removeListener('text-preview-thumb:regenerate-progress', handler)
   }
 }
 

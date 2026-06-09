@@ -27,7 +27,11 @@ import { promptDuplicateImport, registerDuplicateImportPromptHandlers } from '..
 import { scanLibraryContentHashes } from '../../services/contentHashService'
 import { regenerateFontThumbnails } from '../../services/regenerateFontThumbnails'
 import { regenerateModelThumbnails } from '../../services/regenerateModelThumbnails'
+import { regenerateEmbeddedDccThumbnails } from '../../services/regenerateEmbeddedDccThumbnails'
+import { regenerateTextPreviewThumbnails } from '../../services/regenerateTextPreviewThumbnails'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import { isTextPreviewExtension } from '@/shared/textPreviewFormats'
+import { isEmbeddedDccThumbExtension } from '@/shared/embeddedDccFormats'
 import {
   refreshAssetThumbnail,
   setCustomThumbnailFromClipboard,
@@ -39,6 +43,21 @@ import { isAutoWatchFoldersEnabled } from '../../services/appPreferencesStore'
 import { assertPlainObject, assertString, assertStringArray } from '../ipcGuards'
 
 registerDuplicateImportPromptHandlers()
+
+/**
+ * Safely send a message to a renderer window. Suppresses errors only if the
+ * window is actually destroyed; logs anything else (e.g. serialization failures).
+ */
+function safeSend(win: BrowserWindow | undefined | null, channel: string, data: unknown): void {
+  if (!win) return
+  try {
+    if (win.isDestroyed()) return
+    win.webContents.send(channel, data as any)
+  } catch (err) {
+    if (win.isDestroyed()) return
+    console.error(`[IPC] safeSend failed on channel "${channel}":`, err)
+  }
+}
 
 function normalizeImportOptions(
   optionsOrFolderId?: string | ImportAssetOptions
@@ -110,11 +129,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     const results: string[] = []
 
     const sendProgress = (data: ImportProgress) => {
-      try {
-        win?.webContents.send('import:progress', data)
-      } catch {
-        /* window gone */
-      }
+      safeSend(win, 'import:progress', data)
     }
 
     for (let i = 0; i < filePaths.length; i++) {
@@ -242,8 +257,13 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
   ipc.handle('assets:delete', async (_event, ids: string[]) => {
     assertStringArray('ids', ids)
-    await deleteAssets(ids)
-    return true
+    try {
+      await deleteAssets(ids)
+      return true
+    } catch (err) {
+      console.error('[IPC] assets:delete failed:', err)
+      throw err
+    }
   })
 
   ipc.handle('assets:add-to-folders', async (_event, assetIds: string[], folderIds: string[]) => {
@@ -325,7 +345,12 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   ipc.handle('assets:rename', async (_event, id: string, newName: string) => {
     assertString('id', id)
     assertString('newName', newName)
-    return renameAsset(id, newName)
+    try {
+      return await renameAsset(id, newName)
+    } catch (err) {
+      console.error('[IPC] assets:rename failed:', err)
+      throw err
+    }
   })
 
   ipc.handle('assets:analyze-colors-batch', async (_event, ids: string[]) => {
@@ -349,7 +374,12 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
   ipc.handle('assets:copy-to-library', async (_event, assetIds: string[], targetLibraryRoot: string) => {
     assertStringArray('assetIds', assetIds)
     assertString('targetLibraryRoot', targetLibraryRoot)
-    return copyAssetsToOtherLibrary(assetIds, targetLibraryRoot)
+    try {
+      return await copyAssetsToOtherLibrary(assetIds, targetLibraryRoot)
+    } catch (err) {
+      console.error('[IPC] assets:copy-to-library failed:', err)
+      throw err
+    }
   })
 
   ipc.handle('assets:analyze-colors', async (_event, id: string) => {
@@ -371,8 +401,13 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
   ipc.handle('assets:localize', async (_event, assetIds: string[]) => {
     assertStringArray('assetIds', assetIds)
-    const { localizeAssets } = await import('../../services/localizeAsset')
-    return localizeAssets(assetIds, { preferHardlink: true })
+    try {
+      const { localizeAssets } = await import('../../services/localizeAsset')
+      return await localizeAssets(assetIds, { preferHardlink: true })
+    } catch (err) {
+      console.error('[IPC] assets:localize failed:', err)
+      throw err
+    }
   })
 
   ipc.handle('assets:relink', async (_event, assetId: string, newPath: string) => {
@@ -513,7 +548,78 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
     if (asset.fileType === '3d' && absFile && existsSync(absFile)) {
       const ext = asset.extension || asset.filePath.split('.').pop() || ''
-      if (!isModel3dPreviewExtension(ext)) return null
+
+      if (isModel3dPreviewExtension(ext)) {
+        const relThumb = itemThumbRelative(asset.id)
+        const absThumb = resolveLibraryPath(relThumb)
+
+        if (existsSync(absThumb)) {
+          const fromDisk = readWebpDataUrl(relThumb)
+          if (fromDisk) {
+            if (!asset.hasThumbnail || asset.thumbnailPath !== relThumb) {
+              await database
+                .update(assets)
+                .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
+                .where(eq(assets.id, id))
+            }
+            return fromDisk
+          }
+        }
+
+        clearModelThumbnailSkip(asset.id)
+        await waitForModelSnapshotBridge(90_000)
+        const gen = await getThumbnailService().generateModel(absFile, asset.id, ext, {
+          ...getThumbnailService().getGenerationDefaults(),
+          force: true
+        })
+        if (gen?.buffer?.length) {
+          await database
+            .update(assets)
+            .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
+            .where(eq(assets.id, id))
+          const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
+          return `data:image/webp;base64,${buf.toString('base64')}`
+        }
+      }
+
+      if (isEmbeddedDccThumbExtension('.' + ext)) {
+        const relThumb = itemThumbRelative(asset.id)
+        const absThumb = resolveLibraryPath(relThumb)
+
+        if (existsSync(absThumb)) {
+          const fromDisk = readWebpDataUrl(relThumb)
+          if (fromDisk) {
+            if (!asset.hasThumbnail || asset.thumbnailPath !== relThumb) {
+              await database
+                .update(assets)
+                .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
+                .where(eq(assets.id, id))
+            }
+            return fromDisk
+          }
+        }
+
+        const gen = await getThumbnailService().generateEmbeddedDcc(absFile, asset.id, ext, {
+          ...getThumbnailService().getGenerationDefaults(),
+          force: true
+        })
+        if (gen?.buffer?.length) {
+          await database
+            .update(assets)
+            .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
+            .where(eq(assets.id, id))
+          const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
+          return `data:image/webp;base64,${buf.toString('base64')}`
+        }
+        return null
+      }
+
+      return null
+    }
+
+    if ((asset.fileType === 'code' || asset.fileType === 'document') && absFile && existsSync(absFile)) {
+      const ext = asset.extension || ''
+      if (!isTextPreviewExtension('.' + ext)) return null
 
       const relThumb = itemThumbRelative(asset.id)
       const absThumb = resolveLibraryPath(relThumb)
@@ -524,31 +630,21 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
           if (!asset.hasThumbnail || asset.thumbnailPath !== relThumb) {
             await database
               .update(assets)
-              .set({
-                thumbnailPath: relThumb,
-                hasThumbnail: true,
-                updatedAt: new Date()
-              })
+              .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
               .where(eq(assets.id, id))
           }
           return fromDisk
         }
       }
 
-      clearModelThumbnailSkip(asset.id)
-      await waitForModelSnapshotBridge(90_000)
-      const gen = await getThumbnailService().generateModel(absFile, asset.id, ext, {
+      const gen = await getThumbnailService().generateTextPreview(absFile, asset.id, ext, {
         ...getThumbnailService().getGenerationDefaults(),
         force: true
       })
       if (gen?.buffer?.length) {
         await database
           .update(assets)
-          .set({
-            thumbnailPath: relThumb,
-            hasThumbnail: true,
-            updatedAt: new Date()
-          })
+          .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
           .where(eq(assets.id, id))
         const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
         return `data:image/webp;base64,${buf.toString('base64')}`
@@ -562,11 +658,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     const win = BrowserWindow.fromWebContents(event.sender)
 
     const result = await scanLibraryContentHashes((data) => {
-      try {
-        win?.webContents.send('content-hash:scan-progress', data)
-      } catch {
-        /* window gone */
-      }
+      safeSend(win, 'content-hash:scan-progress', data)
     })
 
     await flushDatabase()
@@ -577,11 +669,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     const win = BrowserWindow.fromWebContents(event.sender)
 
     const result = await regenerateFontThumbnails((data) => {
-      try {
-        win?.webContents.send('font-thumb:regenerate-progress', data)
-      } catch {
-        /* window gone */
-      }
+      safeSend(win, 'font-thumb:regenerate-progress', data)
     })
 
     await flushDatabase()
@@ -599,11 +687,37 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     }
 
     const result = await regenerateModelThumbnails(database, (data) => {
-      try {
-        win?.webContents.send('model-thumb:regenerate-progress', data)
-      } catch {
-        /* window gone */
-      }
+      safeSend(win, 'model-thumb:regenerate-progress', data)
+    })
+
+    await flushDatabase()
+    return result
+  })
+
+  ipc.handle('assets:regenerate-embedded-dcc-thumbnails', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const database = getDatabase()
+    if (!database) {
+      return { scanned: 0, updated: 0, skipped: 0, errors: 0, failures: [] }
+    }
+
+    const result = await regenerateEmbeddedDccThumbnails(database, (data) => {
+      safeSend(win, 'embedded-dcc-thumb:regenerate-progress', data)
+    })
+
+    await flushDatabase()
+    return result
+  })
+
+  ipc.handle('assets:regenerate-text-preview-thumbnails', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const database = getDatabase()
+    if (!database) {
+      return { scanned: 0, updated: 0, skipped: 0, errors: 0, failures: [] }
+    }
+
+    const result = await regenerateTextPreviewThumbnails(database, (data) => {
+      safeSend(win, 'text-preview-thumb:regenerate-progress', data)
     })
 
     await flushDatabase()

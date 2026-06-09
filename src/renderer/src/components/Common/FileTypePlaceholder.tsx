@@ -2,6 +2,23 @@ import React, { useEffect, useState } from 'react'
 import { useFormatIconForExtension } from '../../stores/FormatIconOverridesContext'
 import type { FormatIconEntry } from '@/shared/formatIconOverrides'
 
+const FORMAT_ICON_MIME: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.bmp': 'image/bmp',
+  '.ico': 'image/x-icon'
+}
+
+function mimeForFormatIconPath(filePath: string): string {
+  const dot = filePath.lastIndexOf('.')
+  if (dot < 0) return 'image/png'
+  return FORMAT_ICON_MIME[filePath.slice(dot).toLowerCase()] ?? 'image/png'
+}
+
 export type FileTypePlaceholderSize = 'sm' | 'md' | 'lg'
 
 const SIZE_CLASS: Record<FileTypePlaceholderSize, string> = {
@@ -78,14 +95,30 @@ function FormatIconImage({
   color?: string | null
 }) {
   const [src, setSrc] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    void window.assetVaultAPI.fs.pathToFileUrl(path).then((url) => {
-      if (!cancelled) setSrc(url)
-    })
+    let objectUrl: string | null = null
+    setSrc(null)
+    setFailed(false)
+
+    void (async () => {
+      try {
+        const bytes = await window.assetVaultAPI.fs.readFileBytes(path)
+        if (cancelled || !bytes?.byteLength) return
+        objectUrl = URL.createObjectURL(
+          new Blob([bytes], { type: mimeForFormatIconPath(path) })
+        )
+        if (!cancelled) setSrc(objectUrl)
+      } catch {
+        if (!cancelled) setFailed(true)
+      }
+    })()
+
     return () => {
       cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
   }, [path])
 
@@ -94,12 +127,13 @@ function FormatIconImage({
       className="w-full h-full flex flex-col items-center justify-center gap-1 p-2 bg-av-bg-tertiary"
       style={{ backgroundColor: color ? `${color}18` : undefined }}
     >
-      {src ? (
+      {src && !failed ? (
         <img
           src={src}
           alt=""
           className="max-w-full max-h-[85%] object-contain"
           draggable={false}
+          onError={() => setFailed(true)}
         />
       ) : (
         <div className="w-10 h-10 rounded bg-av-bg-elevated animate-pulse" />

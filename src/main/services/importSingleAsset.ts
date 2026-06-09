@@ -34,12 +34,16 @@ import { syncAssetSidecarFromDb, writeAssetSidecarMeta } from './assetSidecar'
 import { finalizeAssetRecords } from './assetSearchIndex'
 import { parseFontFile } from './fontMetadata'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import { isEmbeddedDccThumbExtension } from '@/shared/embeddedDccFormats'
+import { isTextPreviewExtension } from '@/shared/textPreviewFormats'
 import { isSvgExtension, isSvgOverRasterLimit } from '@/shared/svgFormats'
 import { isExrExtension } from '@/shared/exrFormats'
 import { resolveExrFileMetadata, exrStoredMetadataFromFileMeta } from '../utils/exrMetadata'
 import { parseSvgDimensions } from '../utils/svgDimensions'
 import { markSvgRasterSkipped } from './svgRasterSkip'
 import { schedule3dThumbnailAfterImport } from './regenerateModelThumbnails'
+import { scheduleEmbeddedDccThumbnailAfterImport } from './regenerateEmbeddedDccThumbnails'
+import { scheduleTextPreviewThumbnailAfterImport } from './regenerateTextPreviewThumbnails'
 import { buildDuplicatePromptPayload, findAssetIdByContentHash } from './contentHashService'
 
 export interface ImportSingleAssetOptions extends ImportAssetOptions {
@@ -505,6 +509,13 @@ async function finalizeImportedAsset(
 
   if (fileType === '3d' && isModel3dPreviewExtension(extNoDot)) {
     void schedule3dThumbnailAfterImport(database, id, destAbs, extNoDot)
+  } else if (fileType === '3d' && isEmbeddedDccThumbExtension('.' + extNoDot)) {
+    void scheduleEmbeddedDccThumbnailAfterImport(database, id, destAbs, extNoDot)
+  } else if (
+    (fileType === 'code' || fileType === 'document') &&
+    isTextPreviewExtension('.' + extNoDot)
+  ) {
+    void scheduleTextPreviewThumbnailAfterImport(database, id, destAbs, extNoDot, fileType)
   }
 
   return id

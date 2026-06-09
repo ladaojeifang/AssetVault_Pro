@@ -116,7 +116,19 @@
     "fontSummary": "共 {{scanned}} 个字体：更新 {{updated}}，跳过 {{skipped}}{{errorsPart}}",
     "hideFailures": "隐藏失败详情",
     "showFailures": "查看失败详情 ({{count}})",
-    "failed": "重建失败"
+    "failed": "重建失败",
+    "embeddedBusy": "提取 DCC 内嵌缩略图…",
+    "embeddedBusyProgress": "提取 DCC 内嵌缩略图… {{current}}/{{total}}",
+    "embeddedIdle": "重建 C4D/Max/Blend 缩略图",
+    "embeddedSuccess": "已更新 {{count}} 个 DCC 内嵌缩略图",
+    "embeddedSummary": "共 {{scanned}} 个 DCC 文件：更新 {{updated}}，跳过 {{skipped}}{{errorsPart}}",
+    "embeddedErrorsPart": "，失败 {{errors}}",
+    "textPreviewBusy": "生成文本预览缩略图…",
+    "textPreviewBusyProgress": "生成文本预览缩略图… {{current}}/{{total}}",
+    "textPreviewIdle": "重建 JSON/MD/TXT 缩略图",
+    "textPreviewSuccess": "已更新 {{count}} 个文本预览缩略图",
+    "textPreviewSummary": "共 {{scanned}} 个文本文件：更新 {{updated}}，跳过 {{skipped}}{{errorsPart}}",
+    "textPreviewErrorsPart": "，失败 {{errors}}"
   },
   "hashScan": {
     "busy": "扫描中…",
@@ -141,6 +153,12 @@
   "advanced": {
     "title": "高级设置",
     "warning": "这些设置可能影响性能或稳定性。",
+    "logLevel": "主进程日志级别",
+    "logLevelDesc": "控制终端窗口输出哪些级别的日志。开发模式默认 debug，生产模式默认 info。也可通过环境变量 ASSETVAULT_LOG_LEVEL 覆盖。",
+    "logLevelError": "仅错误 (error)",
+    "logLevelWarn": "错误 + 警告 (warn)",
+    "logLevelInfo": "信息 (info) — 默认",
+    "logLevelDebug": "调试 (debug) — 开发模式默认",
     "searchDebounce": "搜索防抖",
     "searchDebounceDesc": "搜索执行前的延迟（毫秒）。保存后生效。当前：{{value}}ms",
     "maxCache": "最大缓存大小",

@@ -75,10 +75,14 @@ export async function upgradeCatalogLibraryToArchive(
   let errors = 0
 
   const send = (data: UpgradeLibraryProgress) => {
+    if (!win) return
     try {
-      win?.webContents.send('library:upgrade-progress', data)
-    } catch {
-      /* window gone */
+      if (win.isDestroyed()) return
+      win.webContents.send('library:upgrade-progress', data)
+    } catch (err) {
+      if (!win.isDestroyed()) {
+        console.error('[libraryUpgrade] Failed to send progress:', err)
+      }
     }
   }
 

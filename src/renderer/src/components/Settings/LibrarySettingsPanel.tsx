@@ -9,6 +9,8 @@ import type {
 import { ContentHashScanButton } from './ContentHashScanButton'
 import { FontThumbRegenerateButton } from './FontThumbRegenerateButton'
 import { ModelThumbRegenerateButton } from './ModelThumbRegenerateButton'
+import { EmbeddedDccThumbRegenerateButton } from './EmbeddedDccThumbRegenerateButton'
+import { TextPreviewThumbRegenerateButton } from './TextPreviewThumbRegenerateButton'
 import { FontSettingsSection } from './FontSettingsSection'
 
 export function LibrarySettingsPanel(): React.ReactElement {
@@ -377,6 +379,8 @@ export function LibrarySettingsPanel(): React.ReactElement {
         <FontSettingsSection />
         <FontThumbRegenerateButton disabled={busy} />
         <ModelThumbRegenerateButton disabled={busy} />
+        <EmbeddedDccThumbRegenerateButton disabled={busy} />
+        <TextPreviewThumbRegenerateButton disabled={busy} />
       </div>
 
       <div className="space-y-2">

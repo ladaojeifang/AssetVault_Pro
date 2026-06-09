@@ -4,7 +4,7 @@ import ffmpegStatic from 'ffmpeg-static'
 
 const EXTRACT_TIMEOUT_MS = 45_000
 
-function resolveFfmpegBinary(): string | null {
+export function resolveFfmpegBinary(): string | null {
   const bundled = ffmpegStatic && ffmpegStatic.length > 0 ? ffmpegStatic : null
   if (bundled) return bundled
   const fromEnv = process.env.FFMPEG_PATH

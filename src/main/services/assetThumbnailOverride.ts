@@ -12,6 +12,8 @@ import {
 } from './customThumbnail'
 import { clearModelThumbnailSkip } from './modelThumbnailSkip'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import { isEmbeddedDccThumbExtension } from '@/shared/embeddedDccFormats'
+import { isTextPreviewExtension } from '@/shared/textPreviewFormats'
 import { syncAssetSidecarFromDb } from './assetSidecar'
 import { getEffectiveThumbSampleText } from './fontSettingsStore'
 import { parseFontFile } from './fontMetadata'
@@ -106,6 +108,19 @@ export async function refreshAssetThumbnail(
     })
   } else if (row.fileType === '3d' && isModel3dPreviewExtension(ext)) {
     gen = await thumbService.generateModel(absFile, assetId, ext, {
+      ...thumbOpts,
+      force: true
+    })
+  } else if (row.fileType === '3d' && isEmbeddedDccThumbExtension('.' + ext)) {
+    gen = await thumbService.generateEmbeddedDcc(absFile, assetId, ext, {
+      ...thumbOpts,
+      force: true
+    })
+  } else if (
+    (row.fileType === 'code' || row.fileType === 'document') &&
+    isTextPreviewExtension('.' + ext)
+  ) {
+    gen = await thumbService.generateTextPreview(absFile, assetId, ext, {
       ...thumbOpts,
       force: true
     })

@@ -436,6 +436,19 @@ export function buildRgba8FromExrsSubLayerCached(
 export async function decodeExrFile(absPath: string): Promise<ExrDecodeImage> {
   await ensureExrsInitialized()
   const exrs = await loadExrs()
+  // Guard against multi-gigabyte EXR files
+  try {
+    const st = statSync(absPath)
+    const MAX_EXR_BYTES = 1024 * 1024 * 1024 // 1GB
+    if (st.size > MAX_EXR_BYTES) {
+      throw new Error(
+        `EXR file too large to decode (${(st.size / 1024 / 1024).toFixed(0)}MB > 1GB limit): ${absPath}`
+      )
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('EXR file too large')) throw err
+    /* if stat fails, let readFileSync report the error */
+  }
   const bytes = readFileSync(absPath)
   return exrs.decodeExr(new Uint8Array(bytes))
 }

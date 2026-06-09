@@ -8,8 +8,12 @@ import { getLibraryRoot, itemPackFileRelative, ITEMS_DIR } from './libraryBundle
 import { getFileType } from '../utils/fileUtils'
 import { finalizeAssetRecords } from './assetSearchIndex'
 import { schedule3dThumbnailAfterImport } from './regenerateModelThumbnails'
+import { scheduleEmbeddedDccThumbnailAfterImport } from './regenerateEmbeddedDccThumbnails'
+import { scheduleTextPreviewThumbnailAfterImport } from './regenerateTextPreviewThumbnails'
 import { isModelThumbnailSkipped } from './modelThumbnailSkip'
 import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import { isEmbeddedDccThumbExtension } from '@/shared/embeddedDccFormats'
+import { isTextPreviewExtension } from '@/shared/textPreviewFormats'
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -55,6 +59,19 @@ export async function repairOrphanItemPacks(): Promise<number> {
         !isModelThumbnailSkipped(id)
       ) {
         void schedule3dThumbnailAfterImport(database, id, origAbs, extNoDot)
+      } else if (
+        existing.fileType === '3d' &&
+        isEmbeddedDccThumbExtension('.' + extNoDot) &&
+        !existing.hasThumbnail &&
+        !isModelThumbnailSkipped(id)
+      ) {
+        void scheduleEmbeddedDccThumbnailAfterImport(database, id, origAbs, extNoDot)
+      } else if (
+        (existing.fileType === 'code' || existing.fileType === 'document') &&
+        isTextPreviewExtension('.' + extNoDot) &&
+        !existing.hasThumbnail
+      ) {
+        void scheduleTextPreviewThumbnailAfterImport(database, id, origAbs, extNoDot, existing.fileType)
       }
       repaired++
       continue
@@ -94,6 +111,13 @@ export async function repairOrphanItemPacks(): Promise<number> {
         await finalizeAssetRecords(database, id)
         if (fileType === '3d' && isModel3dPreviewExtension(extNoDot) && !isModelThumbnailSkipped(id)) {
           void schedule3dThumbnailAfterImport(database, id, origAbs, extNoDot)
+        } else if (fileType === '3d' && isEmbeddedDccThumbExtension('.' + extNoDot) && !isModelThumbnailSkipped(id)) {
+          void scheduleEmbeddedDccThumbnailAfterImport(database, id, origAbs, extNoDot)
+        } else if (
+          (fileType === 'code' || fileType === 'document') &&
+          isTextPreviewExtension('.' + extNoDot)
+        ) {
+          void scheduleTextPreviewThumbnailAfterImport(database, id, origAbs, extNoDot, fileType)
         }
       }
       repaired++

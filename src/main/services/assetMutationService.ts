@@ -68,15 +68,29 @@ export async function patchAsset(
 ): Promise<ReturnType<typeof getAssetById>> {
   const existing = await getAssetById(id, { incrementViewCount: false })
   if (!existing) return null
+
+  const errors: string[] = []
+
   if (patch.notes !== undefined) {
-    await updateAssetNotes(id, patch.notes)
+    try { await updateAssetNotes(id, patch.notes) } catch (e) {
+      errors.push(`notes: ${e instanceof Error ? e.message : String(e)}`)
+    }
   }
   if (patch.sourceUrl !== undefined) {
-    await updateAssetSourceUrl(id, patch.sourceUrl)
+    try { await updateAssetSourceUrl(id, patch.sourceUrl) } catch (e) {
+      errors.push(`sourceUrl: ${e instanceof Error ? e.message : String(e)}`)
+    }
   }
   if (patch.metadata !== undefined) {
-    await updateAssetMetadata(id, patch.metadata)
+    try { await updateAssetMetadata(id, patch.metadata) } catch (e) {
+      errors.push(`metadata: ${e instanceof Error ? e.message : String(e)}`)
+    }
   }
+
+  if (errors.length > 0) {
+    throw new Error(`patchAsset partial failure: ${errors.join('; ')}`)
+  }
+
   return getAssetById(id, { incrementViewCount: false })
 }
 

@@ -1,4 +1,4 @@
-import { writeFileSync, existsSync, mkdirSync } from 'fs'
+import { writeFileSync, renameSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { eq } from 'drizzle-orm'
 import { getDatabase } from '../db'
@@ -99,7 +99,12 @@ export function writeAssetSidecarMeta(
     }
   }
 
-  writeFileSync(join(dir, 'meta.json'), JSON.stringify(payload, null, 2), 'utf-8')
+  // Atomic write: write to tmp then rename to avoid corrupt meta.json on crash
+  const metaPath = join(dir, 'meta.json')
+  const tmpPath = metaPath + '.tmp.' + Date.now()
+  const content = JSON.stringify(payload, null, 2)
+  writeFileSync(tmpPath, content, 'utf-8')
+  renameSync(tmpPath, metaPath)
 }
 
 export async function syncAssetSidecarFromDb(database: Db, assetId: string): Promise<void> {

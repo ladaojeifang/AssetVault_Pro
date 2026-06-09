@@ -10,7 +10,8 @@
 
 | 文档 | 说明 |
 |------|------|
-| [AssetVault_Pro_PRD_V1.0.md](./AssetVault_Pro_PRD_V1.0.md) | 产品需求文档 V1.0 |
+| [AssetVault_Pro_PRD_V1.0.md](./AssetVault_Pro_PRD_V1.0.md) | 产品需求文档 V1.0（单机 Pro 桌面） |
+| [AssetVault_Hub_PRD_V1.0.md](./AssetVault_Hub_PRD_V1.0.md) | **Hub 团队平台 PRD + FRD**（Web 控制台、联邦 Worker、RBAC、多库；Pro 桌面永久保留为胖 Worker） |
 | [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) | 开发计划 |
 | [library-import-from-library-spec.md](./library-import-from-library-spec.md) | **从其它资料库导入**（archive→archive 整库合并，LIM V1） |
 | [library-import-catalog-to-catalog-spec.md](./library-import-catalog-to-catalog-spec.md) | **索引库→索引库（同机）**整库导入（CC-V1，含 A 已本地化时的 hash 三分支） |
@@ -22,6 +23,9 @@
 | 文档 | 说明 |
 |------|------|
 | [资源包.md](./资源包.md) | 资料库资源包结构说明 |
+| [asset-types-and-import.md](./asset-types-and-import.md) | **资产类型与入库处理**（扩展名、缩略图、伴随文件、会话导入） |
+| [thumbnail-pipeline.md](./thumbnail-pipeline.md) | **缩略图处理技术与逻辑**（分类型生成、缓存、异步调度、重建 IPC） |
+| [i18n-inventory.md](./i18n-inventory.md) | 渲染进程 i18n 改动清单与维护约定 |
 | [eagle文件处理.md](./eagle文件处理.md) | Eagle 文件处理参考 |
 | [exr-preview.md](./exr-preview.md) | **OpenEXR** 多 AOV 预览与缩略图管线 |
 | [exr-preview-fix-plan.md](./exr-preview-fix-plan.md) | EXR 审阅后修复计划（F1–F7） |
