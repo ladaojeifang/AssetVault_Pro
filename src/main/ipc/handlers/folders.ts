@@ -11,6 +11,7 @@ import { getLibraryRoot } from '../../services/libraryBundle'
 import { toCanonicalFilePath } from '../../utils/pathUtils'
 import { assertPlainObject, assertString, assertStringArray } from '../ipcGuards'
 import { MAX_FOLDER_LEVEL } from '@/shared/folderLimits'
+import { getMimeForExtension, isFolderIconExtension } from '@/shared/assetFormatRegistry'
 const FOLDER_ICONS_PREFIX = 'folder-icons/'
 
 function isFolderIconStoredPath(icon: string): boolean {
@@ -29,20 +30,7 @@ function tryRemoveFolderIconFile(relativePath: string): void {
 }
 
 function mimeForIconExt(ext: string): string {
-  switch (ext) {
-    case '.svg':
-      return 'image/svg+xml'
-    case '.png':
-      return 'image/png'
-    case '.gif':
-      return 'image/gif'
-    case '.webp':
-      return 'image/webp'
-    case '.ico':
-      return 'image/x-icon'
-    default:
-      return 'image/jpeg'
-  }
+  return getMimeForExtension(ext) ?? 'image/jpeg'
 }
 
 export function handleFolderOperations(ipc: typeof ipcMain): void {
@@ -143,8 +131,7 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
     if (!st.isFile()) throw new Error('Not a file')
     if (st.size > 2 * 1024 * 1024) throw new Error('Image too large (max 2 MB)')
     const ext = extname(src).toLowerCase()
-    const ok = new Set(['.png', '.jpg', '.jpeg', '.jfif', '.gif', '.webp', '.ico', '.svg'])
-    if (!ok.has(ext)) throw new Error('Unsupported image type')
+    if (!isFolderIconExtension(ext)) throw new Error('Unsupported image type')
     const root = getLibraryRoot()
     const dir = join(root, 'folder-icons')
     mkdirSync(dir, { recursive: true })
@@ -173,7 +160,7 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
     const buf = readFileSync(abs)
     if (buf.length > 512 * 1024) return null
     const ext = extname(abs).toLowerCase()
-    if (!['.png', '.jpg', '.jpeg', '.jfif', '.gif', '.webp', '.ico', '.svg'].includes(ext)) return null
+    if (!isFolderIconExtension(ext)) return null
     return `data:${mimeForIconExt(ext)};base64,${buf.toString('base64')}`
   })
 

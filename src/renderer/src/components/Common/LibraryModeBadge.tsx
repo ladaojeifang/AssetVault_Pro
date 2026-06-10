@@ -1,12 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LibraryMode } from '@/shared/libraryTypes'
-
-const MODE_CLASS: Record<LibraryMode, string> = {
-  catalog: 'bg-amber-950/50 text-amber-300 border-amber-800/50',
-  embedded: 'bg-blue-950/40 text-blue-300 border-blue-800/40',
-  archive: 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40'
-}
+import { LIBRARY_MODE_BADGE_CLASS } from '../../theme/libraryModeClasses'
 
 export function LibraryModeBadge({
   mode,
@@ -24,7 +19,7 @@ export function LibraryModeBadge({
 
   return (
     <span
-      className={`shrink-0 text-[9px] font-medium px-1 py-0.5 rounded border ${MODE_CLASS[mode]}`}
+      className={`shrink-0 text-[9px] font-medium px-1 py-0.5 rounded border ${LIBRARY_MODE_BADGE_CLASS[mode]}`}
       title={longLabel}
     >
       {compact ? shortLabel : longLabel}

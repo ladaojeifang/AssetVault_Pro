@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import type { AssetItem, FolderItem } from '@/shared/types'
 import { flattenFolderTree } from '../../utils/flattenFolderTree'
+import { DESTRUCTIVE_MENU_ITEM_CLASS } from '../../theme/destructiveActionClasses'
+import { getHotkeyAccelerator } from '@/shared/hotkeyRegistry'
 
 export type AssetContextMenuState = {
   assetIds: string[]
@@ -159,19 +161,19 @@ export function AssetContextMenu({
     {
       key: 'custom-thumb-file',
       label: t('contextMenu.customThumbFile'),
-      shortcut: 'Ctrl+Alt+T',
+      shortcut: getHotkeyAccelerator('custom-thumb-file'),
       disabled: multi
     },
     {
       key: 'custom-thumb-clipboard',
       label: t('contextMenu.customThumbClipboard'),
-      shortcut: 'Ctrl+Shift+Alt+T',
+      shortcut: getHotkeyAccelerator('custom-thumb-clipboard'),
       disabled: multi
     },
     {
       key: 'refresh-thumbnail',
       label: t('contextMenu.refreshThumb'),
-      shortcut: 'Ctrl+Alt+R'
+      shortcut: getHotkeyAccelerator('refresh-thumbnail')
     },
     {
       key: 'delete',
@@ -210,7 +212,7 @@ export function AssetContextMenu({
               item.disabled
                 ? 'text-av-text-muted/50 cursor-not-allowed'
                 : item.danger
-                  ? 'text-red-400 hover:bg-red-500/10'
+                  ? DESTRUCTIVE_MENU_ITEM_CLASS
                   : 'text-av-text-primary hover:bg-av-bg-hover'
             }`}
             onClick={() => {

@@ -1,24 +1,8 @@
-import { extname } from 'path'
+/** ffmpeg 静帧栅格扩展名 — 配置见 `assetFormatCatalog.ts` IMAGE_FORMAT_GROUPS.ffmpegRaster */
 
-/**
- * Raster formats decoded via ffmpeg → PNG before @napi-rs/image.
- * (No napi decoder and/or no reliable magic bytes — e.g. TGA.)
- */
-export const FFMPEG_STILL_RASTER_IMAGE_EXTENSIONS = new Set([
-  '.tga', '.hdr', '.qoi', '.apng', '.jp2', '.j2k', '.jpc', '.j2c', '.jls',
-  '.dpx', '.pcx', '.rgb', '.rgba', '.bw', '.sun', '.ras', '.xbm', '.xpm',
-  '.fits', '.fit', '.fts'
-])
-
-export function normalizeImageExtension(ext: string): string {
-  const e = ext.toLowerCase().trim()
-  return e.startsWith('.') ? e : `.${e}`
-}
-
-export function isFfmpegStillRasterImageExtension(ext: string): boolean {
-  return FFMPEG_STILL_RASTER_IMAGE_EXTENSIONS.has(normalizeImageExtension(ext))
-}
-
-export function isFfmpegStillRasterImagePath(filePath: string): boolean {
-  return isFfmpegStillRasterImageExtension(extname(filePath))
-}
+export {
+  FFMPEG_STILL_RASTER_IMAGE_EXTENSIONS,
+  isFfmpegStillRasterImageExtension,
+  isFfmpegStillRasterImagePath,
+  normalizeExtWithDot as normalizeImageExtension
+} from './assetFormatRegistry'

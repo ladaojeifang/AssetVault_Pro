@@ -150,6 +150,28 @@
     "emptyLibrary": "Library is empty — import or drag files to add assets.",
     "itemsPath": "items: {{path}}"
   },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "intro": "Window shortcuts while AssetVault is focused. Custom rebinding is not available yet.",
+    "items": {
+      "search": "Focus search bar",
+      "importFiles": "Import files",
+      "importFolder": "Import folder",
+      "toggleSidebar": "Toggle sidebar",
+      "toggleDetail": "Toggle detail panel",
+      "librarySwitcher": "Focus library switcher",
+      "deleteSelected": "Delete selected",
+      "refresh": "Refresh view",
+      "viewGrid": "Grid view",
+      "viewList": "List view",
+      "selectAll": "Select all",
+      "preview": "Open detail preview",
+      "openSettings": "Open settings",
+      "customThumbFile": "Set custom thumbnail from file",
+      "customThumbClipboard": "Set custom thumbnail from clipboard",
+      "refreshThumbnail": "Refresh thumbnail"
+    }
+  },
   "advanced": {
     "title": "Advanced settings",
     "warning": "These settings may affect performance or stability.",

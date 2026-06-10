@@ -13,6 +13,7 @@ import {
 } from './FolderContextMenu'
 import { addDraggedAssetsToFolder } from '../../utils/addAssetsToFolder'
 import { MAX_FOLDER_PARENT_LEVEL_FOR_CHILD } from '@/shared/folderLimits'
+import { extensionsForDialog } from '@/shared/assetFormatRegistry'
 
 function collectSubtreeFolderIds(folder: FolderItem): string[] {
   const ids = [folder.id]
@@ -133,7 +134,7 @@ const Sidebar: React.FC = () => {
 
   const pickFolderIconFromDisk = useCallback(async () => {
     const paths = (await window.assetVaultAPI.fs.selectDialog({
-      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'jfif', 'gif', 'webp', 'ico', 'svg'] }]
+      filters: [{ name: 'Images', extensions: extensionsForDialog('sidebarImage') }]
     })) as string[]
     const first = paths?.[0]
     if (!first) return
@@ -243,7 +244,7 @@ const Sidebar: React.FC = () => {
 
   const pickIconEditFromDisk = useCallback(async () => {
     const paths = (await window.assetVaultAPI.fs.selectDialog({
-      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'jfif', 'gif', 'webp', 'ico', 'svg'] }]
+      filters: [{ name: 'Images', extensions: extensionsForDialog('sidebarImage') }]
     })) as string[]
     const first = paths?.[0]
     if (!first) return

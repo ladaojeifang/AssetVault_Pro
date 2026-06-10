@@ -14,6 +14,7 @@ import { ModelThumbRegenerateButton } from './ModelThumbRegenerateButton'
 import { EmbeddedDccThumbRegenerateButton } from './EmbeddedDccThumbRegenerateButton'
 import { TextPreviewThumbRegenerateButton } from './TextPreviewThumbRegenerateButton'
 import { FontSettingsSection } from './FontSettingsSection'
+import { LIBRARY_MODE_BADGE_CLASS } from '../../theme/libraryModeClasses'
 
 export function LibrarySettingsPanel(): React.ReactElement {
   const { t } = useTranslation('library')
@@ -255,7 +256,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
       </p>
 
       {error && (
-        <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded-lg px-3 py-2">{error}</div>
+        <div className="text-sm text-av-status-error-muted-text bg-av-status-error-muted-bg border border-av-status-error/30 rounded-lg px-3 py-2">{error}</div>
       )}
 
       {upgradeProgress && (
@@ -286,7 +287,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
             })}
           </div>
           {embeddedImportResult.errors.length > 0 && (
-            <details className="text-xs text-amber-300/90">
+            <details className="text-xs text-av-status-warning-muted-text">
               <summary>{t('failureDetails', { count: embeddedImportResult.errors.length })}</summary>
               <ul className="mt-1 list-disc pl-4 max-h-32 overflow-y-auto">
                 {embeddedImportResult.errors.map((e, idx) => (
@@ -302,7 +303,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
       )}
 
       {embeddedImportResult && !embeddedImportResult.ok && (
-        <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded-lg px-3 py-2">
+        <div className="text-sm text-av-status-error-muted-text bg-av-status-error-muted-bg border border-av-status-error/30 rounded-lg px-3 py-2">
           {embeddedImportResult.error}
         </div>
       )}
@@ -341,7 +342,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
             {t('sourceLibraryTag', { name: importResult.sourceLibraryTagName })}
           </div>
           {importResult.errors.length > 0 && (
-            <details className="text-xs text-amber-300/90">
+            <details className="text-xs text-av-status-warning-muted-text">
               <summary>{t('failureDetails', { count: importResult.errors.length })}</summary>
               <ul className="mt-1 list-disc pl-4 max-h-32 overflow-y-auto">
                 {importResult.errors.map((e: ImportLibrarySuccess['errors'][number]) => (
@@ -362,13 +363,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
         <div className="text-xs font-medium text-av-text-muted uppercase tracking-wide">{t('sectionCurrent')}</div>
         <div className="flex items-center gap-2 flex-wrap">
           <span
-            className={`text-[10px] font-medium px-2 py-0.5 rounded ${
-              state.libraryMode === 'catalog'
-                ? 'bg-amber-950/50 text-amber-300 border border-amber-800/50'
-                : state.libraryMode === 'embedded'
-                  ? 'bg-blue-950/40 text-blue-300 border border-blue-800/40'
-                  : 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/40'
-            }`}
+            className={`text-[10px] font-medium px-2 py-0.5 rounded border ${LIBRARY_MODE_BADGE_CLASS[state.libraryMode]}`}
           >
             {state.libraryMode === 'catalog' ? t('catalogIndex') : state.libraryMode === 'embedded' ? t('embeddedLibrary') : t('archiveFull')}
           </span>
@@ -495,7 +490,7 @@ export function LibrarySettingsPanel(): React.ReactElement {
                   {!isActive && (
                     <button
                       type="button"
-                      className="text-xs text-av-text-muted hover:text-red-400 py-1 px-2"
+                      className="text-xs text-av-text-muted hover:text-av-status-error py-1 px-2"
                       disabled={busy}
                       onClick={() => void handleRemoveRecent(p)}
                     >

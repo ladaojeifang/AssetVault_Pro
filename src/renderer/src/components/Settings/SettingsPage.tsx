@@ -19,6 +19,7 @@ import {
 import type { WebApiPreferences } from '@/shared/webApiPreferences'
 import { LOG_LEVELS, type LogLevel } from '@/shared/logLevel'
 import { WebApiSettingsSection } from './WebApiSettingsSection'
+import { formatAcceleratorForDisplay, listSettingsHotkeys } from '@/shared/hotkeyRegistry'
 
 const GRID_SIZE_COLUMN_WIDTH: Record<string, number> = {
   small: 120,
@@ -303,31 +304,20 @@ function AppearanceSettings({
 }
 
 function ShortcutSettings() {
-  const [hotkeys, setHotkeys] = useState([
-    { id: 'search', accelerator: 'Ctrl+K', description: 'Focus search bar' },
-    { id: 'import-files', accelerator: 'Ctrl+I', description: 'Import files' },
-    { id: 'import-folder', accelerator: 'Ctrl+Shift+O', description: 'Import folder' },
-    { id: 'toggle-sidebar', accelerator: 'Ctrl+B', description: 'Toggle sidebar' },
-    { id: 'toggle-detail', accelerator: 'Ctrl+D', description: 'Toggle detail panel' },
-    { id: 'library-switcher', accelerator: 'Ctrl+L', description: 'Open library switcher (sidebar)' },
-    { id: 'delete', accelerator: 'Delete', description: 'Delete selected' },
-    { id: 'refresh', accelerator: 'F5', description: 'Refresh view' }
-  ])
+  const { t } = useTranslation('settings')
+  const hotkeys = listSettingsHotkeys()
   const [editingId, setEditingId] = useState<string | null>(null)
 
   function captureHotkey(id: string) {
     setEditingId(id)
-    // In a real implementation, this would listen for keyboard events
-    // and capture the next key combination pressed
+    // Custom rebinding not implemented yet
   }
 
   return (
     <div className="space-y-6">
-      <h3 className="text-base font-semibold mb-4">Keyboard Shortcuts</h3>
+      <h3 className="text-base font-semibold mb-4">{t('shortcuts.title')}</h3>
 
-      <p className="text-sm text-av-text-muted">
-        Click on a shortcut to customize. Press the new key combination to assign.
-      </p>
+      <p className="text-sm text-av-text-muted">{t('shortcuts.intro')}</p>
 
       <div className="space-y-1">
         {hotkeys.map((hk) => (
@@ -338,14 +328,14 @@ function ShortcutSettings() {
             }`}
           >
             <div>
-              <p className="text-sm font-medium">{hk.description}</p>
-              <p className="text-xs text-av-text-muted mt-0.5">{hk.id}</p>
+              <p className="text-sm font-medium">{t(`shortcuts.items.${hk.i18nKey}`)}</p>
             </div>
             <button
+              type="button"
               onClick={() => captureHotkey(hk.id)}
               className="px-3 py-1.5 rounded bg-av-bg-elevated border border-av-border text-xs font-mono text-av-text-primary hover:border-av-accent-blue transition-colors min-w-[100px] text-center"
             >
-              {hk.accelerator}
+              {formatAcceleratorForDisplay(hk.accelerator)}
             </button>
           </div>
         ))}
@@ -401,7 +391,7 @@ function LibraryStorageStatsCard(): React.ReactElement {
           itemsDir: 'items/'
         })}
       </p>
-      {err != null && <p className="text-xs text-red-400">{err}</p>}
+      {err != null && <p className="text-xs text-av-status-error-muted-text">{err}</p>}
       {stats != null && (
         <dl className="grid grid-cols-2 gap-2 text-sm">
           <div className="rounded-md bg-av-bg-secondary/80 px-3 py-2 border border-av-border/60">
@@ -415,14 +405,14 @@ function LibraryStorageStatsCard(): React.ReactElement {
         </dl>
       )}
       {stats != null && diff != null && diff !== 0 && (
-        <p className="text-xs text-amber-400/90">
+        <p className="text-xs text-av-status-warning-muted-text">
           {diff > 0
             ? t('librarySelfCheck.extraDirs', { count: diff })
             : t('librarySelfCheck.missingDirs', { count: -diff })}
         </p>
       )}
       {stats != null && diff === 0 && stats.assetRowCount > 0 && (
-        <p className="text-xs text-emerald-400/80">{t('librarySelfCheck.countsMatch')}</p>
+        <p className="text-xs text-av-status-success-muted-text">{t('librarySelfCheck.countsMatch')}</p>
       )}
       {stats != null && stats.assetRowCount === 0 && stats.itemPackCount === 0 && (
         <p className="text-xs text-av-text-muted">{t('librarySelfCheck.emptyLibrary')}</p>

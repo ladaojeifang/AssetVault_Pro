@@ -9,8 +9,7 @@ import {
 } from 'fs'
 import { join, resolve, sep, extname, normalize } from 'path'
 import { getLibraryRoot } from '../libraryBundle'
-
-const STRIP_EXT = new Set(['.jpg', '.jpeg', '.png'])
+import { isFullPageStripExtension } from '@/shared/assetFormatRegistry'
 const REMOTE_IMPORTS_DIR = 'remote-imports'
 
 export function buildFullPageTempRoot(): string {
@@ -71,7 +70,7 @@ export function createSessionTempDir(sessionId: string): string {
 }
 
 export function isAllowedStripExtension(filePath: string): boolean {
-  return STRIP_EXT.has(extname(filePath).toLowerCase())
+  return isFullPageStripExtension(extname(filePath))
 }
 
 /** Resolved path must stay under resolved tempDir (no `..`, no symlink escape). */

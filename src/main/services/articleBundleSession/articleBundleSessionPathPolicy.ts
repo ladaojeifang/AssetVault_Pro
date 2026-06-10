@@ -1,13 +1,8 @@
 import { existsSync, lstatSync, mkdirSync, realpathSync, rmSync } from 'fs'
 import { homedir } from 'os'
-import { join, resolve, sep, extname, normalize } from 'path'
+import { join, resolve, sep, normalize } from 'path'
 import { app } from 'electron'
-
-const ALLOWED_EXTS = new Set([
-  '.md', '.json',
-  '.jpg', '.jpeg', '.jfif', '.png', '.webp', '.gif', '.svg', '.avif',
-  '.mp4', '.webm', '.mov', '.m4v'
-])
+import { isArticleBundleExtension } from '@/shared/assetFormatRegistry'
 
 export function resolveDownloadsBase(): string {
   try {
@@ -28,7 +23,7 @@ export function createArticleSessionTempDir(sessionId: string): string {
 }
 
 export function isAllowedBundleExtension(filePath: string): boolean {
-  return ALLOWED_EXTS.has(extname(filePath).toLowerCase())
+  return isArticleBundleExtension(filePath)
 }
 
 /** Resolved path must stay under resolved tempDir (no `..`, no symlink escape). */

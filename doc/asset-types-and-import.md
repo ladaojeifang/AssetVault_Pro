@@ -4,7 +4,9 @@
 
 | 模块 | 路径 |
 |------|------|
-| 扩展名矩阵 | `src/shared/supportedFormats.ts` |
+| **格式统一配置（新增扩展名优先改这里）** | `src/shared/assetFormatCatalog.ts` |
+| 注册表 / 查询 API | `src/shared/assetFormatRegistry.ts` |
+| 扩展名矩阵（由注册表导出） | `src/shared/supportedFormats.ts` |
 | 类型分类 | `src/main/utils/fileUtils.ts` → `getFileType()` |
 | 单文件入库 | `src/main/services/importSingleAsset.ts` |
 | 批量/文件夹 | `src/main/services/assetImportService.ts` |

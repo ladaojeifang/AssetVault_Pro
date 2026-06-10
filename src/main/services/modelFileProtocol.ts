@@ -1,32 +1,14 @@
 import { protocol } from 'electron'
 import { readFile } from 'fs/promises'
 import { extname } from 'path'
+import { mimeMapForKnownExtensions } from '@/shared/assetFormatRegistry'
 
 const SCHEME = 'assetvault-model'
 
 const MIME_BY_EXT: Record<string, string> = {
+  ...mimeMapForKnownExtensions(),
   '.obj': 'text/plain; charset=utf-8',
-  '.mtl': 'text/plain; charset=utf-8',
-  '.gltf': 'model/gltf+json',
-  '.glb': 'model/gltf-binary',
-  '.fbx': 'application/octet-stream',
-  '.stl': 'model/stl',
-  '.ply': 'application/octet-stream',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.jfif': 'image/jpeg',
-  '.webp': 'image/webp',
-  '.gif': 'image/gif',
-  '.bmp': 'image/bmp',
-  '.ico': 'image/x-icon',
-  '.ttf': 'font/ttf',
-  '.otf': 'font/otf',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.ttc': 'font/collection',
-  '.eot': 'application/vnd.ms-fontobject'
+  '.mtl': 'text/plain; charset=utf-8'
 }
 
 /**

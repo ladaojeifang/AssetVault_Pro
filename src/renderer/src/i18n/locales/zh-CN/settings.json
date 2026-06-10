@@ -150,6 +150,28 @@
     "emptyLibrary": "当前库为空，请通过导入或拖拽添加资源。",
     "itemsPath": "items: {{path}}"
   },
+  "shortcuts": {
+    "title": "键盘快捷键",
+    "intro": "AssetVault 窗口聚焦时生效的快捷键。暂不支持自定义改键。",
+    "items": {
+      "search": "聚焦搜索框",
+      "importFiles": "导入文件",
+      "importFolder": "导入文件夹",
+      "toggleSidebar": "切换侧栏",
+      "toggleDetail": "切换详情面板",
+      "librarySwitcher": "聚焦资料库切换器",
+      "deleteSelected": "删除所选",
+      "refresh": "刷新视图",
+      "viewGrid": "网格视图",
+      "viewList": "列表视图",
+      "selectAll": "全选",
+      "preview": "打开详情预览",
+      "openSettings": "打开设置",
+      "customThumbFile": "从文件设置自定义缩略图",
+      "customThumbClipboard": "从剪贴板设置自定义缩略图",
+      "refreshThumbnail": "刷新缩略图"
+    }
+  },
   "advanced": {
     "title": "高级设置",
     "warning": "这些设置可能影响性能或稳定性。",

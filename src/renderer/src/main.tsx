@@ -54,9 +54,16 @@ class ErrorBoundary extends React.Component<
     if (this.state.hasError) {
       console.error('[Renderer] ErrorBoundary caught:', this.state.error)
       return (
-        <div style={{ padding: 20, color: '#EF4444', background: '#0F1117', minHeight: '100vh' }}>
+        <div
+          style={{
+            padding: 20,
+            color: 'var(--av-error-boundary-text)',
+            background: 'var(--av-error-boundary-bg)',
+            minHeight: '100vh'
+          }}
+        >
           <h2>Renderer Error</h2>
-          <pre style={{ color: '#F87171', whiteSpace: 'pre-wrap' }}>
+          <pre style={{ color: 'var(--av-error-boundary-detail)', whiteSpace: 'pre-wrap' }}>
             {this.state.error?.stack || String(this.state.error)}
           </pre>
         </div>

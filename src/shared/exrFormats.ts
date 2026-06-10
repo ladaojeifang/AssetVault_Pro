@@ -1,11 +1,3 @@
-/** OpenEXR (.exr) asset helpers (shared by main + renderer). */
+/** OpenEXR helpers — 配置见 `assetFormatCatalog.ts` IMAGE_FORMAT_GROUPS.exr */
 
-export function isExrExtension(ext: string): boolean {
-  return ext.replace(/^\./, '').toLowerCase().trim() === 'exr'
-}
-
-export function isExrFilePath(filePath: string): boolean {
-  const i = filePath.lastIndexOf('.')
-  if (i < 0) return false
-  return isExrExtension(filePath.slice(i))
-}
+export { isExrExtension, isExrFilePath } from './assetFormatRegistry'

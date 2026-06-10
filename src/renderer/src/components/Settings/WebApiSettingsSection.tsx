@@ -83,7 +83,7 @@ export function WebApiSettingsSection({
           <span className="text-sm text-av-text-secondary">{t('webApi.enableCheckbox')}</span>
           {status && (
             <span
-              className={`text-xs ml-2 ${status.running ? 'text-green-500' : 'text-av-text-muted'}`}
+              className={`text-xs ml-2 ${status.running ? 'text-av-status-success' : 'text-av-text-muted'}`}
             >
               {status.running ? t('webApi.running') : t('webApi.notListening')}
             </span>

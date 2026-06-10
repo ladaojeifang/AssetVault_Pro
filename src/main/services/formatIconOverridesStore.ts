@@ -9,6 +9,7 @@ import {
 } from 'fs'
 import { extname, join } from 'path'
 import { app } from 'electron'
+import { isFormatIconOverrideSourceExtension } from '@/shared/assetFormatRegistry'
 import {
   DEFAULT_FORMAT_ICON_ENTRIES,
   normalizeFormatExtension,
@@ -64,8 +65,7 @@ export function importFormatIconImage(sourcePath: string, extension: string): st
   if (!ext) throw new Error('无效的扩展名')
 
   const srcExt = extname(sourcePath).toLowerCase() || '.png'
-  const allowed = new Set(['.png', '.jpg', '.jpeg', '.jfif', '.webp', '.gif', '.svg', '.bmp', '.ico'])
-  if (!allowed.has(srcExt)) {
+  if (!isFormatIconOverrideSourceExtension(srcExt)) {
     throw new Error('仅支持 PNG、JPG、WebP、GIF、SVG、BMP、ICO')
   }
 

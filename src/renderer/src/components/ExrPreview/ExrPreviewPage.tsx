@@ -15,6 +15,7 @@ import { partitionExrLayerChannelSuffixes } from '@/shared/exrLayerGrouping'
 import { isExrExtension } from '@/shared/exrFormats'
 import { useApp } from '../../stores/AppContext'
 import { useTranslation } from 'react-i18next'
+import { DESTRUCTIVE_MESSAGE_CLASS } from '../../theme/destructiveActionClasses'
 
 interface ExrPreviewPageProps {
   assetId: string
@@ -328,7 +329,7 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
           </div>
           <div className="flex-1 overflow-y-auto py-1">
             {metaError ? (
-              <p className="px-3 py-2 text-[11px] text-red-300/90">{metaError}</p>
+              <p className={`px-3 py-2 text-[11px] ${DESTRUCTIVE_MESSAGE_CLASS}`}>{metaError}</p>
             ) : !metadata ? (
               <p className="px-3 py-2 text-[11px] text-av-text-muted">{t('exr.parsingLayers')}</p>
             ) : !perLayerPreviewAvailable ? (
@@ -417,7 +418,7 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
             </p>
           ) : null}
           {metadata?.layerListIncomplete ? (
-            <p className="px-3 py-2 text-[10px] text-amber-200/80 border-t border-av-border leading-relaxed">
+            <p className="px-3 py-2 text-[10px] text-av-status-warning-muted-text border-t border-av-border leading-relaxed">
               {t('exr.layerListIncomplete')}
             </p>
           ) : null}
@@ -463,7 +464,7 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
             </div>
           )}
           {rendering && previewUrl ? (
-            <div className="absolute top-3 right-3 text-[10px] px-2 py-1 rounded bg-black/50 text-white/80">
+            <div className="absolute top-3 right-3 text-[10px] px-2 py-1 rounded bg-av-media-overlay-badge-bg text-av-media-overlay-badge-text">
               {t('exr.updating')}
             </div>
           ) : null}

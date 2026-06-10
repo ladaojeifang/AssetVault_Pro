@@ -108,7 +108,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   if (!isOpen || !asset) return null
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center animate-fade-in" onClick={onClose}>
+    <div className="fixed inset-0 z-[9999] bg-av-media-overlay-backdrop flex items-center justify-center animate-fade-in" onClick={onClose}>
       {/* Close button */}
       <button
         onClick={onClose}
@@ -147,8 +147,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {loading ? (
-          <div className="flex flex-col items-center gap-4 text-white/60">
-            <div className="w-16 h-16 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          <div className="flex flex-col items-center gap-4 text-av-media-overlay-text-muted">
+            <div className="w-16 h-16 border-2 border-av-media-overlay-text-dim border-t-av-media-overlay-text rounded-full animate-spin" />
             <span>Loading preview...</span>
           </div>
         ) : (
@@ -157,11 +157,11 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
       </div>
 
       {/* Info bar at bottom */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-3 rounded-xl bg-black/60 backdrop-blur-sm text-white/80 text-sm">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-3 rounded-xl bg-av-media-overlay-scrim backdrop-blur-sm text-av-media-overlay-text-muted text-sm">
         <span className="font-medium">{asset.filename}</span>
-        <span className="text-white/40">|</span>
+        <span className="text-av-media-overlay-text-faint">|</span>
         <span>{asset.width && asset.height ? `${asset.width} x ${asset.height}px` : ''}</span>
-        <span className="text-white/40">|</span>
+        <span className="text-av-media-overlay-text-faint">|</span>
         <span>{formatSize(asset.fileSize)}</span>
       </div>
     </div>
@@ -218,12 +218,12 @@ function ImagePlaceholder({ asset }: { asset: AssetItem }) {
   return (
     <div className="flex flex-col items-center gap-4 p-8">
       <div className="w-64 h-64 rounded-lg bg-white/5 flex items-center justify-center">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-white/30">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-av-media-overlay-text-dim">
           <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="M21 15l-3.086-3.086a2 2 0 00-2.828 0L6 21" />
         </svg>
       </div>
-      <p className="text-white/50 text-sm">Image preview not available</p>
-      <p className="text-white/30 text-xs break-all">{asset.resolvedFilePath ?? asset.filePath}</p>
+      <p className="text-av-media-overlay-text-faint text-sm">Image preview not available</p>
+      <p className="text-av-media-overlay-text-dim text-xs break-all">{asset.resolvedFilePath ?? asset.filePath}</p>
     </div>
   )
 }
@@ -237,12 +237,12 @@ function VideoPlaceholder({ asset }: { asset: AssetItem }) {
             <polygon points="8 5 19 12 8 19" />
           </svg>
         </div>
-        <p className="absolute bottom-3 left-3 text-white/50 text-xs">
+        <p className="absolute bottom-3 left-3 text-av-media-overlay-text-faint text-xs">
           Video preview requires FFmpeg integration
         </p>
       </div>
-      <p className="text-white/70 font-medium">{asset.filename}</p>
-      {asset.duration && <p className="text-white/40 text-xs">Duration: {asset.duration.toFixed(1)}s</p>}
+      <p className="text-av-media-overlay-text font-medium">{asset.filename}</p>
+      {asset.duration && <p className="text-av-media-overlay-text-faint text-xs">Duration: {asset.duration.toFixed(1)}s</p>}
     </div>
   )
 }
@@ -264,10 +264,10 @@ function AudioPlaceholder({ asset }: { asset: AssetItem }) {
             />
           ))}
         </div>
-        <p className="text-white/50 text-xs">Audio waveform visualization</p>
+        <p className="text-av-media-overlay-text-faint text-xs">Audio waveform visualization</p>
       </div>
-      <p className="text-white/70">{asset.filename}</p>
-      {asset.duration && <p className="text-white/40 text-xs">Duration: {asset.duration.toFixed(1)}s</p>}
+      <p className="text-av-media-overlay-text">{asset.filename}</p>
+      {asset.duration && <p className="text-av-media-overlay-text-faint text-xs">Duration: {asset.duration.toFixed(1)}s</p>}
     </div>
   )
 }
@@ -285,19 +285,19 @@ function FontPreview({ asset }: { asset: AssetItem }) {
     <div className="flex flex-col items-center gap-4 p-8 min-w-[500px]">
       <div className="w-full rounded-xl bg-white/5 p-8 space-y-4">
         <div style={{ fontFamily: `'${familyName}', '${familyLabel}', sans-serif` }}>
-          <p className="text-5xl text-white mb-4 text-center">
+          <p className="text-5xl text-av-media-overlay-text mb-4 text-center">
             {fontLoaded ? sampleText : 'Loading Font...'}
           </p>
-          <p className="text-3xl text-white/90 mb-4 text-center">
+          <p className="text-3xl text-av-media-overlay-text mb-4 text-center">
             {fontLoaded ? 'The quick brown fox jumps over the lazy dog. 1234567890!' : ''}
           </p>
-          <p className="text-xl text-white/70 text-center">
+          <p className="text-xl text-av-media-overlay-text-muted text-center">
             {fontLoaded
               ? 'ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789 !@#$%'
               : ''}
           </p>
         </div>
-        <p className="text-white/40 text-xs mt-4 pt-4 border-t border-white/10 text-center">
+        <p className="text-av-media-overlay-text-faint text-xs mt-4 pt-4 border-t border-av-media-overlay-border text-center">
           {familyLabel} · {formatSize(asset.fileSize)}
         </p>
       </div>
@@ -309,13 +309,13 @@ function FilePreviewPlaceholder({ asset }: { asset: AssetItem }) {
   return (
     <div className="flex flex-col items-center gap-4 p-8">
       <div className="w-48 h-48 rounded-lg bg-white/5 flex items-center justify-center">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-white/30">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-av-media-overlay-text-dim">
           <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" />
         </svg>
       </div>
-      <p className="text-white/70">{asset.filename}</p>
-      <p className="text-white/40 text-sm">Type: {asset.fileType.toUpperCase()}</p>
-      <p className="text-white/30 text-xs break-all">{asset.resolvedFilePath ?? asset.filePath}</p>
+      <p className="text-av-media-overlay-text">{asset.filename}</p>
+      <p className="text-av-media-overlay-text-faint text-sm">Type: {asset.fileType.toUpperCase()}</p>
+      <p className="text-av-media-overlay-text-dim text-xs break-all">{asset.resolvedFilePath ?? asset.filePath}</p>
     </div>
   )
 }

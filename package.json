@@ -17,6 +17,7 @@
     "lint:fix": "pnpm exec eslint . --ext .ts,.tsx,.js,.jsx --fix",
     "typecheck": "pnpm exec tsc --noEmit",
     "i18n:check": "node scripts/check-i18n-keys.mjs",
+    "theme:gen": "pnpm exec vitest run src/shared/themeFallback.gen.test.ts",
     "test": "pnpm exec vitest run",
     "test:watch": "pnpm exec vitest",
     "rebuild:native": "node scripts/rebuild-native.mjs",

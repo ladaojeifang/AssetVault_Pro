@@ -1,61 +1,8 @@
 import type { FileType } from '@/shared/types'
 import {
-  IMAGE_EXTENSIONS,
-  VIDEO_EXTENSIONS,
-  AUDIO_EXTENSIONS,
-  FONT_EXTENSIONS,
-  DESIGN_EXTENSIONS,
-  DOCUMENT_EXTENSIONS,
-  THREED_EXTENSIONS,
-  CODE_EXTENSIONS
-} from '@/shared/supportedFormats'
-
-const IMAGE_MIMES = new Set([
-  'image/jpeg',
-  'image/jfif',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'image/svg+xml',
-  'image/bmp',
-  'image/x-icon',
-  'image/vnd.microsoft.icon',
-  'image/tiff',
-  'image/avif',
-  'image/heic',
-  'image/heif',
-  'image/x-adobe-dng',
-  'image/x-canon-cr2',
-  'image/x-nikon-nef',
-  'image/x-sony-arw'
-])
-
-const VIDEO_MIMES = new Set([
-  'video/mp4',
-  'video/x-msvideo',
-  'video/quicktime',
-  'video/x-matroska',
-  'video/webm',
-  'video/x-flv',
-  'video/x-ms-wmv',
-  'video/mpeg',
-  'video/3gpp',
-  'video/x-m4v'
-])
-
-const AUDIO_MIMES = new Set([
-  'audio/mpeg',
-  'audio/wav',
-  'audio/flac',
-  'audio/aac',
-  'audio/ogg',
-  'audio/x-ms-wma',
-  'audio/mp4',
-  'audio/aiff',
-  'audio/x-aiff',
-  'audio/opus',
-  'audio/webm'
-])
+  getFileTypeFromExtension,
+  getFileTypeFromMime
+} from '@/shared/assetFormatRegistry'
 
 function normalizeExt(ext: string): string {
   const e = ext.toLowerCase().trim()
@@ -68,19 +15,11 @@ function normalizeExt(ext: string): string {
  */
 export function getFileType(mimeType: string, ext: string): FileType {
   const e = normalizeExt(ext)
+  const fromExt = getFileTypeFromExtension(e)
+  if (fromExt) return fromExt
 
-  if (FONT_EXTENSIONS.has(e)) return 'font'
-  if (CODE_EXTENSIONS.has(e)) return 'code'
-  if (DOCUMENT_EXTENSIONS.has(e)) return 'document'
-  if (DESIGN_EXTENSIONS.has(e)) return 'design'
-  if (THREED_EXTENSIONS.has(e)) return '3d'
-  if (IMAGE_EXTENSIONS.has(e)) return 'image'
-  if (VIDEO_EXTENSIONS.has(e)) return 'video'
-  if (AUDIO_EXTENSIONS.has(e)) return 'audio'
-
-  if (IMAGE_MIMES.has(mimeType)) return 'image'
-  if (VIDEO_MIMES.has(mimeType)) return 'video'
-  if (AUDIO_MIMES.has(mimeType)) return 'audio'
+  const fromMime = getFileTypeFromMime(mimeType)
+  if (fromMime) return fromMime
 
   return 'other'
 }

@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import type { FolderItem } from '@/shared/types'
+import { DESTRUCTIVE_MENU_ITEM_CLASS } from '../../theme/destructiveActionClasses'
 
 export type FolderContextMenuState = {
   folder: FolderItem
@@ -102,7 +103,7 @@ export function FolderContextMenu({
             item.disabled
               ? 'text-av-text-muted/45 cursor-not-allowed'
               : item.danger
-                ? 'text-red-400 hover:bg-red-500/15'
+                ? DESTRUCTIVE_MENU_ITEM_CLASS
                 : 'text-av-text-secondary hover:bg-av-bg-hover hover:text-av-text-primary'
           }`}
           onClick={() => {

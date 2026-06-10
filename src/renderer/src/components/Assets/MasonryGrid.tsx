@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useTranslation } from 'react-i18next'
 import type { AssetItem } from '@/shared/types'
 import { formatFileSize } from '@/shared/types'
-import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
+import { canAssetPreview } from '@/shared/assetPreviewRegistry'
 import { FileTypePlaceholder } from '../Common/FileTypePlaceholder'
 import {
   MASONRY_GAP,
@@ -209,7 +209,7 @@ function MasonryAssetTile({
 }) {
   const { t } = useTranslation('assets')
   const [imgError, setImgError] = useState(false)
-  const can3dPreview = asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)
+  const can3dPreview = canAssetPreview(asset, 'model')
 
   return (
     <div className="flex flex-col h-full min-w-0">
@@ -253,8 +253,8 @@ function MasonryAssetTile({
             <div
               className={`absolute top-2 right-2 text-[9px] font-medium px-1.5 py-0.5 rounded z-10 ${
                 asset.sourceMissing
-                  ? 'bg-red-900/80 text-red-100'
-                  : 'bg-black/55 text-amber-200'
+                  ? 'bg-av-status-error-muted-bg text-av-status-error-muted-text'
+                  : 'bg-av-media-overlay-chip text-av-status-warning-muted-text'
               }`}
               title={asset.sourceMissing ? t('sourceMissingTitle') : t('referenceOnlyTitle')}
             >
@@ -270,11 +270,11 @@ function MasonryAssetTile({
             </div>
           )}
 
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-150 flex items-end justify-between p-2 opacity-0 group-hover:opacity-100 z-10">
-            <span className="text-[10px] text-white font-medium truncate max-w-[70%]">
+          <div className="absolute inset-0 bg-transparent group-hover:bg-av-media-overlay-hover transition-colors duration-150 flex items-end justify-between p-2 opacity-0 group-hover:opacity-100 z-10">
+            <span className="text-[10px] text-av-media-overlay-text font-medium truncate max-w-[70%]">
               {asset.filename}
             </span>
-            <span className="text-[10px] text-white/80">{formatFileSize(asset.fileSize)}</span>
+            <span className="text-[10px] text-av-media-overlay-text-muted">{formatFileSize(asset.fileSize)}</span>
           </div>
         </div>
       </div>

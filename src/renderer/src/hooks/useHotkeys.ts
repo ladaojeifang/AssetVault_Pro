@@ -3,6 +3,12 @@ import { useApp } from '../stores/AppContext'
 import { useAiCanvasNavOptional, type AppScreen } from '../stores/AiCanvasNavContext'
 import { notify } from '../components/Common/notify'
 import { i18n } from '../i18n'
+import { extensionsForDialog } from '@/shared/assetFormatRegistry'
+import {
+  IPC_CHANNEL_TO_HOTKEY,
+  resolveHotkeyId,
+  type HotkeyId
+} from '@/shared/hotkeyRegistry'
 
 const ta = () => i18n.getFixedT(i18n.language, 'assets')
 
@@ -12,8 +18,8 @@ const ta = () => i18n.getFixedT(i18n.language, 'assets')
  * OS-wide `globalShortcut` is opt-in via ASSETVAULT_GLOBAL_HOTKEYS=1 in main — see main/index.ts.
  */
 
-const HOTKEY_MAP: Record<string, (ctx: ReturnType<typeof useApp>) => void> = {
-  search: (ctx) => {
+const HOTKEY_MAP: Record<HotkeyId, (ctx: ReturnType<typeof useApp>) => void> = {
+  search: () => {
     const input = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement | null
     input?.focus()
     input?.select()
@@ -66,7 +72,7 @@ const HOTKEY_MAP: Record<string, (ctx: ReturnType<typeof useApp>) => void> = {
     if (ctx.selectedAssetIds.size === 0) return
 
     const count = ctx.selectedAssetIds.size
-    if (!confirm(`Delete ${count} item${count > 1 ? 's' : ''}?`)) return
+    if (!confirm(ta()('notify.confirmDelete', { count }))) return
 
     try {
       await window.assetVaultAPI.assets.delete(Array.from(ctx.selectedAssetIds))
@@ -102,7 +108,7 @@ const HOTKEY_MAP: Record<string, (ctx: ReturnType<typeof useApp>) => void> = {
         filters: [
           {
             name: 'Images',
-            extensions: ['jpg', 'jpeg', 'jfif', 'png', 'webp', 'gif', 'bmp', 'avif', 'exr']
+            extensions: extensionsForDialog('customThumb')
           }
         ]
       })
@@ -141,22 +147,6 @@ const HOTKEY_MAP: Record<string, (ctx: ReturnType<typeof useApp>) => void> = {
   }
 }
 
-/** Main process sends `webContents.send('hotkey:…')` — map channel → HOTKEY_MAP key */
-const IPC_CHANNEL_TO_ACTION: Record<string, keyof typeof HOTKEY_MAP> = {
-  'hotkey:focus-search': 'search',
-  'hotkey:import-files': 'import-files',
-  'hotkey:import-folder': 'import-folder',
-  'hotkey:toggle-sidebar': 'toggle-sidebar',
-  'hotkey:toggle-detail': 'toggle-detail',
-  'hotkey:view-grid': 'view-grid',
-  'hotkey:view-list': 'view-list',
-  'hotkey:select-all': 'select-all',
-  'hotkey:delete-selected': 'delete-selected',
-  'hotkey:open-settings': 'open-settings',
-  'hotkey:refresh': 'refresh',
-  'hotkey:preview': 'preview'
-}
-
 export function useGlobalHotkeys() {
   const appCtx = useApp()
   const nav = useAiCanvasNavOptional()
@@ -193,46 +183,14 @@ export function useGlobalHotkeys() {
   }, [appCtx, screen])
 }
 
-function resolveHotkeyId(e: KeyboardEvent, screen: AppScreen): string | null {
-  const ctrl = e.ctrlKey || e.metaKey
-  const shift = e.shiftKey
-  const alt = e.altKey
-  const key = e.key.toLowerCase()
-
-  if (ctrl && alt && !shift && key === 't') return 'custom-thumb-file'
-  if (ctrl && alt && shift && key === 't') return 'custom-thumb-clipboard'
-  if (ctrl && alt && !shift && key === 'r') return 'refresh-thumbnail'
-
-  if (ctrl && !shift && key === 'k') return 'search'
-  if (ctrl && !shift && key === 'i') return 'import-files'
-  // Shift+O: avoids Chromium/Electron DevTools (Ctrl+Shift+I) conflict in dev
-  if (ctrl && shift && key === 'o') return 'import-folder'
-  if (ctrl && !shift && key === 'b') return 'toggle-sidebar'
-  if (ctrl && !shift && key === 'd') return 'toggle-detail'
-  if (ctrl && !shift && key === 'g') return 'view-grid'
-  if (ctrl && shift && key === 'g') return 'view-list'
-  if (ctrl && !shift && key === 'a') return 'select-all'
-  if (key === 'delete' || (key === 'backspace' && !(e.target as HTMLElement).isContentEditable)) {
-    // AI 画布内 Delete/Backspace 用于删除节点，勿触发资源库删除
-    if (screen === 'ai-canvas-editor') return null
-    return 'delete-selected'
-  }
-  if (key === 'f5' || (key === 'r' && ctrl)) return 'refresh'
-  if (key === ' ') return 'preview'
-  if (ctrl && !shift && key === ',') return 'open-settings'
-  if (ctrl && !shift && key === 'l') return 'focus-library-switcher'
-
-  return null
-}
-
 function setupIpcHotkeyListener(appCtx: ReturnType<typeof useApp>): () => void {
   const ipc = window.electron?.ipcRenderer
   if (!ipc?.on || !ipc.removeAllListeners) return () => {}
 
-  const channels = Object.keys(IPC_CHANNEL_TO_ACTION)
+  const channels = Object.keys(IPC_CHANNEL_TO_HOTKEY)
 
   for (const channel of channels) {
-    const action = IPC_CHANNEL_TO_ACTION[channel]
+    const action = IPC_CHANNEL_TO_HOTKEY[channel]
     const listener = () => {
       const fn = HOTKEY_MAP[action]
       if (fn) fn(appCtx)
@@ -247,9 +205,4 @@ function setupIpcHotkeyListener(appCtx: ReturnType<typeof useApp>): () => void {
   }
 }
 
-export function getDisplayString(accelerator: string): string {
-  return accelerator
-    .replace(/CommandOrCtrl/g, 'Ctrl')
-    .replace(/\+/g, ' + ')
-    .replace(/([A-Z])/g, '$1')
-}
+export { formatAcceleratorForDisplay as getDisplayString } from '@/shared/hotkeyRegistry'

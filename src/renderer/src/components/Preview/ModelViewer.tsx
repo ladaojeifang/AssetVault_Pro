@@ -114,12 +114,12 @@ export function ModelViewer({
       className={`relative w-full h-full min-h-[200px] bg-[#14161f] rounded-lg overflow-hidden ${className}`}
     >
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center text-sm text-white/50 z-10 pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-av-media-overlay-text-faint z-10 pointer-events-none">
           {t('loadingModel')}
         </div>
       )}
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center text-sm text-red-400/90 px-4 text-center z-10 pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-av-status-error-muted-text px-4 text-center z-10 pointer-events-none">
           {error}
         </div>
       )}

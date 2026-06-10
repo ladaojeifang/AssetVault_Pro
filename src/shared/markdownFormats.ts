@@ -1,6 +1,3 @@
-const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown', 'mdown', 'mkd'])
+/** Markdown 预览扩展名 — 配置见 `assetFormatCatalog.ts` MARKDOWN_PREVIEW_FORMATS */
 
-export function isMarkdownExtension(extension: string): boolean {
-  const ext = extension.replace(/^\./, '').toLowerCase().trim()
-  return MARKDOWN_EXTENSIONS.has(ext)
-}
+export { isMarkdownExtension } from './assetFormatRegistry'

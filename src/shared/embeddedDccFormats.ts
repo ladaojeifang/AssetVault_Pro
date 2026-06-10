@@ -1,7 +1,12 @@
-/** 3D DCC formats with embedded preview thumbnails (no Babylon render). */
-export const MODEL3D_EMBEDDED_THUMB_EXTENSIONS = new Set(['.c4d', '.max', '.blend'])
+/** DCC 内嵌缩略图 — 配置见 `assetFormatCatalog.ts` MODEL3D_EMBEDDED_THUMB_FORMATS */
 
-export type EmbeddedDccFormat = 'c4d' | 'max' | 'blend'
+export {
+  MODEL3D_EMBEDDED_THUMB_EXTENSIONS,
+  parseEmbeddedDccFormat,
+  isEmbeddedDccThumbExtension
+} from './assetFormatRegistry'
+
+export type { EmbeddedDccFormat } from './assetFormatRegistry'
 
 export interface EmbeddedDccRegenerateFailure {
   assetId: string
@@ -15,15 +20,4 @@ export interface EmbeddedDccRegenerateResult {
   skipped: number
   errors: number
   failures: EmbeddedDccRegenerateFailure[]
-}
-
-export function parseEmbeddedDccFormat(ext: string): EmbeddedDccFormat | null {
-  const e = ext.toLowerCase().replace(/^\./, '')
-  if (e === 'c4d' || e === 'max' || e === 'blend') return e
-  return null
-}
-
-export function isEmbeddedDccThumbExtension(ext: string): boolean {
-  const dot = ext.startsWith('.') ? ext : `.${ext}`
-  return MODEL3D_EMBEDDED_THUMB_EXTENSIONS.has(dot.toLowerCase())
 }

@@ -11,11 +11,15 @@ import { FolderIconDisplay } from '../Common/FolderIconDisplay'
 import { ColorPaletteStrip, parseAssetPaletteColors } from '../Common/ColorPaletteStrip'
 import DetailContextPanel from './DetailContextPanel'
 import { ModelViewer } from '../Preview/ModelViewer'
-import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
-import { isMarkdownPreviewAsset } from '../../utils/markdownPreview'
+import {
+  ASSET_PREVIEW_DETAIL_LABEL_KEY,
+  canAssetPreview,
+  listAssetPreviewKinds
+} from '@/shared/assetPreviewRegistry'
 import { isSvgExtension, isSvgOverRasterLimit } from '@/shared/svgFormats'
-import { isExrExtension } from '@/shared/exrFormats'
+import { openAssetPreview } from '../../utils/openAssetPreview'
 import { FileTypePlaceholder } from '../Common/FileTypePlaceholder'
+import { DESTRUCTIVE_BUTTON_CLASS } from '../../theme/destructiveActionClasses'
 
 const DetailPanel: React.FC = () => {
   const { t } = useTranslation('detail')
@@ -295,57 +299,27 @@ const DetailPanel: React.FC = () => {
           )}
         </InfoSection>
 
-        {asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension) && (
+        {listAssetPreviewKinds(asset).map((kind) => (
           <button
+            key={kind}
             type="button"
             className="w-full btn-primary text-sm py-2"
-            onClick={() => openModelPreview(asset.id)}
+            onClick={() =>
+              openAssetPreview(kind, asset.id, {
+                openFontPreview,
+                openModelPreview,
+                openSvgPreview,
+                openExrPreview,
+                openMarkdownPreview
+              })
+            }
           >
-            {t('preview3d')}
+            {t(ASSET_PREVIEW_DETAIL_LABEL_KEY[kind])}
           </button>
-        )}
-
-        {asset.fileType === 'image' && isSvgExtension(asset.extension) && (
-          <button
-            type="button"
-            className="w-full btn-primary text-sm py-2"
-            onClick={() => openSvgPreview(asset.id)}
-          >
-            {t('previewSvg')}
-          </button>
-        )}
-
-        {asset.fileType === 'image' && isExrExtension(asset.extension) && (
-          <button
-            type="button"
-            className="w-full btn-primary text-sm py-2"
-            onClick={() => openExrPreview(asset.id)}
-          >
-            {t('previewExr')}
-          </button>
-        )}
-
-        {isMarkdownPreviewAsset(asset) && (
-          <button
-            type="button"
-            className="w-full btn-primary text-sm py-2"
-            onClick={() => openMarkdownPreview(asset.id)}
-          >
-            {t('previewMarkdown')}
-          </button>
-        )}
+        ))}
 
         {asset.fileType === 'font' && (
-          <>
-            <button
-              type="button"
-              className="w-full btn-primary text-sm py-2"
-              onClick={() => openFontPreview(asset.id)}
-            >
-              {t('previewFont')}
-            </button>
-            <FontDetailSection asset={asset} onRefresh={() => void refreshAssets()} />
-          </>
+          <FontDetailSection asset={asset} onRefresh={() => void refreshAssets()} />
         )}
         <InfoSection title={t('foldersSection')}>
           <p className="text-[11px] text-av-text-muted mb-2 leading-relaxed">
@@ -634,7 +608,10 @@ const DetailPanel: React.FC = () => {
           </svg>
           Show in Explorer
         </button>
-        <button onClick={handleDelete} className="w-full justify-center text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-md px-3 py-1.5 transition-colors flex items-center gap-1.5">
+        <button
+          onClick={handleDelete}
+          className={`w-full justify-center text-xs rounded-md px-3 py-1.5 flex items-center gap-1.5 ${DESTRUCTIVE_BUTTON_CLASS}`}
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
           </svg>
@@ -655,7 +632,7 @@ function DetailPreview({ asset }: { asset: any }) {
     setModelFileUrl(null)
     setPreviewSrc(null)
 
-    if (asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)) {
+    if (canAssetPreview(asset, 'model')) {
       void (async () => {
         const target = asset.resolvedFilePath ?? asset.filePath
         const href = await window.assetVaultAPI.fs.pathToFileUrl(target)
@@ -685,7 +662,7 @@ function DetailPreview({ asset }: { asset: any }) {
     }
   }, [asset.id, asset.fileType, asset.filePath, asset.resolvedFilePath])
 
-  if (asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension) && modelFileUrl) {
+  if (canAssetPreview(asset, 'model') && modelFileUrl) {
     return (
       <ModelViewer
         fileUrl={modelFileUrl}

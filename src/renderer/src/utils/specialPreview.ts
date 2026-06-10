@@ -1,5 +1,7 @@
+import type { AssetPreviewKind } from '@/shared/assetPreviewRegistry'
+
 /** Full-page asset preview kinds (font / 3D / SVG / EXR / Markdown). */
-export type SpecialPreviewKind = 'font' | 'model' | 'svg' | 'exr' | 'markdown'
+export type SpecialPreviewKind = AssetPreviewKind
 
 export function getActiveSpecialPreview(ids: {
   fontPreviewAssetId: string | null

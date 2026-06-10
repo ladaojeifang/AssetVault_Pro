@@ -25,7 +25,7 @@ export function applyAppTheme(theme: AppTheme): void {
   root.classList.toggle('dark', theme === 'dark')
   root.classList.toggle('light', theme === 'light')
 
-  const cssVars = themeTokensToCssVariables(THEME_TOKENS[theme])
+  const cssVars = themeTokensToCssVariables(THEME_TOKENS[theme], theme)
   for (const [key, value] of Object.entries(cssVars)) {
     root.style.setProperty(key, value)
   }

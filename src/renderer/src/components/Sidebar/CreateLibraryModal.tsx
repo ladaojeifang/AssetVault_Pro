@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Modal } from '@arco-design/web-react'
 import type { LibraryMode } from '@/shared/libraryTypes'
+import { LIBRARY_MODE_BADGE_CLASS } from '../../theme/libraryModeClasses'
 
 type Props = {
   visible: boolean
@@ -25,19 +26,19 @@ export function CreateLibraryModal({ visible, busy, onClose, onConfirm }: Props)
       id: 'archive',
       title: t('archiveOptionTitle'),
       desc: t('archiveOptionDesc'),
-      badgeClass: 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40'
+      badgeClass: LIBRARY_MODE_BADGE_CLASS.archive
     },
     {
       id: 'catalog',
       title: t('catalogOptionTitle'),
       desc: t('catalogOptionDesc'),
-      badgeClass: 'bg-amber-950/50 text-amber-300 border-amber-800/50'
+      badgeClass: LIBRARY_MODE_BADGE_CLASS.catalog
     },
     {
       id: 'embedded',
       title: t('embeddedOptionTitle'),
       desc: t('embeddedOptionDesc'),
-      badgeClass: 'bg-blue-950/40 text-blue-300 border-blue-800/40'
+      badgeClass: LIBRARY_MODE_BADGE_CLASS.embedded
     }
   ]
 

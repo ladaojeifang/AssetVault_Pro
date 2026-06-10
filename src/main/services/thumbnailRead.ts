@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'fs'
 import { extname, join } from 'path'
 import { ARTICLE_BUNDLE_THUMB_RELATIVE } from '@/shared/articleBundleSessionTypes'
+import { getMimeForExtension } from '@/shared/assetFormatRegistry'
 import { getLibraryRoot, itemDirAbsolute, itemThumbRelative, resolveLibraryPath } from './libraryBundle'
 
 export function libraryRelativeFromAbs(absPath: string): string | null {
@@ -15,13 +16,7 @@ export function libraryRelativeFromAbs(absPath: string): string | null {
 }
 
 export function mimeTypeForThumbPath(storedPath: string): string {
-  const ext = extname(storedPath).toLowerCase()
-  if (ext === '.jpg' || ext === '.jpeg' || ext === '.jfif') return 'image/jpeg'
-  if (ext === '.png') return 'image/png'
-  if (ext === '.gif') return 'image/gif'
-  if (ext === '.webp') return 'image/webp'
-  if (ext === '.bmp') return 'image/bmp'
-  return 'application/octet-stream'
+  return getMimeForExtension(extname(storedPath)) ?? 'application/octet-stream'
 }
 
 export function articleBundleThumbRelative(assetId: string): string {

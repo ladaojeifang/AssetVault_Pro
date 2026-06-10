@@ -1,24 +1,12 @@
 import type { AssetItem } from '@/shared/types'
-import { isMarkdownExtension } from '@/shared/markdownFormats'
-
-const IMAGE_MIME_BY_EXT: Record<string, string> = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  jfif: 'image/jpeg',
-  png: 'image/png',
-  webp: 'image/webp',
-  gif: 'image/gif',
-  avif: 'image/avif',
-  svg: 'image/svg+xml',
-  bmp: 'image/bmp',
-  ico: 'image/x-icon'
-}
+import { getMimeForExtension } from '@/shared/assetFormatRegistry'
+import { canAssetPreview } from '@/shared/assetPreviewRegistry'
 
 export function isMarkdownPreviewAsset(asset: {
   extension?: string
   fileType?: string
 }): boolean {
-  return isMarkdownExtension(asset.extension ?? '')
+  return canAssetPreview(asset, 'markdown')
 }
 
 export function markdownContentPath(asset: AssetItem): string {
@@ -40,7 +28,7 @@ export function joinMarkdownMediaPath(contentFilePath: string, src: string): str
 
 function mimeForImagePath(filePath: string): string {
   const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
-  return IMAGE_MIME_BY_EXT[ext] ?? 'application/octet-stream'
+  return getMimeForExtension(ext) ?? 'application/octet-stream'
 }
 
 /**

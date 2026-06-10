@@ -12,10 +12,8 @@ import { FolderIconDisplay } from '../Common/FolderIconDisplay'
 import { isAssetDragEvent } from '../../utils/assetDragDrop'
 import { addDraggedAssetsToFolder } from '../../utils/addAssetsToFolder'
 import { notify } from '../Common/notify'
-import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
-import { isMarkdownPreviewAsset } from '../../utils/markdownPreview'
-import { isSvgExtension } from '@/shared/svgFormats'
-import { isExrExtension } from '@/shared/exrFormats'
+import { canAssetPreview } from '@/shared/assetPreviewRegistry'
+import { performAssetDefaultOpen } from '../../utils/openAssetPreview'
 import MasonryGrid from './MasonryGrid'
 import { ListViewColumnHeader } from './ListViewColumnHeader'
 import { AssetListNoResults } from './AssetListNoResults'
@@ -254,42 +252,24 @@ const AssetGrid: React.FC = () => {
     [assets, selectedAssetIds, selectAsset, selectMultiple, clearSelection, setDetailPanelOpen]
   )
 
+  const previewOpeners = useMemo(
+    () => ({
+      openFontPreview,
+      openModelPreview,
+      openSvgPreview,
+      openExrPreview,
+      openMarkdownPreview
+    }),
+    [openFontPreview, openModelPreview, openSvgPreview, openExrPreview, openMarkdownPreview]
+  )
+
   const handleAssetDoubleClick = useCallback(
     async (id: string) => {
       const asset = assets.find((a) => a.id === id)
       if (!asset) return
-
-      if (asset.fileType === 'font') {
-        openFontPreview(id)
-        return
-      }
-
-      if (asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)) {
-        openModelPreview(id)
-        return
-      }
-
-      if (asset.fileType === 'image' && isSvgExtension(asset.extension)) {
-        openSvgPreview(id)
-        return
-      }
-
-      if (asset.fileType === 'image' && isExrExtension(asset.extension)) {
-        openExrPreview(id)
-        return
-      }
-
-      if (isMarkdownPreviewAsset(asset)) {
-        openMarkdownPreview(id)
-        return
-      }
-
-      const p = asset.resolvedFilePath ?? asset.filePath
-      if (p) {
-        await window.assetVaultAPI.fs.openInExplorer(p)
-      }
+      await performAssetDefaultOpen(asset, previewOpeners)
     },
-    [assets, openFontPreview, openModelPreview, openSvgPreview, openExrPreview, openMarkdownPreview]
+    [assets, previewOpeners]
   )
 
   const handleDragStart = useCallback(
@@ -1051,7 +1031,7 @@ function AssetListItem({
   onContextMenu: (e: React.MouseEvent) => void
 }) {
   const { t } = useTranslation('assets')
-  const can3dPreview = asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)
+  const can3dPreview = canAssetPreview(asset, 'model')
 
   const ext = (asset.extension || '').replace(/^\./, '').toLowerCase() || '—'
 
@@ -1096,7 +1076,9 @@ function AssetListItem({
         {asset.storageMode === 'referenced' && (
           <span
             className={`ml-1.5 text-[9px] font-medium px-1 py-0.5 rounded ${
-              asset.sourceMissing ? 'bg-red-900/60 text-red-200' : 'bg-amber-900/50 text-amber-200'
+              asset.sourceMissing
+                ? 'bg-av-status-error-muted-bg text-av-status-error-muted-text'
+                : 'bg-av-media-overlay-chip text-av-status-warning-muted-text'
             }`}
           >
             {asset.sourceMissing ? t('missing') : t('reference')}

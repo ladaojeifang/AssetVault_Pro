@@ -10,6 +10,7 @@ import {
 import { persistFormatIconOverrides } from '../../stores/FormatIconOverridesContext'
 import { notify } from '../Common/notify'
 import { FileTypePlaceholder } from '../Common/FileTypePlaceholder'
+import { DESTRUCTIVE_TEXT_BUTTON_CLASS } from '../../theme/destructiveActionClasses'
 
 export function FormatIconOverridesSection(): React.ReactElement {
   const { t } = useTranslation(['settings', 'common'])
@@ -287,7 +288,7 @@ export function FormatIconOverridesSection(): React.ReactElement {
                 ) : null}
                 <button
                   type="button"
-                  className="text-[11px] px-2 py-1 rounded text-red-400 hover:bg-red-500/10"
+                  className={`text-[11px] px-2 py-1 ${DESTRUCTIVE_TEXT_BUTTON_CLASS}`}
                   disabled={busy}
                   onClick={() => void handleDelete(entry.extension)}
                 >

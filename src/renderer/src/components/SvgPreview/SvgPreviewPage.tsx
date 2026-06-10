@@ -5,6 +5,7 @@ import { formatFileSize } from '@/shared/types'
 import { isSvgExtension } from '@/shared/svgFormats'
 import { useApp } from '../../stores/AppContext'
 import { loadSvgPreviewObjectUrl, revokeSvgPreviewObjectUrl } from '../../utils/loadSvgPreviewUrl'
+import { DESTRUCTIVE_MESSAGE_CLASS } from '../../theme/destructiveActionClasses'
 
 interface SvgPreviewPageProps {
   assetId: string
@@ -203,7 +204,7 @@ const SvgPreviewPage: React.FC<SvgPreviewPageProps> = ({ assetId }) => {
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-av-text-muted px-6 text-center">
               <p>{loadError}</p>
               {asset.sourceMissing ? (
-                <p className="text-xs text-red-300/80">{t('svg.sourceMissing')}</p>
+                <p className={`text-xs ${DESTRUCTIVE_MESSAGE_CLASS}`}>{t('svg.sourceMissing')}</p>
               ) : null}
             </div>
           ) : svgFileUrl ? (

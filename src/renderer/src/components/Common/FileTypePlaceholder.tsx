@@ -1,23 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import { useFormatIconForExtension } from '../../stores/FormatIconOverridesContext'
 import type { FormatIconEntry } from '@/shared/formatIconOverrides'
-
-const FORMAT_ICON_MIME: Record<string, string> = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.jfif': 'image/jpeg',
-  '.webp': 'image/webp',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.bmp': 'image/bmp',
-  '.ico': 'image/x-icon'
-}
+import { getMimeForExtension } from '@/shared/assetFormatRegistry'
+import { fileTypePlaceholderGradientStyle } from '../../theme/fileTypeVisualStyle'
 
 function mimeForFormatIconPath(filePath: string): string {
   const dot = filePath.lastIndexOf('.')
   if (dot < 0) return 'image/png'
-  return FORMAT_ICON_MIME[filePath.slice(dot).toLowerCase()] ?? 'image/png'
+  return getMimeForExtension(filePath.slice(dot)) ?? 'image/png'
 }
 
 export type FileTypePlaceholderSize = 'sm' | 'md' | 'lg'
@@ -75,13 +65,16 @@ export function FileTypePlaceholder({
     )
   }
 
-  const cfg = fileTypeVisual(fileType, svgPx)
+  const cfg = fileTypeIcon(fileType, svgPx)
   return (
     <div
-      className={`w-full h-full flex items-center justify-center ${cfg.bgClass}`}
-      style={{ backgroundColor: color ? `${color}18` : undefined }}
+      className="w-full h-full flex items-center justify-center"
+      style={{
+        ...fileTypePlaceholderGradientStyle(fileType),
+        backgroundColor: color ? `${color}18` : undefined
+      }}
     >
-      <span className="text-av-text-muted">{cfg.icon}</span>
+      <span className="text-av-text-muted">{cfg}</span>
     </div>
   )
 }
@@ -148,45 +141,19 @@ function FormatIconImage({
   )
 }
 
-function fileTypeVisual(
-  fileType: string,
-  svgPx: number
-): { icon: JSX.Element; bgClass: string } {
-  const config: Record<string, { icon: JSX.Element; bgClass: string }> = {
-    image: {
-      icon: iconImage(svgPx),
-      bgClass: 'bg-gradient-to-br from-green-900/30 to-emerald-800/20'
-    },
-    video: {
-      icon: iconVideo(svgPx),
-      bgClass: 'bg-gradient-to-br from-purple-900/30 to-violet-800/20'
-    },
-    audio: {
-      icon: iconAudio(svgPx),
-      bgClass: 'bg-gradient-to-br from-pink-900/30 to-rose-800/20'
-    },
-    font: {
-      icon: iconFont(svgPx),
-      bgClass: 'bg-gradient-to-br from-orange-900/30 to-amber-800/20'
-    },
-    document: {
-      icon: iconDocument(svgPx),
-      bgClass: 'bg-gradient-to-br from-blue-900/30 to-cyan-800/20'
-    },
-    design: {
-      icon: iconDesign(svgPx),
-      bgClass: 'bg-gradient-to-br from-fuchsia-900/30 to-pink-800/20'
-    },
-    '3d': {
-      icon: icon3d(svgPx),
-      bgClass: 'bg-gradient-to-br from-slate-700/40 to-slate-900/40'
-    },
-    code: {
-      icon: iconCode(svgPx),
-      bgClass: 'bg-gradient-to-br from-emerald-900/30 to-teal-800/20'
-    }
+function fileTypeIcon(fileType: string, svgPx: number): JSX.Element {
+  const icons: Record<string, (n: number) => JSX.Element> = {
+    image: iconImage,
+    video: iconVideo,
+    audio: iconAudio,
+    font: iconFont,
+    document: iconDocument,
+    design: iconDesign,
+    '3d': icon3d,
+    code: iconCode
   }
-  return config[fileType] || config.document
+  const render = icons[fileType] ?? iconDocument
+  return render(svgPx)
 }
 
 function iconImage(n: number) {

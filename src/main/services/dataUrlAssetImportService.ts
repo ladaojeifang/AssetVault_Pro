@@ -3,6 +3,7 @@ import { join, extname, basename } from 'path'
 import { tmpdir } from 'os'
 import { v4 as uuidv4 } from 'uuid'
 import { ALL_SUPPORTED_IMPORT_EXTENSIONS } from '@/shared/supportedFormats'
+import { extensionFromMime, normalizeExtWithDot } from '@/shared/assetFormatRegistry'
 import { getLibraryRoot, sanitizeStorageFileName } from './libraryBundle'
 import { computeFileSha256 } from '../utils/contentHash'
 import { toCanonicalFilePath } from '../utils/pathUtils'
@@ -29,30 +30,11 @@ function parseDataUrl(dataUrl: string): ParsedDataUrl {
 }
 
 function extFromMime(mime: string): string | null {
-  const mt = mime.toLowerCase().trim()
-  switch (mt) {
-    case 'image/png':
-      return '.png'
-    case 'image/jpeg':
-    case 'image/jpg':
-      return '.jpg'
-    case 'image/jfif':
-      return '.jfif'
-    case 'image/webp':
-      return '.webp'
-    case 'image/gif':
-      return '.gif'
-    case 'image/bmp':
-      return '.bmp'
-    case 'image/svg+xml':
-      return '.svg'
-    default:
-      return null
-  }
+  return extensionFromMime(mime)
 }
 
 function resolveExt(mime: string, filenameHint?: string): string | null {
-  const extFromHint = filenameHint ? (filenameHint.startsWith('.') ? filenameHint : `.${filenameHint}`).toLowerCase().trim() : null
+  const extFromHint = filenameHint ? normalizeExtWithDot(filenameHint) : null
   if (extFromHint && ALL_SUPPORTED_IMPORT_EXTENSIONS.has(extFromHint)) return extFromHint
   const ext = extFromMime(mime)
   if (!ext) return null
