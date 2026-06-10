@@ -23,6 +23,7 @@ import { isSvgFilePath } from '@/shared/svgFormats'
 import { isExrFilePath } from '@/shared/exrFormats'
 import { renderExrThumbnailWebp } from './exrThumbnailRender'
 import { isCustomThumbnail } from './customThumbnail'
+import { articleBundleThumbAbs } from './thumbnailRead'
 import { renderSvgToWebpBuffer } from './svgThumbnailRenderer'
 import { isSvgRasterSkipped } from './svgRasterSkip'
 import {
@@ -437,6 +438,13 @@ export class ThumbnailService {
 
     if (!isTextPreviewExtension(dotExt)) {
       return null
+    }
+
+    const bundleThumbPath = articleBundleThumbAbs(assetId)
+    if (existsSync(bundleThumbPath)) {
+      const diskBuffer = readFileSync(bundleThumbPath)
+      this.lruCache.set(assetId, diskBuffer)
+      return { buffer: diskBuffer, path: bundleThumbPath }
     }
 
     if (force) {

@@ -40,6 +40,7 @@ import {
 } from '../../services/assetThumbnailOverride'
 import { notifyAllWindowsAssetsImported } from '../../services/importNotify'
 import { isAutoWatchFoldersEnabled } from '../../services/appPreferencesStore'
+import { readStoredThumbnailDataUrl, resolveExistingThumbnailRelPath, mimeTypeForThumbPath, libraryRelativeFromAbs } from '../../services/thumbnailRead'
 import { assertPlainObject, assertString, assertStringArray } from '../ipcGuards'
 
 registerDuplicateImportPromptHandlers()
@@ -440,21 +441,10 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
     if (!asset) return null
 
-    const readWebpDataUrl = (storedPath: string): string | null => {
-      try {
-        const abs = resolveLibraryPath(storedPath)
-        if (!existsSync(abs)) return null
-        const buffer = readFileSync(abs)
-        return `data:image/webp;base64,${buffer.toString('base64')}`
-      } catch {
-        return null
-      }
-    }
-
     const absFile = asset.filePath ? resolveAssetContentPath(asset) : ''
 
     if (isCustomThumbnail(asset.id)) {
-      const fromCustom = readWebpDataUrl(itemThumbRelative(asset.id))
+      const fromCustom = readStoredThumbnailDataUrl(itemThumbRelative(asset.id))
       if (fromCustom) return fromCustom
     }
 
@@ -474,8 +464,22 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     }
 
     if (asset.thumbnailPath) {
-      const fromDisk = readWebpDataUrl(asset.thumbnailPath)
+      const fromDisk = readStoredThumbnailDataUrl(asset.thumbnailPath)
       if (fromDisk) return fromDisk
+    }
+
+    const existingThumbRel = resolveExistingThumbnailRelPath(asset.id, asset.thumbnailPath)
+    if (existingThumbRel) {
+      const fromDisk = readStoredThumbnailDataUrl(existingThumbRel)
+      if (fromDisk) {
+        if (!asset.hasThumbnail || asset.thumbnailPath !== existingThumbRel) {
+          await database
+            .update(assets)
+            .set({ thumbnailPath: existingThumbRel, hasThumbnail: true, updatedAt: new Date() })
+            .where(eq(assets.id, id))
+        }
+        return fromDisk
+      }
     }
 
     if (asset.fileType === 'image' && absFile && existsSync(absFile)) {
@@ -554,7 +558,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
         const absThumb = resolveLibraryPath(relThumb)
 
         if (existsSync(absThumb)) {
-          const fromDisk = readWebpDataUrl(relThumb)
+          const fromDisk = readStoredThumbnailDataUrl(relThumb)
           if (fromDisk) {
             if (!asset.hasThumbnail || asset.thumbnailPath !== relThumb) {
               await database
@@ -587,7 +591,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
         const absThumb = resolveLibraryPath(relThumb)
 
         if (existsSync(absThumb)) {
-          const fromDisk = readWebpDataUrl(relThumb)
+          const fromDisk = readStoredThumbnailDataUrl(relThumb)
           if (fromDisk) {
             if (!asset.hasThumbnail || asset.thumbnailPath !== relThumb) {
               await database
@@ -621,16 +625,14 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       const ext = asset.extension || ''
       if (!isTextPreviewExtension('.' + ext)) return null
 
-      const relThumb = itemThumbRelative(asset.id)
-      const absThumb = resolveLibraryPath(relThumb)
-
-      if (existsSync(absThumb)) {
-        const fromDisk = readWebpDataUrl(relThumb)
+      const existingRel = resolveExistingThumbnailRelPath(asset.id, asset.thumbnailPath)
+      if (existingRel) {
+        const fromDisk = readStoredThumbnailDataUrl(existingRel)
         if (fromDisk) {
-          if (!asset.hasThumbnail || asset.thumbnailPath !== relThumb) {
+          if (!asset.hasThumbnail || asset.thumbnailPath !== existingRel) {
             await database
               .update(assets)
-              .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
+              .set({ thumbnailPath: existingRel, hasThumbnail: true, updatedAt: new Date() })
               .where(eq(assets.id, id))
           }
           return fromDisk
@@ -642,12 +644,14 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
         force: true
       })
       if (gen?.buffer?.length) {
+        const storedRel = (gen.path && libraryRelativeFromAbs(gen.path)) ?? itemThumbRelative(asset.id)
         await database
           .update(assets)
-          .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
+          .set({ thumbnailPath: storedRel, hasThumbnail: true, updatedAt: new Date() })
           .where(eq(assets.id, id))
+        const mime = mimeTypeForThumbPath(storedRel)
         const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
-        return `data:image/webp;base64,${buf.toString('base64')}`
+        return `data:${mime};base64,${buf.toString('base64')}`
       }
     }
 

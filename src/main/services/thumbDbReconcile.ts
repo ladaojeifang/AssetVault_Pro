@@ -1,21 +1,16 @@
 import { eq } from 'drizzle-orm'
-import { existsSync } from 'fs'
 import { getDatabase } from '../db'
 import { assets } from '../db/schema'
-import { itemThumbRelative, resolveLibraryPath } from './libraryBundle'
+import { resolveExistingThumbnailRelPath } from './thumbnailRead'
 import { syncAssetSidecarFromDb } from './assetSidecar'
 
 type Database = ReturnType<typeof getDatabase>
 
-/** Align has_thumbnail / thumbnail_path with thumb.webp on disk. */
+/** Align has_thumbnail / thumbnail_path with on-disk thumbnail files. */
 export async function reconcileThumbnailDbWithDisk(
   database: Database,
   assetId: string
 ): Promise<{ hasThumb: boolean; relPath: string | null }> {
-  const relThumb = itemThumbRelative(assetId)
-  const absThumb = resolveLibraryPath(relThumb)
-  const onDisk = existsSync(absThumb)
-
   const row = await database
     .select({
       hasThumbnail: assets.hasThumbnail,
@@ -27,15 +22,16 @@ export async function reconcileThumbnailDbWithDisk(
 
   if (!row) return { hasThumb: false, relPath: null }
 
-  if (onDisk) {
-    if (!row.hasThumbnail || row.thumbnailPath !== relThumb) {
+  const existingRel = resolveExistingThumbnailRelPath(assetId, row.thumbnailPath)
+  if (existingRel) {
+    if (!row.hasThumbnail || row.thumbnailPath !== existingRel) {
       await database
         .update(assets)
-        .set({ hasThumbnail: true, thumbnailPath: relThumb, updatedAt: new Date() })
+        .set({ hasThumbnail: true, thumbnailPath: existingRel, updatedAt: new Date() })
         .where(eq(assets.id, assetId))
       await syncAssetSidecarFromDb(database, assetId)
     }
-    return { hasThumb: true, relPath: relThumb }
+    return { hasThumb: true, relPath: existingRel }
   }
 
   if (row.hasThumbnail || row.thumbnailPath) {

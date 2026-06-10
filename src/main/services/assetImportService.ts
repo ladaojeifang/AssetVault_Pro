@@ -27,7 +27,8 @@ function buildImportOpts(options?: ApiImportOptions) {
     targetFolderId: options?.targetFolderId,
     duplicatePolicy: options?.duplicatePolicy ?? 'use_existing',
     presetAssetId: options?.presetAssetId,
-    skipCopyIntoPack: options?.skipCopyIntoPack
+    skipCopyIntoPack: options?.skipCopyIntoPack,
+    skipTextPreviewThumbnail: options?.skipTextPreviewThumbnail
   }
 }
 

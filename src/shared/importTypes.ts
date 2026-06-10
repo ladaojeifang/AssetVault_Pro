@@ -33,6 +33,8 @@ export interface ImportAssetOptions {
   presetAssetId?: string
   /** Primary file is already at the pack path under the library; do not copy/hardlink again. */
   skipCopyIntoPack?: boolean
+  /** Skip async text-preview thumbnail (e.g. article bundle already provides _thumb.jpg). */
+  skipTextPreviewThumbnail?: boolean
 }
 
 export interface ContentHashScanProgress {

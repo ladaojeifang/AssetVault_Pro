@@ -18,3 +18,6 @@ export const ARTICLE_BUNDLE_SESSION_LIMITS = {
   appendTimeoutMs: 30_000,
   finishTimeoutMs: 120_000
 } as const
+
+/** Browser article bundle viewport capture — stored under items/{assetId}/ */
+export const ARTICLE_BUNDLE_THUMB_RELATIVE = '_thumb.jpg'

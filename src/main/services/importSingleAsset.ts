@@ -45,6 +45,7 @@ import { schedule3dThumbnailAfterImport } from './regenerateModelThumbnails'
 import { scheduleEmbeddedDccThumbnailAfterImport } from './regenerateEmbeddedDccThumbnails'
 import { scheduleTextPreviewThumbnailAfterImport } from './regenerateTextPreviewThumbnails'
 import { buildDuplicatePromptPayload, findAssetIdByContentHash } from './contentHashService'
+import { resolveExistingThumbnailRelPath } from './thumbnailRead'
 import { isEmbeddedInPlaceImport } from './embeddedAssetImport'
 
 export interface ImportSingleAssetOptions extends ImportAssetOptions {
@@ -442,7 +443,8 @@ export async function importSingleAsset(
         targetFolderId,
         fileType,
         destAbs,
-        extNoDot
+        extNoDot,
+        skipTextPreviewThumbnail: opts.skipTextPreviewThumbnail
       })
     }
 
@@ -493,8 +495,17 @@ export async function importSingleAsset(
     targetFolderId,
     fileType,
     destAbs,
-    extNoDot
+    extNoDot,
+    skipTextPreviewThumbnail: opts.skipTextPreviewThumbnail
   })
+}
+
+function shouldSkipTextPreviewThumbnail(
+  assetId: string,
+  skipRequested?: boolean
+): boolean {
+  if (skipRequested) return true
+  return resolveExistingThumbnailRelPath(assetId) !== null
 }
 
 async function finalizeImportedAsset(
@@ -505,9 +516,10 @@ async function finalizeImportedAsset(
     fileType: string
     destAbs: string
     extNoDot: string
+    skipTextPreviewThumbnail?: boolean
   }
 ): Promise<string> {
-  const { id, targetFolderId, fileType, destAbs, extNoDot } = opts
+  const { id, targetFolderId, fileType, destAbs, extNoDot, skipTextPreviewThumbnail } = opts
 
   const row = await database.select().from(assets).where(eq(assets.id, id)).get()
   if (!row) {
@@ -539,7 +551,8 @@ async function finalizeImportedAsset(
     void scheduleEmbeddedDccThumbnailAfterImport(database, id, destAbs, extNoDot)
   } else if (
     (fileType === 'code' || fileType === 'document') &&
-    isTextPreviewExtension('.' + extNoDot)
+    isTextPreviewExtension('.' + extNoDot) &&
+    !shouldSkipTextPreviewThumbnail(id, skipTextPreviewThumbnail)
   ) {
     void scheduleTextPreviewThumbnailAfterImport(database, id, destAbs, extNoDot, fileType)
   }

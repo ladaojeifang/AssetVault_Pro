@@ -1,5 +1,5 @@
 import { join, extname, basename } from 'path'
-import { statSync, mkdirSync, copyFileSync } from 'fs'
+import { statSync, mkdirSync, copyFileSync, existsSync, unlinkSync } from 'fs'
 import { v4 as uuidv4 } from 'uuid'
 import {
   getLibraryRoot,
@@ -11,6 +11,8 @@ import { posixRelToFsAbs } from '../importSingleAssetHelpers'
 import { importAssetFromPath } from '../assetImportService'
 import { patchAsset } from '../assetMutationService'
 import { getAssetById } from '../assetQueryService'
+import { ARTICLE_BUNDLE_THUMB_RELATIVE } from '@/shared/articleBundleSessionTypes'
+import { itemThumbRelative } from '../libraryBundle'
 import { assertBundlePathInSessionDir, removeDirRecursive } from './articleBundleSessionPathPolicy'
 import { writeBundleFileFromDataUrl, writeBundleFileFromRemoteUrl } from './articleBundleSessionFileWrite'
 import {
@@ -205,7 +207,8 @@ export async function articleBundleSessionFinish(body: Record<string, unknown>) 
       targetFolderId: session.output.targetFolderId ?? undefined,
       duplicatePolicy: session.output.duplicatePolicy,
       presetAssetId: assetId,
-      skipCopyIntoPack: true
+      skipCopyIntoPack: true,
+      skipTextPreviewThumbnail: true
     })
   } catch (e) {
     removeItemPack(assetId)
@@ -234,7 +237,7 @@ export async function articleBundleSessionFinish(body: Record<string, unknown>) 
   }
 
   try {
-    const thumbRel = `items/${assetId}/${thumbnailReq.replace(/\\/g, '/')}`
+    const thumbRel = `items/${assetId}/${ARTICLE_BUNDLE_THUMB_RELATIVE.replace(/\\/g, '/')}`
     const db = getDatabase()
     await db
       .update(assets)
@@ -243,6 +246,15 @@ export async function articleBundleSessionFinish(body: Record<string, unknown>) 
         hasThumbnail: true
       })
       .where(eq(assets.id, assetId))
+
+    const strayWebpAbs = join(itemDirAbs, basename(itemThumbRelative(assetId)))
+    if (existsSync(strayWebpAbs)) {
+      try {
+        unlinkSync(strayWebpAbs)
+      } catch {
+        // non-fatal
+      }
+    }
   } catch (e) {
     console.warn('[ArticleBundle] Failed to set bundle thumbnail:', e)
     warnings.push({ code: 'BUNDLE_THUMB_FAILED', message: String(e) })

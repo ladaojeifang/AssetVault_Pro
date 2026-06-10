@@ -3,6 +3,7 @@ import { existsSync } from 'fs'
 import { assets } from '../../db/schema'
 import { resolveLibraryPath, itemThumbRelative } from '../libraryBundle'
 import { resolveAssetContentPath } from '../assetPathResolver'
+import { resolveExistingThumbnailRelPath } from '../thumbnailRead'
 import { getThumbnailService } from '../ThumbnailService'
 import {
   clearThumbnailSkip,
@@ -27,11 +28,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
 }
 
-async function syncExistingThumbToDb(database: Database, assetId: string): Promise<void> {
+async function syncExistingThumbPathToDb(
+  database: Database,
+  assetId: string,
+  relPath: string
+): Promise<void> {
   await database
     .update(assets)
     .set({
-      thumbnailPath: itemThumbRelative(assetId),
+      thumbnailPath: relPath,
       hasThumbnail: true,
       updatedAt: new Date()
     })
@@ -64,10 +69,7 @@ async function persistGeneratedThumb(
 function shouldProcessPendingRow(row: AssetThumbRow, job: AsyncThumbnailJob): boolean {
   if (isCustomThumbnail(row.id)) return false
 
-  if (row.hasThumbnail && row.thumbnailPath) {
-    const absThumb = resolveLibraryPath(row.thumbnailPath)
-    if (existsSync(absThumb)) return false
-  }
+  if (resolveExistingThumbnailRelPath(row.id, row.thumbnailPath)) return false
 
   const absThumbPath = resolveLibraryPath(itemThumbRelative(row.id))
   const pipeline = job.id as ThumbSkipPipeline
@@ -93,10 +95,17 @@ export async function runThumbnailJobForAsset(
   if (!job.matchesAsset(fileType, extNoDot)) return
   if (isCustomThumbnail(assetId)) return
 
-  const absThumb = resolveLibraryPath(itemThumbRelative(assetId))
-  if (existsSync(absThumb)) {
+  const row = await database
+    .select({ thumbnailPath: assets.thumbnailPath })
+    .from(assets)
+    .where(eq(assets.id, assetId))
+    .get()
+  const existingRel = resolveExistingThumbnailRelPath(assetId, row?.thumbnailPath)
+  if (existingRel) {
     try {
-      await syncExistingThumbToDb(database, assetId)
+      if (row?.thumbnailPath !== existingRel) {
+        await syncExistingThumbPathToDb(database, assetId, existingRel)
+      }
     } catch (error) {
       console.warn(`[${job.logTag}] thumbnail DB sync failed:`, error)
     }
