@@ -15,6 +15,7 @@ import {
   writeLibraryUserState,
   buildStateAfterSwitch
 } from './libraryBundle'
+import { getFileWatcher } from './FileWatcher'
 
 /** Serialize library switches — overlapping async IPC could corrupt DB / active-library.json. */
 let switchChain: Promise<unknown> = Promise.resolve()
@@ -28,6 +29,14 @@ function assertDirectory(path: string): string {
     throw new Error('不是文件夹')
   }
   return n
+}
+
+function broadcastLibrarySwitching(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('library:switching')
+    }
+  }
 }
 
 function broadcastLibrarySwitched(root: string): void {
@@ -77,6 +86,9 @@ async function switchActiveLibraryOnce(newRootRaw: string): Promise<{ ok: true }
       ensureLibraryDirectories(root)
       ensureManifest(root)
     }
+
+    broadcastLibrarySwitching()
+    getFileWatcher().stop()
 
     await flushDatabase()
     await closeDatabase()

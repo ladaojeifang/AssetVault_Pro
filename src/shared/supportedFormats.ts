@@ -7,6 +7,7 @@ import { MODEL3D_ALL_EXTENSIONS } from './model3dFormats'
 export const IMAGE_EXTENSIONS = new Set([
   '.jpg',
   '.jpeg',
+  '.jfif',
   '.png',
   '.gif',
   '.webp',

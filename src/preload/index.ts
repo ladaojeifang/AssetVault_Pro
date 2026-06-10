@@ -215,6 +215,11 @@ const api = {
       ipcRenderer.on('library:switched', handler)
       return () => ipcRenderer.removeListener('library:switched', handler)
     },
+    onLibrarySwitching: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('library:switching', handler)
+      return () => ipcRenderer.removeListener('library:switching', handler)
+    },
     onUpgradeProgress: (callback: (data: import('../../shared/libraryTypes').UpgradeLibraryProgress) => void) => {
       const handler = (_: unknown, data: import('../../shared/libraryTypes').UpgradeLibraryProgress) =>
         callback(data)

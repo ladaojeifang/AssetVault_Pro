@@ -25,4 +25,9 @@ describe('ffmpegRasterImageFormats', () => {
     expect(isFfmpegStillRasterImagePath('C:/tex/albedo.png')).toBe(false)
     expect(isFfmpegStillRasterImageExtension('HDR')).toBe(true)
   })
+
+  it('jfif is a supported JPEG-family image, not ffmpeg-raster', () => {
+    expect(IMAGE_EXTENSIONS.has('.jfif')).toBe(true)
+    expect(isFfmpegStillRasterImageExtension('.jfif')).toBe(false)
+  })
 })

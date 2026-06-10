@@ -133,7 +133,7 @@ const Sidebar: React.FC = () => {
 
   const pickFolderIconFromDisk = useCallback(async () => {
     const paths = (await window.assetVaultAPI.fs.selectDialog({
-      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'svg'] }]
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'jfif', 'gif', 'webp', 'ico', 'svg'] }]
     })) as string[]
     const first = paths?.[0]
     if (!first) return
@@ -243,7 +243,7 @@ const Sidebar: React.FC = () => {
 
   const pickIconEditFromDisk = useCallback(async () => {
     const paths = (await window.assetVaultAPI.fs.selectDialog({
-      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'svg'] }]
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'jfif', 'gif', 'webp', 'ico', 'svg'] }]
     })) as string[]
     const first = paths?.[0]
     if (!first) return

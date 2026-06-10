@@ -5,7 +5,7 @@ import { app } from 'electron'
 
 const ALLOWED_EXTS = new Set([
   '.md', '.json',
-  '.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.avif',
+  '.jpg', '.jpeg', '.jfif', '.png', '.webp', '.gif', '.svg', '.avif',
   '.mp4', '.webm', '.mov', '.m4v'
 ])
 

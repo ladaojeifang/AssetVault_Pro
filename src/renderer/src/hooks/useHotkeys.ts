@@ -102,7 +102,7 @@ const HOTKEY_MAP: Record<string, (ctx: ReturnType<typeof useApp>) => void> = {
         filters: [
           {
             name: 'Images',
-            extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'avif', 'exr']
+            extensions: ['jpg', 'jpeg', 'jfif', 'png', 'webp', 'gif', 'bmp', 'avif', 'exr']
           }
         ]
       })

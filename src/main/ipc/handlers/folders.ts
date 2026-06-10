@@ -143,7 +143,7 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
     if (!st.isFile()) throw new Error('Not a file')
     if (st.size > 2 * 1024 * 1024) throw new Error('Image too large (max 2 MB)')
     const ext = extname(src).toLowerCase()
-    const ok = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.svg'])
+    const ok = new Set(['.png', '.jpg', '.jpeg', '.jfif', '.gif', '.webp', '.ico', '.svg'])
     if (!ok.has(ext)) throw new Error('Unsupported image type')
     const root = getLibraryRoot()
     const dir = join(root, 'folder-icons')
@@ -173,7 +173,7 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
     const buf = readFileSync(abs)
     if (buf.length > 512 * 1024) return null
     const ext = extname(abs).toLowerCase()
-    if (!['.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.svg'].includes(ext)) return null
+    if (!['.png', '.jpg', '.jpeg', '.jfif', '.gif', '.webp', '.ico', '.svg'].includes(ext)) return null
     return `data:${mimeForIconExt(ext)};base64,${buf.toString('base64')}`
   })
 

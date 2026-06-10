@@ -16,7 +16,7 @@ export function libraryRelativeFromAbs(absPath: string): string | null {
 
 export function mimeTypeForThumbPath(storedPath: string): string {
   const ext = extname(storedPath).toLowerCase()
-  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg'
+  if (ext === '.jpg' || ext === '.jpeg' || ext === '.jfif') return 'image/jpeg'
   if (ext === '.png') return 'image/png'
   if (ext === '.gif') return 'image/gif'
   if (ext === '.webp') return 'image/webp'

@@ -1,7 +1,7 @@
 import chokidar from 'chokidar'
 import { basename } from 'path'
 import { statSync, existsSync } from 'fs'
-import { getDatabase } from '../db'
+import { getDatabase, isDatabaseReady } from '../db'
 import { assets } from '../db/schema'
 import { eq } from 'drizzle-orm'
 import { importSingleAsset } from './importSingleAsset'
@@ -95,6 +95,7 @@ export class FileWatcher {
 
   private handleFileAdd(filePath: string): void {
     this.debounce(`add:${filePath}`, async () => {
+      if (!isDatabaseReady()) return
       try {
         if (!existsSync(filePath)) return
 
@@ -126,6 +127,7 @@ export class FileWatcher {
 
   private handleFileChange(filePath: string): void {
     this.debounce(`change:${filePath}`, async () => {
+      if (!isDatabaseReady()) return
       try {
         const database = getDatabase()
         const canonical = toCanonicalFilePath(filePath)
@@ -152,6 +154,7 @@ export class FileWatcher {
 
   private handleFileDelete(filePath: string): void {
     this.debounce(`delete:${filePath}`, async () => {
+      if (!isDatabaseReady()) return
       try {
         const database = getDatabase()
         const canonical = toCanonicalFilePath(filePath)

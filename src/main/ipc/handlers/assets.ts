@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { existsSync, statSync, readdirSync, readFileSync } from 'fs'
 import { join, basename, extname, dirname } from 'path'
-import { flushDatabase, getDatabase } from '../../db'
+import { flushDatabase, getDatabase, isDatabaseReady } from '../../db'
 import { assets, assetTags, assetFolders } from '../../db/schema'
 import { eq, and, inArray } from 'drizzle-orm'
 import type { QueryParams, ImportProgress } from '@/shared/types'
@@ -421,6 +421,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
   ipc.handle('assets:get-thumbnail', async (_event, id: string) => {
     assertString('id', id)
+    if (!isDatabaseReady()) return null
     const database = getDatabase()
     const asset = await database
       .select({

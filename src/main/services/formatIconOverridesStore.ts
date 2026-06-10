@@ -64,7 +64,7 @@ export function importFormatIconImage(sourcePath: string, extension: string): st
   if (!ext) throw new Error('无效的扩展名')
 
   const srcExt = extname(sourcePath).toLowerCase() || '.png'
-  const allowed = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.bmp', '.ico'])
+  const allowed = new Set(['.png', '.jpg', '.jpeg', '.jfif', '.webp', '.gif', '.svg', '.bmp', '.ico'])
   if (!allowed.has(srcExt)) {
     throw new Error('仅支持 PNG、JPG、WebP、GIF、SVG、BMP、ICO')
   }

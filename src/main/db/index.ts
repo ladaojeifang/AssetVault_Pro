@@ -26,6 +26,11 @@ export function getDatabase() {
   return db
 }
 
+/** True while a library.sqlite connection is open (false during library switch gap). */
+export function isDatabaseReady(): boolean {
+  return db != null
+}
+
 export function getRawSqlite(): Database {
   if (!sqliteDb) {
     throw new Error('Database not initialized. Call initDatabase() first.')

@@ -12,6 +12,7 @@ import {
 
 const IMAGE_MIMES = new Set([
   'image/jpeg',
+  'image/jfif',
   'image/png',
   'image/gif',
   'image/webp',

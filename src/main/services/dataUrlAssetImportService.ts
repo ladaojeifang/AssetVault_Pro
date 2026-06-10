@@ -36,6 +36,8 @@ function extFromMime(mime: string): string | null {
     case 'image/jpeg':
     case 'image/jpg':
       return '.jpg'
+    case 'image/jfif':
+      return '.jfif'
     case 'image/webp':
       return '.webp'
     case 'image/gif':

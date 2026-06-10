@@ -313,13 +313,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, 200)
   }, [fetchAssets])
 
-  const reloadAfterLibrarySwitch = useCallback(async () => {
+  const beginLibrarySwitchClear = useCallback(() => {
     listGenerationRef.current += 1
-    lastFullFetchGenRef.current = listGenerationRef.current
-    const gen = listGenerationRef.current
-    const sortField = stateRef.current.sortField
-    const sortOrder = stateRef.current.sortOrder
-
     setState((prev) => ({
       ...prev,
       selectedAssetIds: new Set(),
@@ -340,6 +335,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       isLoading: true,
       isLoadingMore: false
     }))
+  }, [])
+
+  const reloadAfterLibrarySwitch = useCallback(async () => {
+    beginLibrarySwitchClear()
+    lastFullFetchGenRef.current = listGenerationRef.current
+    const gen = listGenerationRef.current
+    const sortField = stateRef.current.sortField
+    const sortOrder = stateRef.current.sortOrder
 
     let tree: FolderItem[] = []
     let tagList: TagItem[] = []
@@ -380,14 +383,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setState((prev) => ({ ...prev, isLoading: false, isLoadingMore: false }))
       }
     }
-  }, [])
+  }, [beginLibrarySwitchClear])
 
   useEffect(() => {
+    const unsubSwitching = window.assetVaultAPI.library.onLibrarySwitching(() => {
+      beginLibrarySwitchClear()
+    })
     const unsub = window.assetVaultAPI.library.onLibrarySwitched(() => {
       void reloadAfterLibrarySwitch()
     })
-    return unsub
-  }, [reloadAfterLibrarySwitch])
+    return () => {
+      unsubSwitching()
+      unsub()
+    }
+  }, [beginLibrarySwitchClear, reloadAfterLibrarySwitch])
 
   useEffect(() => {
     const unsub = window.assetVaultAPI.onAssetsImported(() => {

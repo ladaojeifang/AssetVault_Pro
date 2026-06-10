@@ -55,7 +55,7 @@ image | video | audio | font | design | document | 3d | code | other
 
 | 类别 | 扩展名 |
 |------|--------|
-| 常见位图 | `.jpg` `.jpeg` `.png` `.gif` `.webp` `.bmp` `.tga` `.ico` |
+| 常见位图 | `.jpg` `.jpeg` `.jfif` `.png` `.gif` `.webp` `.bmp` `.tga` `.ico` |
 | 矢量 | `.svg` |
 | HDR / 现代 | `.exr` `.hdr` `.heic` `.heif` `.avif` `.qoi` `.apng` |
 | PNM / 贴图 / farbfeld | `.pbm` `.pgm` `.ppm` `.pam` `.dds` `.ff`（`@napi-rs/image` 直解） |
