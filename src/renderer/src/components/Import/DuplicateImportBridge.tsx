@@ -4,7 +4,7 @@ import { Modal, Checkbox } from '@arco-design/web-react'
 import type { DuplicateImportAnswer, DuplicateImportPromptPayload } from '@/shared/importTypes'
 import { formatFileSize } from '@/shared/types'
 
-export function DuplicateImportBridge(): null {
+export function DuplicateImportBridge(): React.ReactElement | null {
   const { t } = useTranslation(['import', 'common'])
   const [open, setOpen] = useState(false)
   const [payload, setPayload] = useState<DuplicateImportPromptPayload | null>(null)

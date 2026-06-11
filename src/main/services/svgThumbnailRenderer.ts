@@ -247,7 +247,7 @@ export async function renderSvgToWebpBuffer(
   const run = async (): Promise<Buffer | null> => {
     const dataUrl = svgFileToDataUrl(absFilePath)
     if (!dataUrl) return null
-    return renderViaHiddenWindow(dataUrl, options)
+    return renderViaHiddenWindow(dataUrl, options ?? {})
   }
 
   const done = thumbRenderQueue.then(run, run)
@@ -256,4 +256,8 @@ export async function renderSvgToWebpBuffer(
     () => undefined
   )
   return done
+}
+
+export function awaitSvgThumbnailRenderIdle(): Promise<void> {
+  return thumbRenderQueue
 }

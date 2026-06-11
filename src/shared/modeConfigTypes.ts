@@ -12,6 +12,10 @@ export type ConfigNodeType =
   | 'GENERATE_STORYBOARD'
 
 export type CanvasNodeType =
+  | 'BASE_TEXT'
+  | 'BASE_IMAGE'
+  | 'BASE_VIDEO'
+  | 'BASE_AUDIO'
   | 'GENERATE_TEXT'
   | 'GENERATE_IMAGE'
   | 'GENERATE_VIDEO'

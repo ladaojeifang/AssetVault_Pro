@@ -83,3 +83,5 @@ window.svgThumbHost.onRenderRequest(async (payload) => {
 })
 
 window.svgThumbHost.sendResult({ ok: true, ready: true })
+
+export {}

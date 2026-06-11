@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3'
+import type { SqliteDatabase } from '../db/sqliteTypes'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import type { BrowserWindow } from 'electron'
@@ -58,7 +58,7 @@ async function importArchiveToArchiveFromPath(
   const targetDb = getDatabase()
   const targetRoot = getLibraryRoot()
 
-  let sourceDb: Database
+  let sourceDb: SqliteDatabase
   try {
     sourceDb = openSourceLibraryDb(sourceDbPath)
   } catch (e) {

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useFormatIconForExtension } from '../../stores/FormatIconOverridesContext'
 import type { FormatIconEntry } from '@/shared/formatIconOverrides'
 import { getMimeForExtension } from '@/shared/assetFormatRegistry'
+import { toBlobPart } from '@/shared/blobUtils'
 import { fileTypePlaceholderGradientStyle } from '../../theme/fileTypeVisualStyle'
 
 function mimeForFormatIconPath(filePath: string): string {
@@ -82,11 +83,13 @@ export function FileTypePlaceholder({
 function FormatIconImage({
   path,
   extension,
-  color
+  color,
+  size: _size
 }: {
   path: string
   extension?: string | null
   color?: string | null
+  size?: FileTypePlaceholderSize
 }) {
   const [src, setSrc] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
@@ -102,7 +105,7 @@ function FormatIconImage({
         const bytes = await window.assetVaultAPI.fs.readFileBytes(path)
         if (cancelled || !bytes?.byteLength) return
         objectUrl = URL.createObjectURL(
-          new Blob([bytes], { type: mimeForFormatIconPath(path) })
+          new Blob([toBlobPart(bytes)], { type: mimeForFormatIconPath(path) })
         )
         if (!cancelled) setSrc(objectUrl)
       } catch {

@@ -40,6 +40,10 @@ const FLOW_TO_CANVAS: Record<FlowNodeType, CanvasNodeType> = {
 }
 
 const CANVAS_TO_FLOW: Record<CanvasNodeType, FlowNodeType> = {
+  BASE_TEXT: 'base_text',
+  BASE_IMAGE: 'base_image',
+  BASE_VIDEO: 'base_video',
+  BASE_AUDIO: 'base_audio',
   GENERATE_TEXT: 'generate_text',
   GENERATE_IMAGE: 'generate_image',
   GENERATE_VIDEO: 'generate_video',

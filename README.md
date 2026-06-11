@@ -1,6 +1,11 @@
 # AssetVault Pro
 
-Professional Digital Asset Management (DAM) System - Desktop Application
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/YOUR_ORG/AssetVault_Pro/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_ORG/AssetVault_Pro/actions/workflows/ci.yml)
+
+Professional Digital Asset Management (DAM) System — desktop application (**Community Edition**, MIT).
+
+> **Status:** V0.5 Alpha — APIs and on-disk formats may change between releases.
 
 ## Overview
 
@@ -16,6 +21,25 @@ AssetVault Pro is a modern, high-performance desktop application for managing di
 - **Virtual Scrolling**: Smooth rendering of 100K+ assets
 - **Dark Theme**: Professional dark UI optimized for creative workflows
 - **Web API (v1)**: Local HTTP API for automation while the app is running — see [doc/web-api-v1-guide.md](doc/web-api-v1-guide.md)
+
+## Open source & commercial
+
+This repository is the **open-source Community Edition**, released under the [MIT License](LICENSE).
+
+| Edition | Scope |
+|---------|--------|
+| **Community (this repo)** | Local desktop DAM, import/preview/search, Web API v1, browser extension integration |
+| **Commercial (planned)** | Team hub, advanced collaboration, enterprise integrations, hosted services — **not included here**; terms and availability will be announced separately if offered |
+
+Roadmap items in [doc/DEVELOPMENT_PLAN.md](doc/DEVELOPMENT_PLAN.md) and related PRDs are **planning documents**, not commitments. Forks may redistribute under MIT; see [TRADEMARK.md](TRADEMARK.md) for naming and logo rules.
+
+**Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md) · **Security:** [SECURITY.md](SECURITY.md)
+
+## Related projects
+
+| Project | Description |
+|---------|-------------|
+| [AssetVault Browser Extension](https://github.com/YOUR_ORG/AssetVault_Browser_Extension) | Chrome/Edge MV3 extension — saves web media via the local Web API |
 
 ## Documentation
 
@@ -47,7 +71,7 @@ All project documentation lives under **[doc/](doc/README.md)** (PRD, developmen
 
 ```bash
 # Clone the repository
-git clone <repo-url>
+git clone https://github.com/YOUR_ORG/AssetVault_Pro.git
 cd AssetVault_Pro
 
 # Install dependencies
@@ -259,8 +283,8 @@ src/
 2. 已在切库成功路径与失败回滚路径调用 `loadLibraryModeFromManifest(...)`，保证 `sessionLibraryMode` 与 manifest 一致。
 3. 已新增 `src/main/ipc/ipcGuards.ts` 并在 `assets/folders/tags/fs/fonts/library` 等 IPC handler 上加输入校验；可继续向其他入口扩展并补更多回归项。
 
-当前仓库**无**自动化测试（`*.test.ts` / `*.spec.ts`），上述风险只能靠手测与代码审查覆盖。
+自动化测试见 [testing/README.md](testing/README.md)（单元 + 集成 + OpenAPI 契约；`pnpm test` / `pnpm run test:all`）。UI 与全链路 E2E 仍以本节手测为主。
 
 ## License
 
-MIT
+[MIT](LICENSE) — Copyright (c) AssetVault Team. Third-party binaries (e.g. ffmpeg, yt-dlp) are subject to their own licenses; see packaging scripts and `resources/bin/`.

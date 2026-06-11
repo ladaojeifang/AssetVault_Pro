@@ -1,4 +1,5 @@
 import type { AssetItem } from '@/shared/types'
+import { toBlobPart } from '@/shared/blobUtils'
 import { getMimeForExtension } from '@/shared/assetFormatRegistry'
 import { canAssetPreview } from '@/shared/assetPreviewRegistry'
 
@@ -49,7 +50,7 @@ export async function loadMarkdownImageObjectUrl(
   try {
     const bytes = await window.assetVaultAPI.fs.readFileBytes(absPath)
     if (!bytes?.byteLength) return undefined
-    const blob = new Blob([bytes], { type: mimeForImagePath(absPath) })
+    const blob = new Blob([toBlobPart(bytes)], { type: mimeForImagePath(absPath) })
     return URL.createObjectURL(blob)
   } catch {
     return undefined

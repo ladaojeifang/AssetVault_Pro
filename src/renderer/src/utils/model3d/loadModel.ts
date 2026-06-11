@@ -121,11 +121,13 @@ function objectUrlFromBytes(bytes: ArrayBufferView): string {
     bytes instanceof Uint8Array
       ? bytes
       : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  return URL.createObjectURL(new Blob([view]))
+  const copy = new Uint8Array(view.byteLength)
+  copy.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength))
+  return URL.createObjectURL(new Blob([copy]))
 }
 
 function meshHasVertices(mesh: AbstractMesh): boolean {
-  mesh.refreshBoundingInfo(true)
+  mesh.refreshBoundingInfo({})
   if (mesh.getTotalVertices() > 0) return true
   return (mesh.geometry?.getTotalVertices() ?? 0) > 0
 }

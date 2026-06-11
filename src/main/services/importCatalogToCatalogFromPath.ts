@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3'
+import type { SqliteDatabase } from '../db/sqliteTypes'
 import { existsSync } from 'fs'
 import { normalize } from 'path'
 import { v4 as uuidv4 } from 'uuid'
@@ -102,7 +102,7 @@ async function processLocalizedAsset(
   targetDb: ReturnType<typeof getDatabase>,
   targetRoot: string,
   sourceRoot: string,
-  sourceDb: Database,
+  sourceDb: SqliteDatabase,
   row: SourceAssetRow,
   contentHash: string,
   contentAbs: string,
@@ -189,7 +189,7 @@ async function processLocalizedAsset(
 
 async function processReferencedAsset(
   targetDb: ReturnType<typeof getDatabase>,
-  sourceDb: Database,
+  sourceDb: SqliteDatabase,
   row: SourceAssetRow,
   contentHash: string,
   contentAbs: string,
@@ -246,7 +246,7 @@ export async function importCatalogToCatalogFromPath(
   const targetDb = getDatabase()
   const targetRoot = getLibraryRoot()
 
-  let sourceDb: Database
+  let sourceDb: SqliteDatabase
   try {
     sourceDb = openSourceLibraryDb(sourceDbPath)
   } catch (e) {

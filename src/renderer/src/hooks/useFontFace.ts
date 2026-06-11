@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AssetItem } from '@/shared/types'
+import { toBlobPart } from '@/shared/blobUtils'
 import { fontPreviewFamilyName } from '../utils/fontAssetMeta'
 import { resolveLibraryFileProtocolUrl } from '../utils/appFileProtocolUrl'
 import { i18n } from '../i18n'
@@ -39,7 +40,7 @@ async function loadFontFaceFromBytes(
 ): Promise<FontFace> {
   const bytes = await window.assetVaultAPI.fs.readFileBytes(storedPath)
   const mime = MIME_BY_EXT[extension] ?? 'application/octet-stream'
-  const blob = new Blob([bytes], { type: mime })
+  const blob = new Blob([toBlobPart(bytes)], { type: mime })
   const blobUrl = URL.createObjectURL(blob)
   try {
     const face = new FontFace(familyName, fontFaceSourceUrl(blobUrl, extension))
@@ -84,11 +85,13 @@ export function useFontFace(asset: AssetItem | null): {
     let cancelled = false
     let face: FontFace | null = null
 
+    const current = asset
+
     async function load() {
       try {
         setLoaded(false)
         setError(null)
-        face = await loadFontFaceForAsset(asset, familyName)
+        face = await loadFontFaceForAsset(current, familyName)
         if (cancelled) return
         document.fonts.add(face)
         setLoaded(true)

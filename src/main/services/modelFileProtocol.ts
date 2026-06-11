@@ -58,7 +58,7 @@ export function setupModelFileProtocolHandler(): void {
       const abs = absPathFromModelRequestUrl(request.url)
       const body = await readFile(abs)
       const ext = extname(abs).toLowerCase()
-      return new Response(body, {
+      return new Response(new Uint8Array(body), {
         status: 200,
         headers: {
           'Content-Type': MIME_BY_EXT[ext] ?? 'application/octet-stream',

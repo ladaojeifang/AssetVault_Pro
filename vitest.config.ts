@@ -1,9 +1,16 @@
 import { resolve } from 'path'
 import { defineConfig } from 'vitest/config'
 
+const runIntegration = process.env.TEST_INTEGRATION === '1'
+
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts'],
+    include: [
+      'testing/unit/**/*.test.ts',
+      'testing/gen/**/*.test.ts',
+      ...(runIntegration ? ['testing/integration/**/*.test.ts'] : [])
+    ],
+    exclude: runIntegration ? [] : ['testing/integration/**'],
     testTimeout: 60_000
   },
   resolve: {

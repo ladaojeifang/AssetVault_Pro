@@ -100,9 +100,9 @@ export function migrateLoadedNodes(nodes: Node[]): Node[] {
     return {
       ...n,
       type: flowType,
-      data: migrateGenerateData(canvasNodeType, d, displayIndex)
+      data: migrateGenerateData(canvasNodeType, d, displayIndex) as unknown as Record<string, unknown>
     }
-  })
+  }) as Node[]
 }
 
 export function migrateLoadedCanvas(

@@ -15,9 +15,12 @@ export function isAssetDragEvent(e: React.DragEvent | DragEvent): boolean {
 
 /** Parse asset ids from an in-app asset drag (grid or sidebar). */
 export function parseAssetDragPayload(e: React.DragEvent | DragEvent): AssetDragPayload | null {
+  const dt = e.dataTransfer
+  if (!dt) return null
+
   let raw = ''
   try {
-    raw = e.dataTransfer.getData('application/x-assetvault-drag')
+    raw = dt.getData('application/x-assetvault-drag')
   } catch {
     /* ignore */
   }
@@ -35,7 +38,7 @@ export function parseAssetDragPayload(e: React.DragEvent | DragEvent): AssetDrag
   }
 
   try {
-    const single = e.dataTransfer.getData('application/x-assetvault-asset-id')
+    const single = dt.getData('application/x-assetvault-asset-id')
     if (single) return { assetIds: [single] }
   } catch {
     /* ignore */

@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3'
+import type { SqliteDatabase } from './sqliteTypes'
 
 /** Thin wrapper so schema/migrations use sql.js-style `run` on better-sqlite3. */
 export type RawSqliteDb = {
@@ -7,7 +7,7 @@ export type RawSqliteDb = {
   getScalarInt(sql: string): number | null
 }
 
-export function wrapBetterSqlite(db: Database): RawSqliteDb {
+export function wrapBetterSqlite(db: SqliteDatabase): RawSqliteDb {
   return {
     exec(sql: string) {
       db.exec(sql)
@@ -25,7 +25,7 @@ export function wrapBetterSqlite(db: Database): RawSqliteDb {
   }
 }
 
-export function execSelectInt(db: Database, sql: string): number | null {
+export function execSelectInt(db: SqliteDatabase, sql: string): number | null {
   try {
     const row = db.prepare(sql).get() as Record<string, unknown> | undefined
     if (!row) return null

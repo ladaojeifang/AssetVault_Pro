@@ -46,7 +46,7 @@ const api = {
         state: { active: boolean; assetIds: string[] }
       ) => callback(state)
       ipcRenderer.on('asset-drag:state', handler)
-      return () => ipcRenderer.removeListener('asset-drag:state', handler)
+      return () => { ipcRenderer.removeListener('asset-drag:state', handler) }
     },
     onNavigate: (callback: (payload: { canvasId: string | null }) => void) => {
       const handler = (
@@ -54,7 +54,7 @@ const api = {
         payload: { canvasId: string | null }
       ) => callback(payload)
       ipcRenderer.on('ai-canvas:navigate', handler)
-      return () => ipcRenderer.removeListener('ai-canvas:navigate', handler)
+      return () => { ipcRenderer.removeListener('ai-canvas:navigate', handler) }
     }
   },
 
@@ -100,29 +100,29 @@ const api = {
     getById: (id: string) => ipcRenderer.invoke('assets:get-by-id', id),
     import: (
       filePaths: string[],
-      options?: string | import('../../shared/importTypes').ImportAssetOptions
+      options?: string | import('../shared/importTypes').ImportAssetOptions
     ) => ipcRenderer.invoke('assets:import', filePaths, options),
     importFolder: (
       folderPath: string,
-      options?: string | import('../../shared/importTypes').ImportAssetOptions
+      options?: string | import('../shared/importTypes').ImportAssetOptions
     ) => ipcRenderer.invoke('assets:import-folder', folderPath, options),
     scanContentHashes: () =>
-      ipcRenderer.invoke('assets:scan-content-hashes') as Promise<import('../../shared/importTypes').ContentHashScanResult>,
+      ipcRenderer.invoke('assets:scan-content-hashes') as Promise<import('../shared/importTypes').ContentHashScanResult>,
     regenerateFontThumbnails: () =>
       ipcRenderer.invoke('assets:regenerate-font-thumbnails') as Promise<
-        import('../../shared/fontTypes').FontRegenerateResult
+        import('../shared/fontTypes').FontRegenerateResult
       >,
     regenerateModelThumbnails: () =>
       ipcRenderer.invoke('assets:regenerate-model-thumbnails') as Promise<
-        import('../../shared/model3dFormats').ModelRegenerateResult
+        import('../shared/model3dFormats').ModelRegenerateResult
       >,
     regenerateEmbeddedDccThumbnails: () =>
       ipcRenderer.invoke('assets:regenerate-embedded-dcc-thumbnails') as Promise<
-        import('../../shared/embeddedDccFormats').EmbeddedDccRegenerateResult
+        import('../shared/embeddedDccFormats').EmbeddedDccRegenerateResult
       >,
     regenerateTextPreviewThumbnails: () =>
       ipcRenderer.invoke('assets:regenerate-text-preview-thumbnails') as Promise<
-        import('../../shared/textPreviewFormats').TextPreviewRegenerateResult
+        import('../shared/textPreviewFormats').TextPreviewRegenerateResult
       >,
     delete: (ids: string[]) => ipcRenderer.invoke('assets:delete', ids),
     move: (ids: string[], targetFolderId: string) =>
@@ -155,7 +155,7 @@ const api = {
       }>,
     localize: (assetIds: string[]) =>
       ipcRenderer.invoke('assets:localize', assetIds) as Promise<
-        import('../../shared/libraryTypes').LocalizeAssetsResult
+        import('../shared/libraryTypes').LocalizeAssetsResult
       >,
     relink: (assetId: string, newPath: string) =>
       ipcRenderer.invoke('assets:relink', assetId, newPath) as Promise<
@@ -169,25 +169,25 @@ const api = {
         libraryRoot: string
         manifestPath: string
         dbPath: string
-        libraryMode: import('../../shared/libraryTypes').LibraryMode
-        localization: import('../../shared/libraryTypes').LibraryLocalizationManifest | null
-        stats: import('../../shared/libraryTypes').LibraryModeStats
+        libraryMode: import('../shared/libraryTypes').LibraryMode
+        localization: import('../shared/libraryTypes').LibraryLocalizationManifest | null
+        stats: import('../shared/libraryTypes').LibraryModeStats
       }>,
     getState: () =>
       ipcRenderer.invoke('library:get-state') as Promise<
-        import('../../shared/webApiTypes').LibraryStateResponse
+        import('../shared/webApiTypes').LibraryStateResponse
       >,
     getModeStats: () =>
       ipcRenderer.invoke('library:get-mode-stats') as Promise<
-        import('../../shared/libraryTypes').LibraryModeStats
+        import('../shared/libraryTypes').LibraryModeStats
       >,
     switchRoot: (targetRoot: string) => ipcRenderer.invoke('library:switch', targetRoot),
     pickAndSwitch: () => ipcRenderer.invoke('library:pick-and-switch'),
-    createAndSwitch: (libraryMode?: import('../../shared/libraryTypes').LibraryMode) =>
+    createAndSwitch: (libraryMode?: import('../shared/libraryTypes').LibraryMode) =>
       ipcRenderer.invoke('library:create-and-switch', libraryMode ?? 'archive'),
     createEmbedded: () =>
       ipcRenderer.invoke('library:create-embedded') as Promise<
-        import('../../shared/libraryTypes').CreateEmbeddedLibraryResult
+        import('../shared/libraryTypes').CreateEmbeddedLibraryResult
       >,
     upgradeToArchive: (options?: { preferHardlink?: boolean }) =>
       ipcRenderer.invoke('library:upgrade-to-archive', options) as Promise<
@@ -201,7 +201,7 @@ const api = {
       >,
     importFromLibrary: (sourceLibraryRoot: string) =>
       ipcRenderer.invoke('library:import-from-library', sourceLibraryRoot) as Promise<
-        import('../../shared/libraryTypes').ImportLibraryResult
+        import('../shared/libraryTypes').ImportLibraryResult
       >,
     removeFromRecent: (path: string) => ipcRenderer.invoke('library:remove-from-recent', path),
     getStorageStats: () =>
@@ -213,49 +213,49 @@ const api = {
     onLibrarySwitched: (callback: () => void) => {
       const handler = () => callback()
       ipcRenderer.on('library:switched', handler)
-      return () => ipcRenderer.removeListener('library:switched', handler)
+      return () => { ipcRenderer.removeListener('library:switched', handler) }
     },
     onLibrarySwitching: (callback: () => void) => {
       const handler = () => callback()
       ipcRenderer.on('library:switching', handler)
-      return () => ipcRenderer.removeListener('library:switching', handler)
+      return () => { ipcRenderer.removeListener('library:switching', handler) }
     },
-    onUpgradeProgress: (callback: (data: import('../../shared/libraryTypes').UpgradeLibraryProgress) => void) => {
-      const handler = (_: unknown, data: import('../../shared/libraryTypes').UpgradeLibraryProgress) =>
+    onUpgradeProgress: (callback: (data: import('../shared/libraryTypes').UpgradeLibraryProgress) => void) => {
+      const handler = (_: unknown, data: import('../shared/libraryTypes').UpgradeLibraryProgress) =>
         callback(data)
       ipcRenderer.on('library:upgrade-progress', handler)
-      return () => ipcRenderer.removeListener('library:upgrade-progress', handler)
+      return () => { ipcRenderer.removeListener('library:upgrade-progress', handler) }
     },
-    onImportProgress: (callback: (data: import('../../shared/libraryTypes').ImportLibraryProgress) => void) => {
-      const handler = (_: unknown, data: import('../../shared/libraryTypes').ImportLibraryProgress) =>
+    onImportProgress: (callback: (data: import('../shared/libraryTypes').ImportLibraryProgress) => void) => {
+      const handler = (_: unknown, data: import('../shared/libraryTypes').ImportLibraryProgress) =>
         callback(data)
       ipcRenderer.on('library:import-progress', handler)
-      return () => ipcRenderer.removeListener('library:import-progress', handler)
+      return () => { ipcRenderer.removeListener('library:import-progress', handler) }
     },
-    onEmbeddedImportProgress: (callback: (data: import('../../shared/libraryTypes').EmbeddedImportProgress) => void) => {
-      const handler = (_: unknown, data: import('../../shared/libraryTypes').EmbeddedImportProgress) =>
+    onEmbeddedImportProgress: (callback: (data: import('../shared/libraryTypes').EmbeddedImportProgress) => void) => {
+      const handler = (_: unknown, data: import('../shared/libraryTypes').EmbeddedImportProgress) =>
         callback(data)
       ipcRenderer.on('embedded-import:progress', handler)
-      return () => ipcRenderer.removeListener('embedded-import:progress', handler)
+      return () => { ipcRenderer.removeListener('embedded-import:progress', handler) }
     }
   },
 
   exr: {
     getMetadata: (assetId: string) =>
       ipcRenderer.invoke('exr:get-metadata', assetId) as Promise<
-        | { ok: true; metadata: import('../../shared/exrTypes').ExrFileMetadata }
+        | { ok: true; metadata: import('../shared/exrTypes').ExrFileMetadata }
         | { ok: false; error: string }
       >,
-    renderPreview: (req: import('../../shared/exrTypes').ExrPreviewRenderRequest) =>
+    renderPreview: (req: import('../shared/exrTypes').ExrPreviewRenderRequest) =>
       ipcRenderer.invoke('exr:render-preview', req) as Promise<
-        import('../../shared/exrTypes').ExrPreviewRenderResult
+        import('../shared/exrTypes').ExrPreviewRenderResult
       >
   },
 
   fonts: {
     getSettings: () =>
-      ipcRenderer.invoke('fonts:get-settings') as Promise<import('../../shared/fontSettings').FontAppSettings>,
-    setSettings: (settings: import('../../shared/fontSettings').FontAppSettings) =>
+      ipcRenderer.invoke('fonts:get-settings') as Promise<import('../shared/fontSettings').FontAppSettings>,
+    setSettings: (settings: import('../shared/fontSettings').FontAppSettings) =>
       ipcRenderer.invoke('fonts:set-settings', settings),
     getEffectiveSampleText: () =>
       ipcRenderer.invoke('fonts:get-effective-sample-text') as Promise<{
@@ -264,19 +264,19 @@ const api = {
       }>,
     listFaces: (assetId: string) =>
       ipcRenderer.invoke('fonts:list-faces', assetId) as Promise<
-        import('../../shared/fontTypes').FontFaceSummary[]
+        import('../shared/fontTypes').FontFaceSummary[]
       >,
-    renderPreview: (req: import('../../shared/fontTypes').FontPreviewRenderRequest) =>
+    renderPreview: (req: import('../shared/fontTypes').FontPreviewRenderRequest) =>
       ipcRenderer.invoke('fonts:render-preview', req) as Promise<
         { ok: true; dataUrl: string } | { ok: false; error: string }
       >,
     updateFaceIndex: (assetId: string, ttcIndex: number, reparse?: boolean) =>
       ipcRenderer.invoke('fonts:update-face-index', assetId, ttcIndex, reparse) as Promise<
-        { ok: true; font: import('../../shared/fontTypes').ParsedFontMetadata | null } | { ok: false; error: string }
+        { ok: true; font: import('../shared/fontTypes').ParsedFontMetadata | null } | { ok: false; error: string }
       >,
     listFamilyGroups: () =>
       ipcRenderer.invoke('fonts:list-family-groups') as Promise<
-        import('../../shared/fontTypes').FontFamilyGroup[]
+        import('../shared/fontTypes').FontFamilyGroup[]
       >,
     installToSystem: (assetId: string) =>
       ipcRenderer.invoke('fonts:install-to-system', assetId) as Promise<
@@ -298,46 +298,46 @@ const api = {
       const handler = (_event: Electron.IpcRendererEvent, payload: { assetId: string }) =>
         callback(payload)
       ipcRenderer.on('fonts:open-preview', handler)
-      return () => ipcRenderer.removeListener('fonts:open-preview', handler)
+      return () => { ipcRenderer.removeListener('fonts:open-preview', handler) }
     }
   },
 
   settings: {
     getAppPreferences: () =>
       ipcRenderer.invoke('settings:get-app-preferences') as Promise<
-        import('../../shared/appPreferences').AppPreferences
+        import('../shared/appPreferences').AppPreferences
       >,
-    setAppPreferences: (prefs: import('../../shared/appPreferences').AppPreferences) =>
+    setAppPreferences: (prefs: import('../shared/appPreferences').AppPreferences) =>
       ipcRenderer.invoke('settings:set-app-preferences', prefs) as Promise<
-        import('../../shared/appPreferences').AppPreferences
+        import('../shared/appPreferences').AppPreferences
       >,
     onAppPreferencesChanged: (callback: () => void) => {
       const handler = () => callback()
       ipcRenderer.on('settings:app-preferences-changed', handler)
-      return () => ipcRenderer.removeListener('settings:app-preferences-changed', handler)
+      return () => { ipcRenderer.removeListener('settings:app-preferences-changed', handler) }
     },
     getAppAppearance: () =>
       ipcRenderer.invoke('settings:get-app-appearance') as Promise<
-        import('../../shared/appTheme').AppAppearanceSettings
+        import('../shared/appTheme').AppAppearanceSettings
       >,
-    setAppTheme: (theme: import('../../shared/appTheme').AppTheme) =>
+    setAppTheme: (theme: import('../shared/appTheme').AppTheme) =>
       ipcRenderer.invoke('settings:set-app-theme', theme) as Promise<
-        import('../../shared/appTheme').AppAppearanceSettings
+        import('../shared/appTheme').AppAppearanceSettings
       >,
     onAppAppearanceChanged: (callback: () => void) => {
       const handler = () => callback()
       ipcRenderer.on('settings:app-appearance-changed', handler)
-      return () => ipcRenderer.removeListener('settings:app-appearance-changed', handler)
+      return () => { ipcRenderer.removeListener('settings:app-appearance-changed', handler) }
     },
     getFormatIconOverrides: () =>
       ipcRenderer.invoke('settings:get-format-icon-overrides') as Promise<
-        import('../../shared/formatIconOverrides').FormatIconOverridesSettings
+        import('../shared/formatIconOverrides').FormatIconOverridesSettings
       >,
     setFormatIconOverrides: (
-      settings: import('../../shared/formatIconOverrides').FormatIconOverridesSettings
+      settings: import('../shared/formatIconOverrides').FormatIconOverridesSettings
     ) =>
       ipcRenderer.invoke('settings:set-format-icon-overrides', settings) as Promise<
-        import('../../shared/formatIconOverrides').FormatIconOverridesSettings
+        import('../shared/formatIconOverrides').FormatIconOverridesSettings
       >,
     importFormatIconImage: (extension: string, sourcePath: string) =>
       ipcRenderer.invoke('settings:import-format-icon-image', extension, sourcePath) as Promise<{
@@ -346,7 +346,7 @@ const api = {
     onFormatIconOverridesChanged: (callback: () => void) => {
       const handler = () => callback()
       ipcRenderer.on('settings:format-icon-overrides-changed', handler)
-      return () => ipcRenderer.removeListener('settings:format-icon-overrides-changed', handler)
+      return () => { ipcRenderer.removeListener('settings:format-icon-overrides-changed', handler) }
     },
     getWebApiStatus: () =>
       ipcRenderer.invoke('settings:get-web-api-status') as Promise<{
@@ -448,40 +448,40 @@ const api = {
       data: { current: number; total: number; filename: string; status: 'processing' | 'done' | 'error' }
     ) => callback(data)
     ipcRenderer.on('import:progress', handler)
-    return () => ipcRenderer.removeListener('import:progress', handler)
+    return () => { ipcRenderer.removeListener('import:progress', handler) }
   },
 
   onAssetsImported: (callback: () => void) => {
     const handler = () => callback()
     ipcRenderer.on('assets:imported', handler)
-    return () => ipcRenderer.removeListener('assets:imported', handler)
+    return () => { ipcRenderer.removeListener('assets:imported', handler) }
   },
 
   onDuplicateImportPrompt: (
-    callback: (payload: import('../../shared/importTypes').DuplicateImportPromptPayload) => void
+    callback: (payload: import('../shared/importTypes').DuplicateImportPromptPayload) => void
   ) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
-      payload: import('../../shared/importTypes').DuplicateImportPromptPayload
+      payload: import('../shared/importTypes').DuplicateImportPromptPayload
     ) => callback(payload)
     ipcRenderer.on('import:duplicate-prompt', handler)
-    return () => ipcRenderer.removeListener('import:duplicate-prompt', handler)
+    return () => { ipcRenderer.removeListener('import:duplicate-prompt', handler) }
   },
 
   answerDuplicateImport: (
     requestId: string,
-    answer: import('../../shared/importTypes').DuplicateImportAnswer
+    answer: import('../shared/importTypes').DuplicateImportAnswer
   ) => ipcRenderer.invoke('import:duplicate-answer', requestId, answer) as Promise<boolean>,
 
   onContentHashScanProgress: (
-    callback: (data: import('../../shared/importTypes').ContentHashScanProgress) => void
+    callback: (data: import('../shared/importTypes').ContentHashScanProgress) => void
   ) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
-      data: import('../../shared/importTypes').ContentHashScanProgress
+      data: import('../shared/importTypes').ContentHashScanProgress
     ) => callback(data)
     ipcRenderer.on('content-hash:scan-progress', handler)
-    return () => ipcRenderer.removeListener('content-hash:scan-progress', handler)
+    return () => { ipcRenderer.removeListener('content-hash:scan-progress', handler) }
   },
 
   onFontThumbRegenerateProgress: (
@@ -492,7 +492,7 @@ const api = {
       data: { current: number; total: number; assetId: string; status: string }
     ) => callback(data)
     ipcRenderer.on('font-thumb:regenerate-progress', handler)
-    return () => ipcRenderer.removeListener('font-thumb:regenerate-progress', handler)
+    return () => { ipcRenderer.removeListener('font-thumb:regenerate-progress', handler) }
   },
 
   onModelThumbRegenerateProgress: (
@@ -503,7 +503,7 @@ const api = {
       data: { current: number; total: number; assetId: string; status: string }
     ) => callback(data)
     ipcRenderer.on('model-thumb:regenerate-progress', handler)
-    return () => ipcRenderer.removeListener('model-thumb:regenerate-progress', handler)
+    return () => { ipcRenderer.removeListener('model-thumb:regenerate-progress', handler) }
   },
 
   onEmbeddedDccThumbRegenerateProgress: (
@@ -514,7 +514,7 @@ const api = {
       data: { current: number; total: number; assetId: string; status: string }
     ) => callback(data)
     ipcRenderer.on('embedded-dcc-thumb:regenerate-progress', handler)
-    return () => ipcRenderer.removeListener('embedded-dcc-thumb:regenerate-progress', handler)
+    return () => { ipcRenderer.removeListener('embedded-dcc-thumb:regenerate-progress', handler) }
   },
 
   onTextPreviewThumbRegenerateProgress: (
@@ -525,7 +525,7 @@ const api = {
       data: { current: number; total: number; assetId: string; status: string }
     ) => callback(data)
     ipcRenderer.on('text-preview-thumb:regenerate-progress', handler)
-    return () => ipcRenderer.removeListener('text-preview-thumb:regenerate-progress', handler)
+    return () => { ipcRenderer.removeListener('text-preview-thumb:regenerate-progress', handler) }
   }
 }
 

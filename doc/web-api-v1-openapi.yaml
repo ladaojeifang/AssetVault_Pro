@@ -149,6 +149,27 @@ paths:
       responses:
         '200': { description: OK }
 
+  /library/switch:
+    post:
+      tags: [library]
+      summary: 切换到另一资料库根目录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [libraryRoot]
+              properties:
+                libraryRoot:
+                  type: string
+                  description: 目标资料库根目录（须已存在）
+      responses:
+        '200':
+          description: 切换成功，data 为切换后的 library/info
+        '400':
+          description: 路径无效或切换失败
+
   /library/importFromLibrary:
     post:
       tags: [library]

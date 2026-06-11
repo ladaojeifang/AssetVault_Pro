@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3'
+import type { SqliteDatabase } from './sqliteTypes'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { dirname, join, normalize } from 'path'
 import { existsSync, mkdirSync, renameSync, readdirSync, statSync } from 'fs'
@@ -15,7 +16,7 @@ import {
 } from './betterSqliteNative'
 
 let db: ReturnType<typeof drizzle> | null = null
-let sqliteDb: Database | null = null
+let sqliteDb: SqliteDatabase | null = null
 /** Absolute path to the active library.sqlite (set in initDatabase). */
 let activeDbFilePath: string | null = null
 
@@ -31,7 +32,7 @@ export function isDatabaseReady(): boolean {
   return db != null
 }
 
-export function getRawSqlite(): Database {
+export function getRawSqlite(): SqliteDatabase {
   if (!sqliteDb) {
     throw new Error('Database not initialized. Call initDatabase() first.')
   }
@@ -56,7 +57,7 @@ export async function withSqliteTransaction<T>(fn: () => Promise<T>): Promise<T>
   }
 }
 
-function applyPragmas(raw: Database): void {
+function applyPragmas(raw: SqliteDatabase): void {
   raw.pragma('journal_mode = WAL')
   raw.pragma('synchronous = NORMAL')
   raw.pragma('cache_size = -64000')
@@ -65,7 +66,7 @@ function applyPragmas(raw: Database): void {
   raw.pragma('busy_timeout = 5000')
 }
 
-function walCheckpoint(raw: Database): void {
+function walCheckpoint(raw: SqliteDatabase): void {
   try {
     raw.pragma('wal_checkpoint(TRUNCATE)')
   } catch (e) {
@@ -118,7 +119,7 @@ function findLatestCorruptBackup(normalized: string): string | null {
   return best && best.size > 4096 ? best.path : null
 }
 
-function openSqliteFile(normalized: string): Database {
+function openSqliteFile(normalized: string): SqliteDatabase {
   const hasFile = existsSync(normalized)
   const size = hasFile ? statSync(normalized).size : 0
 

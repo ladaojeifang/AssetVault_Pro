@@ -1,7 +1,7 @@
 import React, { useRef, useCallback, useEffect, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { Virtualizer } from '@tanstack/virtual-core'
+import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual'
 import { useApp } from '../../stores/AppContext'
 import { resolveDropPaths } from '../../utils/resolveDroppedFilePaths'
 import { formatFileSize, type AssetItem, type FolderItem } from '@/shared/types'
@@ -133,11 +133,11 @@ const AssetGrid: React.FC = () => {
     debouncedSearch,
     tagFilters,
     fileTypeFilter,
-    colorBucketFilter,
-    sizePresetFilter,
+    colorBucket: colorBucketFilter,
+    sizePreset: sizePresetFilter,
     fileSizeMinMb,
     fileSizeMaxMb,
-    datePresetFilter
+    datePreset: datePresetFilter
   })
 
   const currentFolderNode = useMemo(
@@ -828,7 +828,7 @@ function ListContent({
 }) {
   return (
     <div className="relative w-full min-w-0" style={{ height: `${virtualizer.getTotalSize()}px` }}>
-      {virtualizer.getVirtualItems().map((virtualRow) => {
+      {virtualizer.getVirtualItems().map((virtualRow: VirtualItem) => {
         const asset = assets[virtualRow.index]
         if (!asset) return null
         return (

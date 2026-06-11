@@ -26,7 +26,7 @@ export async function getAssetFolderIds(assetId: string): Promise<string[]> {
 
 export function attachResolvedPaths<
   T extends {
-    filePath: string
+    filePath: string | null
     thumbnailPath?: string | null
     storageMode?: string | null
   }

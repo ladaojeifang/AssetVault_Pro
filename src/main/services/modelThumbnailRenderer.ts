@@ -269,6 +269,10 @@ export async function renderModelToPngBuffer(
   return done
 }
 
+export function awaitModelThumbnailRenderIdle(): Promise<void> {
+  return thumbRenderQueue
+}
+
 /** Wait until main renderer exposes __assetVaultRenderModelSnapshot (or timeout). */
 export async function waitForModelSnapshotBridge(maxMs = 120_000): Promise<boolean> {
   const start = Date.now()

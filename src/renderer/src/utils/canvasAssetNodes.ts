@@ -4,6 +4,7 @@ import type { FlowNodeType } from '../components/AiCanvas/canvasNodeTypes'
 import { createFlowNodeId } from '../components/AiCanvas/genNodeData'
 import { parseFontMetadataFromAsset, fontFamilyLabel } from './fontAssetMeta'
 import { FONT_THUMB_SAMPLE_TEXT } from '@/shared/fontTypes'
+import { toBlobPart } from '@/shared/blobUtils'
 
 const FILE_TYPE_TO_BASE: Partial<Record<AssetItem['fileType'], FlowNodeType>> = {
   image: 'base_image',
@@ -44,7 +45,7 @@ export async function resolveMediaBlobUrl(asset: AssetItem): Promise<string | nu
   if (!path) return null
   try {
     const bytes = await window.assetVaultAPI.fs.readFileBytes(path)
-    const blob = new Blob([bytes], {
+    const blob = new Blob([toBlobPart(bytes)], {
       type: asset.mimeType || mimeFromFilename(asset.originalName || asset.filename || path)
     })
     return URL.createObjectURL(blob)

@@ -797,7 +797,10 @@ const AiCanvasEditorInner: React.FC<AiCanvasEditorProps> = ({ canvasId }) => {
 
         position: pos,
 
-        data: defaultGenNodeDataForFlow(flowType, nextIndex(nodes, flowType))
+        data: defaultGenNodeDataForFlow(flowType, nextIndex(nodes, flowType)) as unknown as Record<
+          string,
+          unknown
+        >
 
       }
 

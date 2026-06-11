@@ -68,9 +68,9 @@ type RouteDef = {
 const API_PREFIX = '/api/v1'
 
 const routes: RouteDef[] = [
-  { method: 'GET', path: `${API_PREFIX}/app/info`, handler: () => handleAppInfo() },
-  { method: 'GET', path: `${API_PREFIX}/library/info`, handler: () => handleLibraryInfo() },
-  { method: 'GET', path: `${API_PREFIX}/library/state`, handler: () => handleLibraryState() },
+  { method: 'GET', path: `${API_PREFIX}/app/info`, handler: async () => handleAppInfo() },
+  { method: 'GET', path: `${API_PREFIX}/library/info`, handler: async () => handleLibraryInfo() },
+  { method: 'GET', path: `${API_PREFIX}/library/state`, handler: async () => handleLibraryState() },
   {
     method: 'POST',
     path: `${API_PREFIX}/library/switch`,
@@ -167,4 +167,21 @@ export function matchRoute(ctx: ApiRequestContext): RouteHandler | null {
 
 export function listApiRoutes(): Array<{ method: string; path: string }> {
   return routes.map((r) => ({ method: r.method, path: r.path }))
+}
+
+/** Parametric routes resolved by `matchRoute` (OpenAPI uses `{param}` templates). */
+export function listApiDynamicRoutes(): Array<{ method: string; pathTemplate: string }> {
+  return [
+    { method: 'DELETE', pathTemplate: `${API_PREFIX}/asset/fullPageSession/{sessionId}` },
+    { method: 'GET', pathTemplate: `${API_PREFIX}/asset/fullPageSession/{sessionId}` },
+    { method: 'DELETE', pathTemplate: `${API_PREFIX}/asset/articleBundleSession/{sessionId}` },
+    { method: 'GET', pathTemplate: `${API_PREFIX}/asset/articleBundleSession/{sessionId}` },
+    { method: 'GET', pathTemplate: `${API_PREFIX}/asset/pageVideoImport/batch/{batchId}` },
+    { method: 'DELETE', pathTemplate: `${API_PREFIX}/asset/pageVideoImport/jobs/{jobId}` },
+    { method: 'GET', pathTemplate: `${API_PREFIX}/asset/pageVideoImport/jobs/{jobId}` }
+  ]
+}
+
+export function listAllApiRouteOperations(): Array<{ method: string; path: string }> {
+  return [...listApiRoutes(), ...listApiDynamicRoutes().map((r) => ({ method: r.method, path: r.pathTemplate }))]
 }

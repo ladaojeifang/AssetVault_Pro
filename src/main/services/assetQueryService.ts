@@ -1,7 +1,8 @@
 import { eq, and, inArray, desc, asc, sql, count, type SQL } from 'drizzle-orm'
 import { getDatabase } from '../db'
 import { assets } from '../db/schema'
-import type { AssetItem, QueryParams, QueryResult } from '@/shared/types'
+import type { AssetItem, FileType, QueryParams, QueryResult } from '@/shared/types'
+import type { LocalizationState, StorageMode } from '@/shared/libraryTypes'
 import { buildSearchCondition, tokenizeSearchQuery } from './assetSearch'
 import {
   buildColorBucketCondition,
@@ -11,6 +12,20 @@ import {
 } from './assetQueryFilters'
 import { attachResolvedPaths, getAssetFolderIds, getAssetTagIds } from './assetRowHelpers'
 import { removeItemPack } from './libraryBundle'
+import { getThumbnailService } from './ThumbnailService'
+
+type DbAssetRow = typeof assets.$inferSelect
+
+function mapToAssetItem(row: DbAssetRow, tagIds: string[], folderIds: string[]): AssetItem {
+  return {
+    ...attachResolvedPaths(row),
+    fileType: row.fileType as FileType,
+    storageMode: row.storageMode as StorageMode,
+    localizationState: row.localizationState as LocalizationState,
+    tagIds,
+    folderIds
+  }
+}
 
 export async function queryAssets(params: QueryParams): Promise<QueryResult<AssetItem>> {
   const database = getDatabase()
@@ -106,7 +121,7 @@ export async function queryAssets(params: QueryParams): Promise<QueryResult<Asse
         getAssetTagIds(item.id),
         getAssetFolderIds(item.id)
       ])
-      return { ...attachResolvedPaths(item), tagIds, folderIds }
+      return mapToAssetItem(item, tagIds, folderIds)
     })
   )
 
@@ -138,13 +153,15 @@ export async function getAssetById(
   }
 
   const [tagIds, folderIds] = await Promise.all([getAssetTagIds(id), getAssetFolderIds(id)])
-  return { ...attachResolvedPaths(item), tagIds, folderIds }
+  return mapToAssetItem(item, tagIds, folderIds)
 }
 
 export async function deleteAssets(ids: string[]): Promise<number> {
   if (ids.length === 0) return 0
   const database = getDatabase()
+  const thumbService = getThumbnailService()
   for (const id of ids) {
+    thumbService.invalidate(id)
     removeItemPack(id)
   }
   await database.delete(assets).where(inArray(assets.id, ids))

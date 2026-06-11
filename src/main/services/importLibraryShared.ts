@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3'
+import type { SqliteDatabase } from '../db/sqliteTypes'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'fs'
 import { basename, join, normalize, sep, isAbsolute } from 'path'
 import { v4 as uuidv4 } from 'uuid'
@@ -188,11 +188,11 @@ export function rewriteItemRelativePath(rel: string, oldId: string, newId: strin
   return `items/${newId}/${name}`
 }
 
-export function openSourceLibraryDb(sourceDbPath: string): Database {
+export function openSourceLibraryDb(sourceDbPath: string): SqliteDatabase {
   return openBetterSqliteDatabase(sourceDbPath, { readonly: true, fileMustExist: true })
 }
 
-export function readSourceLibraryMode(sourceRoot: string): 'archive' | 'catalog' | null {
+export function readSourceLibraryMode(sourceRoot: string): import('@/shared/libraryTypes').LibraryMode | null {
   return readLibraryManifestFile(sourceRoot)?.libraryMode ?? null
 }
 
@@ -243,7 +243,7 @@ export async function ensureSourceLibraryTag(
 }
 
 export async function phaseTags(
-  sourceDb: Database,
+  sourceDb: SqliteDatabase,
   targetDb: ReturnType<typeof getDatabase>,
   sourceLibraryTagName: string,
   stats: BaseImportStats
@@ -290,7 +290,7 @@ export async function phaseTags(
 }
 
 export async function phaseFolders(
-  sourceDb: Database,
+  sourceDb: SqliteDatabase,
   targetDb: ReturnType<typeof getDatabase>,
   stats: BaseImportStats
 ): Promise<Map<string, string>> {
@@ -354,7 +354,7 @@ export async function applySourceTagsAndLibraryTag(
   targetDb: ReturnType<typeof getDatabase>,
   assetId: string,
   sourceAssetId: string,
-  sourceDb: Database,
+  sourceDb: SqliteDatabase,
   tagMap: Map<string, string>,
   sourceLibraryTagId: string
 ) {
@@ -374,7 +374,7 @@ export async function applySourceFolders(
   assetId: string,
   sourceRow: SourceAssetRow,
   folderMap: Map<string, string>,
-  sourceDb: Database
+  sourceDb: SqliteDatabase
 ) {
   const sourceFolderLinks = sourceDb
     .prepare('SELECT folder_id FROM asset_folders WHERE asset_id = ?')
@@ -396,7 +396,7 @@ export async function mergeAssetMetadata(
   folderMap: Map<string, string>,
   tagMap: Map<string, string>,
   sourceLibraryTagId: string,
-  sourceDb: Database
+  sourceDb: SqliteDatabase
 ) {
   const targetRow = await targetDb.select().from(assets).where(eq(assets.id, targetAssetId)).get()
   if (!targetRow) return
@@ -517,7 +517,7 @@ export async function refreshFolderAssetCounts(targetDb: ReturnType<typeof getDa
   }
 }
 
-export function loadSourceAssets(sourceDb: Database): SourceAssetRow[] {
+export function loadSourceAssets(sourceDb: SqliteDatabase): SourceAssetRow[] {
   return sourceDb
     .prepare(
       `SELECT id, filename, original_name, extension, mime_type, file_type, folder_id, file_path,

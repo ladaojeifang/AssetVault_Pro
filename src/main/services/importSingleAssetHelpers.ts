@@ -1,5 +1,5 @@
-import { basename, dirname, extname, existsSync, copyFileSync, readdirSync } from 'fs'
-import { join, sep } from 'path'
+import { existsSync, copyFileSync, readdirSync } from 'fs'
+import { basename, dirname, extname, join, sep } from 'path'
 import { sanitizeStorageFileName } from './libraryBundle'
 
 export function posixRelToFsAbs(libraryRoot: string, rel: string): string {

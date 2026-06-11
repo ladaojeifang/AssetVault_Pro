@@ -70,41 +70,21 @@ export function readExrVersionFlags(buffer: Buffer): {
   }
 }
 
-export function walkExrAttributes(buffer: Buffer, maxBytes = buffer.length): ExrAttribute[] {
-  if (buffer.length < 16 || buffer.readUInt32LE(0) !== EXR_MAGIC) return []
-
-  const { longNames } = readExrVersionFlags(buffer)
-
+function walkExrAttributesNullTerminated(buffer: Buffer, maxBytes: number): ExrAttribute[] {
   const attrs: ExrAttribute[] = []
   let off = 8
   const limit = Math.min(buffer.length, maxBytes)
 
   while (off < limit - 4) {
-    let name = ''
-    let type = ''
+    const nameEnd = buffer.indexOf(0, off)
+    if (nameEnd <= off) break
+    const name = buffer.toString('ascii', off, nameEnd)
+    off = nameEnd + 1
 
-    if (longNames) {
-      const namePart = readLengthPrefixedAscii(buffer, off)
-      if (!namePart) break
-      off = namePart.next
-      if (!namePart.text) break
-      name = namePart.text
-
-      const typePart = readLengthPrefixedAscii(buffer, off)
-      if (!typePart) break
-      off = typePart.next
-      type = typePart.text
-    } else {
-      const nameEnd = buffer.indexOf(0, off)
-      if (nameEnd <= off) break
-      name = buffer.toString('ascii', off, nameEnd)
-      off = nameEnd + 1
-
-      const typeEnd = buffer.indexOf(0, off)
-      if (typeEnd <= off) break
-      type = buffer.toString('ascii', off, typeEnd)
-      off = typeEnd + 1
-    }
+    const typeEnd = buffer.indexOf(0, off)
+    if (typeEnd <= off) break
+    const type = buffer.toString('ascii', off, typeEnd)
+    off = typeEnd + 1
 
     if (off + 4 > limit) break
     const size = buffer.readUInt32LE(off)
@@ -118,6 +98,51 @@ export function walkExrAttributes(buffer: Buffer, maxBytes = buffer.length): Exr
   }
 
   return attrs
+}
+
+function walkExrAttributesLengthPrefixed(buffer: Buffer, maxBytes: number): ExrAttribute[] {
+  const attrs: ExrAttribute[] = []
+  let off = 8
+  const limit = Math.min(buffer.length, maxBytes)
+
+  while (off < limit - 4) {
+    const namePart = readLengthPrefixedAscii(buffer, off)
+    if (!namePart) break
+    off = namePart.next
+    if (!namePart.text) break
+    const name = namePart.text
+
+    const typePart = readLengthPrefixedAscii(buffer, off)
+    if (!typePart) break
+    off = typePart.next
+    const type = typePart.text
+
+    if (off + 4 > limit) break
+    const size = buffer.readUInt32LE(off)
+    off += 4
+
+    const valStart = off
+    if (size < 0 || valStart + size > limit) break
+    off += size
+
+    attrs.push({ name, type, value: buffer.subarray(valStart, valStart + size) })
+  }
+
+  return attrs
+}
+
+export function walkExrAttributes(buffer: Buffer, maxBytes = buffer.length): ExrAttribute[] {
+  if (buffer.length < 16 || buffer.readUInt32LE(0) !== EXR_MAGIC) return []
+
+  const { longNames } = readExrVersionFlags(buffer)
+  if (longNames) {
+    const longAttrs = walkExrAttributesLengthPrefixed(buffer, maxBytes)
+    if (longAttrs.length > 0) return longAttrs
+    // Some writers (e.g. Unreal engineBake) set LONG_NAMES but still use null-terminated names.
+    return walkExrAttributesNullTerminated(buffer, maxBytes)
+  }
+
+  return walkExrAttributesNullTerminated(buffer, maxBytes)
 }
 
 export function parseExrChannelsFromBuffer(buffer: Buffer): ExrHeaderChannel[] {
@@ -216,7 +241,7 @@ export function parseExrMetadataFromBuffer(buffer: Buffer, absPath?: string): Ex
             name: EXR_DEFAULT_LAYER_NAME,
             channels: ['R', 'G', 'B', 'A'],
             previewable: true,
-            displayMode: 'hdr'
+            displayMode: 'hdr' as const
           }
         ]
 

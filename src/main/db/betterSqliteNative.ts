@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3'
+import type { SqliteDatabase } from './sqliteTypes'
 import { existsSync } from 'fs'
 import { dirname, join } from 'path'
 import { createRequire } from 'module'
@@ -66,6 +67,11 @@ function collectProjectRoots(): string[] {
 
 /** Optional prebuilt binary outside node_modules (env or resources/). */
 export function resolveBetterSqliteNativeBinding(): string | undefined {
+  if (process.env.AV_TEST_SKIP_CUSTOM_SQLITE === '1') {
+    cachedNativeBinding = ''
+    return undefined
+  }
+
   if (cachedNativeBinding !== null) {
     return cachedNativeBinding || undefined
   }
@@ -134,7 +140,7 @@ export function isBetterSqliteBindingsError(err: unknown): boolean {
   return Array.isArray(tries)
 }
 
-function openProbeDatabase(): Database {
+function openProbeDatabase(): SqliteDatabase {
   const opts = getBetterSqliteConstructorOptions()
   return Object.keys(opts).length > 0 ? new Database(':memory:', opts) : new Database(':memory:')
 }
@@ -148,7 +154,7 @@ export function probeBetterSqliteNative(): void {
 export function openBetterSqliteDatabase(
   filename: string,
   options?: ConstructorParameters<typeof Database>[1]
-): Database {
+): SqliteDatabase {
   const native = getBetterSqliteConstructorOptions()
   return new Database(filename, { ...native, ...options })
 }

@@ -33,6 +33,13 @@ function dialogParent(event: Electron.IpcMainInvokeEvent): BrowserWindow | undef
   return BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow() ?? undefined
 }
 
+async function showOpenDialog(
+  parent: BrowserWindow | undefined,
+  options: Electron.OpenDialogOptions
+): Promise<Electron.OpenDialogReturnValue> {
+  return parent ? dialog.showOpenDialog(parent, options) : dialog.showOpenDialog(options)
+}
+
 export function handleLibraryOperations(ipc: typeof ipcMain): void {
   ipc.handle('library:get-state', async () => getLibraryState())
 
@@ -49,7 +56,7 @@ export function handleLibraryOperations(ipc: typeof ipcMain): void {
 
   ipc.handle('library:pick-and-switch', async (event) => {
     const parent = dialogParent(event)
-    const r = await dialog.showOpenDialog(parent, {
+    const r = await showOpenDialog(parent, {
       properties: ['openDirectory'],
       title: '选择资料库文件夹（需包含 library.sqlite，或空库将自动初始化）'
     })
@@ -70,7 +77,7 @@ export function handleLibraryOperations(ipc: typeof ipcMain): void {
       libraryMode === 'catalog'
         ? '选择空文件夹以创建索引资料库（不拷贝原文件）'
         : '选择空文件夹以创建完整资料库'
-    const r = await dialog.showOpenDialog(parent, {
+    const r = await showOpenDialog(parent, {
       properties: ['openDirectory', 'createDirectory'],
       title
     })
@@ -116,7 +123,7 @@ export function handleLibraryOperations(ipc: typeof ipcMain): void {
 
   ipc.handle('library:pick-source-library-root', async (event) => {
     const parent = dialogParent(event)
-    const r = await dialog.showOpenDialog(parent, {
+    const r = await showOpenDialog(parent, {
       properties: ['openDirectory'],
       title: '选择要导入的完整资料库（需包含 manifest.json 与 library.sqlite）'
     })
@@ -150,7 +157,7 @@ export function handleLibraryOperations(ipc: typeof ipcMain): void {
 
   ipc.handle('library:create-embedded', async (event) => {
     const parent = dialogParent(event)
-    const r = await dialog.showOpenDialog(parent, {
+    const r = await showOpenDialog(parent, {
       properties: ['openDirectory'],
       title: '选择文件夹创建内嵌资料库（文件不复制，原地管理）'
     })

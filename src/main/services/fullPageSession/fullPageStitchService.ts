@@ -151,7 +151,7 @@ export async function stitchVerticalToFile(
   if (plan.format === 'png') {
     buf = exportCanvas.toBuffer('image/png')
   } else {
-    buf = exportCanvas.toBuffer('image/jpeg', { quality })
+    buf = exportCanvas.toBuffer('image/jpeg', quality)
   }
 
   if (buf.byteLength > plan.maxOutputBytes) {

@@ -302,7 +302,7 @@ export async function importSingleAsset(
         colors = serializePaletteColors(palette.colors)
 
         try {
-          const exifTags = ExifReader.load(destAbs, { expanded: true })
+          const exifTags = await ExifReader.load(destAbs, { expanded: true })
           if (exifTags && typeof exifTags === 'object' && !Array.isArray(exifTags)) {
             metadataObj.exif = {}
             const tagMap = exifTags as unknown as Record<string, { value: unknown; description?: string }>
@@ -509,7 +509,7 @@ function shouldSkipTextPreviewThumbnail(
 }
 
 async function finalizeImportedAsset(
-  database: NonNullable<typeof db>,
+  database: ReturnType<typeof getDatabase>,
   opts: {
     id: string
     targetFolderId?: string
@@ -566,7 +566,7 @@ function removeOrphanItemDir(libraryRoot: string, id: string): void {
 }
 
 async function linkExistingAsset(
-  database: NonNullable<typeof db>,
+  database: ReturnType<typeof getDatabase>,
   existingId: string,
   targetFolderId?: string
 ): Promise<string> {

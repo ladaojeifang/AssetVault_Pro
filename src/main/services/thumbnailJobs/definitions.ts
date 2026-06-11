@@ -42,8 +42,12 @@ export const model3dThumbnailJob: AsyncThumbnailJob = {
     fileType === '3d' && isModel3dPreviewExtension(extNoDot),
   loadRows: load3dRows,
   rowsAreCandidatesOnly: false,
-  beforeBatch: () => waitForModelSnapshotBridge(120_000),
-  beforeGenerate: () => waitForModelSnapshotBridge(120_000),
+  beforeBatch: async () => {
+    await waitForModelSnapshotBridge(120_000)
+  },
+  beforeGenerate: async () => {
+    await waitForModelSnapshotBridge(120_000)
+  },
   generate: (absFile, assetId, extNoDot, opts) =>
     thumbService().generateModel(absFile, assetId, extNoDot, opts),
   maxAttempts: 3,

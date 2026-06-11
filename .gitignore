@@ -10,6 +10,7 @@ resources/thumbnails/
 resources/bin/*
 !resources/bin/.gitkeep
 data/
+testing/fixtures/large/
 *.db
 *.db-journal
 .env

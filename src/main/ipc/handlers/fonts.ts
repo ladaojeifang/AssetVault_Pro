@@ -168,8 +168,13 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
     const abs = resolveLibraryPath(row.filePath)
     if (!existsSync(abs)) return { ok: false as const, error: '文件不存在' }
 
-    const parent = BrowserWindow.fromWebContents(event.sender)
-    const r = await dialog.showSaveDialog(parent ?? undefined, {
+    const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined
+    const r = parent
+      ? await dialog.showSaveDialog(parent, {
+      defaultPath: row.filename,
+      filters: [{ name: 'Font', extensions: ['ttf', 'otf', 'ttc', 'woff', 'woff2'] }]
+    })
+      : await dialog.showSaveDialog({
       defaultPath: row.filename,
       filters: [{ name: 'Font', extensions: ['ttf', 'otf', 'ttc', 'woff', 'woff2'] }]
     })

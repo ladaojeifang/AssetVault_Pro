@@ -28,6 +28,13 @@ export interface GenNodeData {
   importing?: boolean
   assetId?: string | null
   label?: string
+  /** Legacy flat fields used by UnifiedGenNode UI */
+  prompt?: string
+  modelLabel?: string
+  resolution?: string
+  aspect?: string
+  durationSec?: number
+  batchSize?: number
 }
 
 export function defaultGenNodeData(

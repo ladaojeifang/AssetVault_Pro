@@ -29,7 +29,7 @@ export function listFontFacesFromFile(filePath: string): FontFaceSummary[] {
   try {
     const doc = fontkit.openSync(filePath)
     if (isFontCollection(doc)) {
-      return doc.fonts.map((face, index) => faceToSummary(face, index))
+      return doc.fonts.map((face: Font, index: number) => faceToSummary(face, index))
     }
     return [faceToSummary(doc as Font, 0)]
   } catch (error) {
@@ -114,13 +114,16 @@ export function parseVariationAxes(face: Font): FontVariationAxisSummary[] {
     const axes = (face as Font & { variationAxes?: Record<string, { name?: string; min?: number; default?: number; max?: number }> })
       .variationAxes
     if (!axes || typeof axes !== 'object') return []
-    return Object.entries(axes).map(([tag, axis]) => ({
-      tag,
-      name: axis.name ?? tag,
-      min: toFiniteNumber(axis.min),
-      default: toFiniteNumber(axis.default),
-      max: toFiniteNumber(axis.max)
-    }))
+    return Object.entries(axes).map(([tag, axis]) => {
+      const a = axis as { name?: string; min?: number; default?: number; max?: number }
+      return {
+        tag,
+        name: a.name ?? tag,
+        min: toFiniteNumber(a.min),
+        default: toFiniteNumber(a.default),
+        max: toFiniteNumber(a.max)
+      }
+    })
   } catch {
     return []
   }

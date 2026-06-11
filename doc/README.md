@@ -19,13 +19,15 @@
 
 ---
 
-## 功能与资源
+## 工程与质量
 
 | 文档 | 说明 |
 |------|------|
-| [资源包.md](./资源包.md) | 资料库资源包结构说明 |
+| [testing/README.md](../testing/README.md) | **测试目录入口**（运行命令、目录约定） |
+| [testing/doc/strategy.md](../testing/doc/strategy.md) | **自动化测试方案**（分层、用例矩阵、CI、跨端契约） |
 | [asset-types-and-import.md](./asset-types-and-import.md) | **资产类型与入库处理**（扩展名、缩略图、伴随文件、会话导入） |
 | [thumbnail-pipeline.md](./thumbnail-pipeline.md) | **缩略图处理技术与逻辑**（分类型生成、缓存、异步调度、重建 IPC） |
+| [资源包.md](./资源包.md) | 资料库资源包结构说明 |
 | [i18n-inventory.md](./i18n-inventory.md) | 渲染进程 i18n 改动清单与维护约定 |
 | [eagle文件处理.md](./eagle文件处理.md) | Eagle 文件处理参考 |
 | [exr-preview.md](./exr-preview.md) | **OpenEXR** 多 AOV 预览与缩略图管线 |
@@ -69,5 +71,6 @@
 ## 文档维护约定
 
 - 新增说明类 Markdown 请放在 `doc/` 下，并在本索引中补一行链接。
+- **测试相关**文档、用例、夹具请放在仓库根目录 [`testing/`](../testing/)，见 [testing/README.md](../testing/README.md)。
 - 面向用户的 API 用法优先更新 `web-api-v1-guide.md`；协议变更同步 `web-api-v1-openapi.yaml` 与设计稿。
 - 代码中引用文档路径请使用 `doc/...`，勿再使用已废弃的 `docs/` 目录。

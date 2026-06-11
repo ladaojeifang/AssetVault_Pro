@@ -235,7 +235,7 @@ function MasonryAssetTile({
             asset.hasThumbnail) ? (
             <MasonryThumbnail
               assetId={asset.id}
-              cacheKey={asset.updatedAt}
+              cacheKey={asset.updatedAt.getTime()}
               objectFit={asset.fileType === 'font' ? 'contain' : 'cover'}
               retryWhileEmpty={can3dPreview && !asset.hasThumbnail}
               onError={() => setImgError(true)}

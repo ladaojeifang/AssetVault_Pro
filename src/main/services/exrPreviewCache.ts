@@ -39,7 +39,7 @@ export function setupExrPreviewProtocolHandler(): void {
       if (!entry?.jpeg?.length) {
         return new Response(null, { status: 404, statusText: 'Not Found' })
       }
-      return new Response(entry.jpeg, {
+      return new Response(new Uint8Array(entry.jpeg), {
         status: 200,
         headers: {
           'Content-Type': 'image/jpeg',

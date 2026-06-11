@@ -3,6 +3,7 @@ import { join, extname, basename, dirname } from 'path'
 import { tmpdir } from 'os'
 import http from 'http'
 import https from 'https'
+import type { ClientRequest, IncomingMessage, RequestOptions } from 'http'
 import { v4 as uuidv4 } from 'uuid'
 import { ALL_SUPPORTED_IMPORT_EXTENSIONS } from '@/shared/supportedFormats'
 import { isPageVideoWorkUrl } from '@/shared/pageVideoUrlPolicy'
@@ -14,6 +15,16 @@ import type { ApiImportOptions } from './assetImportService'
 import { importAssetFromPath } from './assetImportService'
 
 const REMOTE_IMPORTS_DIR = 'remote-imports'
+
+function requestUrl(
+  url: URL,
+  options: RequestOptions,
+  onResponse: (res: IncomingMessage) => void
+): ClientRequest {
+  return url.protocol === 'https:'
+    ? https.request(url, options as https.RequestOptions, onResponse)
+    : http.request(url, options, onResponse)
+}
 
 // Download sizing policy:
 // - If `Content-Length` exists, we derive an adaptive max.
@@ -238,10 +249,8 @@ async function downloadUrlWithNodeHttp(
     throw new Error('DOWNLOAD_TOO_MANY_REDIRECTS')
   }
 
-  const transport = url.protocol === 'https:' ? https : http
-
   return await new Promise((resolve, reject) => {
-    const req = transport.request(
+    const req = requestUrl(
       url,
       {
         method: 'GET',
@@ -410,9 +419,8 @@ async function downloadUrlToTempFile(
 }
 
 function probeContentLength(url: URL, headers: Record<string, string>): Promise<number | null> {
-  const transport = url.protocol === 'https:' ? https : http
   return new Promise((resolve) => {
-    const req = transport.request(
+    const req = requestUrl(
       url,
       { method: 'HEAD', headers, timeout: 15_000 },
       (res) => {
@@ -516,7 +524,7 @@ export type ImportFromUrlBatchItem = { url: string; filename?: string; headers?:
 
 export async function importAssetFromUrlBatch(
   items: ImportFromUrlBatchItem[],
-  options?: ApiImportOptions & { concurrent?: number }
+  options?: ApiImportOptions & { concurrent?: number; headers?: Record<string, string> }
 ): Promise<AssetImportFromUrlBatchResponse> {
   const imported: string[] = []
   const skipped: AssetImportFromUrlBatchResponse['skipped'] = []

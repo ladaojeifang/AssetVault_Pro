@@ -88,9 +88,9 @@ function scanFolder(root: string, skipDir?: string, win?: BrowserWindow): ScanEn
   const skipDirNorm = skipDir ? normalize(skipDir) : undefined
 
   function walk(dir: string) {
-    let items: ReturnType<typeof readdirSync>
+    let items: import('fs').Dirent<string>[]
     try {
-      items = readdirSync(dir, { withFileTypes: true })
+      items = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' }) as import('fs').Dirent<string>[]
     } catch {
       return
     }

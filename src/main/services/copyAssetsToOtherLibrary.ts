@@ -223,7 +223,7 @@ export async function copyAssetsToOtherLibrary(
           writeAssetSidecarMeta(
             inserted,
             assignedTags,
-            folderMeta.map((f) => ({ id: f.id, name: f.name })),
+            folderMeta.map((f) => f.id),
             targetRoot
           )
         }

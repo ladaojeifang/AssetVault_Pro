@@ -258,9 +258,8 @@ export function itemThumbRelative(assetId: string): string {
 
 export function removeItemPack(assetId: string): void {
   const dir = itemDirAbsolute(assetId)
-  if (existsSync(dir)) {
-    rmSync(dir, { recursive: true, force: true })
-  }
+  if (!existsSync(dir)) return
+  rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 }
 
 /**
