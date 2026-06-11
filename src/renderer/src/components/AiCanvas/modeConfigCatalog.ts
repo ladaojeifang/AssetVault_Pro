@@ -1,4 +1,4 @@
-import modeConfigJson from '../../../../../modeconfig.json'
+import modeConfigJson from '../../../../shared/modeconfig.json'
 import type {
   CanvasNodeType,
   ConfigNodeType,

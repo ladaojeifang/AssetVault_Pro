@@ -23,8 +23,8 @@ describe('decodeTextFileBytes', () => {
     expect(decodeTextFileBytes(Buffer.from('a\rb\tc', 'utf8'))).toBe('a\nb  c')
   })
 
-  it('decodes GBK Windows .txt (3d-thumb-extractor/test/test.txt)', () => {
-    const samplePath = join(process.cwd(), '3d-thumb-extractor/test/test.txt')
+  it('decodes GBK Windows .txt (testing/fixtures/3d-thumb-extractor/test/test.txt)', () => {
+    const samplePath = join(process.cwd(), 'testing/fixtures/3d-thumb-extractor/test/test.txt')
     const head = readFileSync(samplePath).subarray(0, 256)
     const text = decodeTextFileBytes(head)
     expect(text.startsWith('广东文化智算中心平台')).toBe(true)

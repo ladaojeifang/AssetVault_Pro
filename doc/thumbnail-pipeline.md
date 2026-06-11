@@ -40,7 +40,7 @@ thumbnailRead → 渲染进程 data URL / 网格展示
 | GIF / 视频 | `generateVideo()` | ffmpeg 抽帧 |
 | 字体 | `generateFont()` | Canvas 样张渲染 |
 | 3D 预览集 | `generateModel()` | 隐藏 Babylon 离屏窗口 |
-| C4D/MAX/Blend | `generateEmbeddedDcc()` | `3d-thumb-extractor` 提取嵌入预览 |
+| C4D/MAX/Blend | `generateEmbeddedDcc()` | `embeddedDccThumbnail/` 提取嵌入预览（原型见 `testing/fixtures/3d-thumb-extractor`） |
 | EXR | `renderExrThumbnailWebp` | HDR 专用 |
 | SVG | `renderSvgToWebpBuffer` | 大图（>5MB）可跳过栅格 |
 | 文本/MD/JSON | `generateTextPreview()` | Canvas 纸张预览或 ffmpeg 路径 |

@@ -25,7 +25,7 @@ git config core.hooksPath .githooks
 pnpm run typecheck
 pnpm run test:ci
 node scripts/verify-push-safe.mjs
-git push origin main
+git push origin master:main
 ```
 
 The pre-push hook runs `verify-push-safe.mjs` automatically when `core.hooksPath` is set.
@@ -34,8 +34,8 @@ The pre-push hook runs `verify-push-safe.mjs` automatically when `core.hooksPath
 
 ```bash
 git remote -v
-# origin  git@github.com:ladaojeifang/AssetVault_Pro.git
-git push -u origin main
+# origin  https://github.com/ladaojeifang/AssetVault_Pro.git
+git push -u origin master:main
 ```
 
 ## Internal documentation workflow
