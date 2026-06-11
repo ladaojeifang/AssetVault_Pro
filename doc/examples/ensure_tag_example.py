@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """
-在当前资料库中确保存在名为「人像」的标签：已存在则返回，不存在则创建。
+Ensure a tag exists in the current library (create if missing).
 
-前置：AssetVault Pro 已启动、已打开资料库、Web API 已启用。
-依赖：pip install requests
+Prerequisites: AssetVault Pro running, library open, Web API enabled.
+  pip install requests
 
-用法：
-  python doc/examples/ensure_tag_renxiao.py
+Usage:
+  python doc/examples/ensure_tag_example.py --name "reference"
+  python doc/examples/ensure_tag_example.py --name "portraits" --color "#3b82f6"
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
 from typing import Any
 
@@ -18,7 +20,6 @@ import requests
 
 BASE_URL = "http://127.0.0.1:41596/api/v1"
 API_TOKEN: str | None = None
-TAG_NAME = "人像"
 TIMEOUT = 30
 
 
@@ -48,7 +49,6 @@ def list_tags() -> list[dict[str, Any]]:
 
 
 def find_tag_by_name(name: str) -> dict[str, Any] | None:
-    """按名称精确匹配（区分大小写）。"""
     for tag in list_tags():
         if tag.get("name") == name:
             return tag
@@ -63,32 +63,32 @@ def create_tag(name: str, *, color: str | None = None) -> dict[str, Any]:
     return body["data"]
 
 
-def ensure_tag(name: str = TAG_NAME, *, color: str | None = None) -> dict[str, Any]:
-    """
-    返回标签对象（含 id、name、color 等）。
-    第二个返回值语义：created=True 表示本次新建，False 表示已存在。
-    """
+def ensure_tag(name: str, *, color: str | None = None) -> tuple[dict[str, Any], bool]:
     existing = find_tag_by_name(name)
     if existing:
-        return {**existing, "_created": False}
-    created = create_tag(name, color=color)
-    return {**created, "_created": True}
+        return existing, False
+    return create_tag(name, color=color), True
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Ensure a tag exists via Web API v1")
+    parser.add_argument("--name", required=True, help="Tag display name")
+    parser.add_argument("--color", default=None, help="Optional hex color, e.g. #3b82f6")
+    args = parser.parse_args()
+
     try:
-        tag = ensure_tag(TAG_NAME)
+        tag, created = ensure_tag(args.name, color=args.color)
     except requests.ConnectionError:
-        print("无法连接 API，请确认 AssetVault 已启动且 Web API 已启用。", file=sys.stderr)
+        print("Cannot reach API — is AssetVault running with Web API enabled?", file=sys.stderr)
         return 1
     except RuntimeError as e:
-        print(f"API 错误: {e}", file=sys.stderr)
+        print(f"API error: {e}", file=sys.stderr)
         return 1
 
-    if tag.pop("_created"):
-        print(f"已创建标签「{TAG_NAME}」: id={tag['id']}")
+    if created:
+        print(f"Created tag {args.name!r}: id={tag['id']}")
     else:
-        print(f"标签「{TAG_NAME}」已存在: id={tag['id']}, usageCount={tag.get('usageCount', 0)}")
+        print(f"Tag {args.name!r} already exists: id={tag['id']}")
     return 0
 
 

@@ -13,7 +13,7 @@ Security fixes are applied to the latest release on `main`. Pre-release (alpha) 
 
 **Please do not file public GitHub issues for security vulnerabilities.**
 
-Report privately by opening a [GitHub Security Advisory](https://github.com/YOUR_ORG/AssetVault_Pro/security/advisories/new) (preferred) or emailing the maintainers (add your contact when the repository is published).
+Report privately by opening a [GitHub Security Advisory](https://github.com/ladaojeifang/AssetVault_Pro/security/advisories/new) (preferred) or emailing the maintainers.
 
 Include:
 

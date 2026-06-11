@@ -16,3 +16,16 @@ testing/fixtures/large/
 .env
 .env.local
 .vite/
+
+# Editor / local IDE
+.cursor/
+
+# Office / binary product docs (keep in doc-internal/ locally)
+*.docx
+*.doc
+
+# Maintainer-only docs & scripts (local nested git — see doc-internal.template/README.md)
+doc-internal/
+
+# Local-only script outputs / scratch
+scripts/local/

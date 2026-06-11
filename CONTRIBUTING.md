@@ -6,7 +6,8 @@ Thank you for your interest in contributing. This repository is the **open-sourc
 
 - Read [README.md](README.md) for setup (`pnpm install`, `pnpm dev`).
 - Browse [doc/README.md](doc/README.md) for architecture and API docs.
-- Check existing [issues](https://github.com/YOUR_ORG/AssetVault_Pro/issues) to avoid duplicate work.
+- Check existing [issues](https://github.com/ladaojeifang/AssetVault_Pro/issues) to avoid duplicate work.
+- Maintainer-only docs belong in `doc-internal/` (see [doc-internal.template/README.md](doc-internal.template/README.md)); never commit paths blocked by `scripts/verify-push-safe.mjs`.
 
 ## Development workflow
 

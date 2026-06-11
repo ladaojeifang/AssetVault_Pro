@@ -316,5 +316,4 @@ items/{assetId}/
 ## 9. 相关文档
 
 - [thumbnail-pipeline.md](./thumbnail-pipeline.md) — 缩略图专项：生成管线、缓存、启动补全、IPC 重建
-- [i18n-inventory.md](./i18n-inventory.md) — 界面语言改动清单（与本文档独立）
 - [web-api-v1-guide.md](./web-api-v1-guide.md) — HTTP 导入与会话 API 用法

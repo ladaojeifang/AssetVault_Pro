@@ -1,0 +1,3 @@
+#!/bin/sh
+# Install: git config core.hooksPath .githooks
+node scripts/verify-push-safe.mjs "$1" "$2"

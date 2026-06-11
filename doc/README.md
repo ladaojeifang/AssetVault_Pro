@@ -1,76 +1,68 @@
-# AssetVault Pro — 项目文档索引
+# AssetVault Pro — 公开文档索引
 
-本目录集中存放项目说明、规格与集成文档，便于查阅与后续 AI/开发者协助。
+本目录为 **GitHub 对外发布** 的开发者与用户文档。维护者专用材料（路线图、手测清单、个人脚本）在仓库根目录的 **`doc-internal/`**（已 gitignore，不推送）；首次克隆后运行 `node scripts/init-doc-internal.mjs`。
 
-根目录仅保留 [README.md](../README.md)（仓库入口与快速开始）。
-
----
-
-## 产品与规划
-
-| 文档 | 说明 |
-|------|------|
-| [AssetVault_Pro_PRD_V1.0.md](./AssetVault_Pro_PRD_V1.0.md) | 产品需求文档 V1.0（单机 Pro 桌面） |
-| [AssetVault_Hub_PRD_V1.0.md](./AssetVault_Hub_PRD_V1.0.md) | **Hub 团队平台 PRD + FRD**（Web 控制台、联邦 Worker、RBAC、多库；Pro 桌面永久保留为胖 Worker） |
-| [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) | 开发计划 |
-| [library-import-from-library-spec.md](./library-import-from-library-spec.md) | **从其它资料库导入**（archive→archive 整库合并，LIM V1） |
-| [library-import-catalog-to-catalog-spec.md](./library-import-catalog-to-catalog-spec.md) | **索引库→索引库（同机）**整库导入（CC-V1，含 A 已本地化时的 hash 三分支） |
-| [embedded-library-spec.md](./embedded-library-spec.md) | **内嵌库**功能规格（文件夹原地转资料库：文件不复制、相对路径、items 只存元数据） |
+根目录 [README.md](../README.md) 为快速开始入口。
 
 ---
 
-## 工程与质量
+## 集成与 API
 
 | 文档 | 说明 |
 |------|------|
-| [testing/README.md](../testing/README.md) | **测试目录入口**（运行命令、目录约定） |
-| [testing/doc/strategy.md](../testing/doc/strategy.md) | **自动化测试方案**（分层、用例矩阵、CI、跨端契约） |
-| [asset-types-and-import.md](./asset-types-and-import.md) | **资产类型与入库处理**（扩展名、缩略图、伴随文件、会话导入） |
-| [thumbnail-pipeline.md](./thumbnail-pipeline.md) | **缩略图处理技术与逻辑**（分类型生成、缓存、异步调度、重建 IPC） |
-| [资源包.md](./资源包.md) | 资料库资源包结构说明 |
-| [i18n-inventory.md](./i18n-inventory.md) | 渲染进程 i18n 改动清单与维护约定 |
-| [eagle文件处理.md](./eagle文件处理.md) | Eagle 文件处理参考 |
-| [exr-preview.md](./exr-preview.md) | **OpenEXR** 多 AOV 预览与缩略图管线 |
-| [exr-preview-fix-plan.md](./exr-preview-fix-plan.md) | EXR 审阅后修复计划（F1–F7） |
-| [exr-preview-manual-acceptance.md](./exr-preview-manual-acceptance.md) | EXR 预览 **手工验收清单** |
-| [eagle插件探索方式.md](../eagle插件探索方式.md) | Eagle 扩展探测/采集思路与 AssetVault 对照 |
-| [node_type.md](./node_type.md) | AI 画布节点类型（对齐 modeconfig） |
-| [AI_GATEWAY_SPEC.md](./AI_GATEWAY_SPEC.md) | AI 网关 API、inputs 校验与 IPC 规划 |
+| [web-api-v1-guide.md](./web-api-v1-guide.md) | Web API 使用说明（curl、Playground） |
+| [web-api-v1-design.md](./web-api-v1-design.md) | 技术设计 |
+| [web-api-v1-openapi.yaml](./web-api-v1-openapi.yaml) | OpenAPI 3.1（中文） |
+| [web-api-v1-openapi.en.yaml](./web-api-v1-openapi.en.yaml) | OpenAPI 3.1（英文） |
+| [browser-extension.md](./browser-extension.md) | 浏览器扩展（独立仓库） |
 
----
-
-## Web API v1（本地 HTTP 自动化）
-
-| 文档 | 说明 |
-|------|------|
-| [web-api-v1-guide.md](./web-api-v1-guide.md) | **使用说明**（接口清单、curl 示例、Playground） |
-| 整页截图会话 API | 扩展规格 `AssetVault_Browser_Extension/docs/fullpage-stitch-session-api-spec.md`；Pro 实现见 guide §整页截图会话 |
-| [web-api-v1-design.md](./web-api-v1-design.md) | 技术设计稿与实现阶段 |
-| [web-api-v1-openapi.yaml](./web-api-v1-openapi.yaml) | OpenAPI 3.1 规范（可导入 Postman） |
-| [page-video-import-fix-plan.md](./page-video-import-fix-plan.md) | 作品页视频导入（yt-dlp Job API）审阅后修复计划（PVI-F1–F10） |
-
-运行时访问（应用已启动、默认端口 41596）：
+运行时（应用已启动，默认端口 41596）：
 
 - Playground：`http://127.0.0.1:41596/api/v1/playground/`
 - OpenAPI：`http://127.0.0.1:41596/api/v1/docs/openapi.yaml`
 
-应用内：**设置 → Advanced → 开发者 · Web API**。
-
 ---
 
-## 浏览器扩展
+## 架构与资产
 
-| 路径 | 说明 |
+| 文档 | 说明 |
 |------|------|
-| [browser-extension.md](./browser-extension.md) | Chrome MV3 扩展（独立仓库 `AssetVault_Browser_Extension`） |
-
-构建：在扩展仓库内 `pnpm run build` / `pnpm run package`（见 [browser-extension.md](./browser-extension.md)）。
+| [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md) | 代码架构总览 |
+| [asset-types-and-import.md](./asset-types-and-import.md) | 资产类型、入库、伴随文件 |
+| [thumbnail-pipeline.md](./thumbnail-pipeline.md) | 缩略图生成与缓存 |
+| [资源包.md](./资源包.md) | 资料库包结构 |
+| [library-import-from-library-spec.md](./library-import-from-library-spec.md) | 整库导入（LIM） |
+| [library-import-catalog-to-catalog-spec.md](./library-import-catalog-to-catalog-spec.md) | 索引库→索引库导入 |
+| [embedded-library-spec.md](./embedded-library-spec.md) | 内嵌库规格 |
+| [exr-preview.md](./exr-preview.md) | OpenEXR 预览 |
+| [eagle文件处理.md](./eagle文件处理.md) | Eagle 格式参考 |
+| [node_type.md](./node_type.md) | AI 画布节点类型 |
+| [AI_GATEWAY_SPEC.md](./AI_GATEWAY_SPEC.md) | AI 网关规格 |
 
 ---
 
-## 文档维护约定
+## 测试
 
-- 新增说明类 Markdown 请放在 `doc/` 下，并在本索引中补一行链接。
-- **测试相关**文档、用例、夹具请放在仓库根目录 [`testing/`](../testing/)，见 [testing/README.md](../testing/README.md)。
-- 面向用户的 API 用法优先更新 `web-api-v1-guide.md`；协议变更同步 `web-api-v1-openapi.yaml` 与设计稿。
-- 代码中引用文档路径请使用 `doc/...`，勿再使用已废弃的 `docs/` 目录。
+| 文档 | 说明 |
+|------|------|
+| [testing/README.md](../testing/README.md) | 测试目录与命令 |
+| [testing/doc/strategy.md](../testing/doc/strategy.md) | 分层测试策略 |
+
+---
+
+## 示例脚本
+
+| 文件 | 说明 |
+|------|------|
+| [examples/assetvault_api_import.py](./examples/assetvault_api_import.py) | Web API 导入入门 |
+| [examples/ensure_tag_example.py](./examples/ensure_tag_example.py) | 创建/确保标签 |
+| [examples/asset_update_notes_and_import_with_tag.py](./examples/asset_update_notes_and_import_with_tag.py) | 导入并打标签 |
+| [examples/test_sourceUrl_api.py](./examples/test_sourceUrl_api.py) | sourceUrl 字段示例 |
+
+---
+
+## 维护约定
+
+- 面向用户的 API 变更：更新 `web-api-v1-guide.md` 与 OpenAPI。
+- 新增公开说明放在 `doc/` 并更新本索引。
+- 规划、手测、个人脚本：放入 `doc-internal/`（见 [doc-internal.template/README.md](../doc-internal.template/README.md)）。
