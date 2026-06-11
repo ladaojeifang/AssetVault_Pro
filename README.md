@@ -1,7 +1,7 @@
 # AssetVault Pro
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![CI](https://github.com/YOUR_ORG/AssetVault_Pro/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_ORG/AssetVault_Pro/actions/workflows/ci.yml)
+[![CI](https://github.com/ladaojeifang/AssetVault_Pro/actions/workflows/ci.yml/badge.svg)](https://github.com/ladaojeifang/AssetVault_Pro/actions/workflows/ci.yml)
 
 Professional Digital Asset Management (DAM) System — desktop application (**Community Edition**, MIT).
 
@@ -39,7 +39,7 @@ Roadmap items in [doc/DEVELOPMENT_PLAN.md](doc/DEVELOPMENT_PLAN.md) and related 
 
 | Project | Description |
 |---------|-------------|
-| [AssetVault Browser Extension](https://github.com/YOUR_ORG/AssetVault_Browser_Extension) | Chrome/Edge MV3 extension — saves web media via the local Web API |
+| [AssetVault Browser Extension](https://github.com/ladaojeifang/AssetVault_Browser_Extension) | Chrome/Edge MV3 extension — saves web media via the local Web API |
 
 ## Documentation
 
@@ -71,7 +71,7 @@ All project documentation lives under **[doc/](doc/README.md)** (PRD, developmen
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_ORG/AssetVault_Pro.git
+git clone https://github.com/ladaojeifang/AssetVault_Pro.git
 cd AssetVault_Pro
 
 # Install dependencies
