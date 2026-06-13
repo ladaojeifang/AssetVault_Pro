@@ -6,6 +6,20 @@
 
 ---
 
+## 用户帮助
+
+面向最终用户的使用说明（中文）：
+
+| 文档 | 说明 |
+|------|------|
+| [help/index.md](./help/index.md) | 帮助中心目录 |
+| [help/getting-started.md](./help/getting-started.md) | 快速入门 |
+| [help/faq.md](./help/faq.md) | 常见问题 |
+
+完整目录见 [help/index.md](./help/index.md)。
+
+---
+
 ## 集成与 API
 
 | 文档 | 说明 |
@@ -30,12 +44,10 @@
 | [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md) | 代码架构总览 |
 | [asset-types-and-import.md](./asset-types-and-import.md) | 资产类型、入库、伴随文件 |
 | [thumbnail-pipeline.md](./thumbnail-pipeline.md) | 缩略图生成与缓存 |
-| [资源包.md](./资源包.md) | 资料库包结构 |
 | [library-import-from-library-spec.md](./library-import-from-library-spec.md) | 整库导入（LIM） |
 | [library-import-catalog-to-catalog-spec.md](./library-import-catalog-to-catalog-spec.md) | 索引库→索引库导入 |
 | [embedded-library-spec.md](./embedded-library-spec.md) | 内嵌库规格 |
 | [exr-preview.md](./exr-preview.md) | OpenEXR 预览 |
-| [eagle文件处理.md](./eagle文件处理.md) | Eagle 格式参考 |
 | [node_type.md](./node_type.md) | AI 画布节点类型 |
 | [AI_GATEWAY_SPEC.md](./AI_GATEWAY_SPEC.md) | AI 网关规格 |
 

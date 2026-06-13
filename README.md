@@ -43,7 +43,13 @@ Product roadmaps and commercial plans live in **`doc-internal/`** (local only, n
 
 ## Documentation
 
-Public documentation: **[doc/](doc/README.md)**. Maintainer-only docs: **`doc-internal/`** (run `node scripts/init-doc-internal.mjs` after clone).
+| Audience | Entry |
+|----------|-------|
+| **Users** | **[Help center](doc/help/index.md)** — install, import, folders & tags, preview, Web API, settings, shortcuts, FAQ（中文） |
+| **Developers** | **[doc/](doc/README.md)** — Web API, architecture, asset specs, OpenAPI |
+| **Maintainers** | **`doc-internal/`** — roadmaps & regression checklists (local only; run `node scripts/init-doc-internal.mjs` after clone) |
+
+New to the app? Start with [Getting started](doc/help/getting-started.md).
 
 ## Tech Stack
 
