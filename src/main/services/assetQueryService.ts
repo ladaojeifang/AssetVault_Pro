@@ -67,11 +67,13 @@ export async function queryAssets(params: QueryParams): Promise<QueryResult<Asse
   }
 
   if (params.tags?.length) {
-    for (const tagId of params.tags) {
-      conditions.push(
-        sql`exists (select 1 from asset_tags at where at.asset_id = ${assets.id} and at.tag_id = ${tagId})`
-      )
-    }
+    // Multiple tags = union (OR): asset matches if it has any selected tag.
+    conditions.push(
+      sql`exists (select 1 from asset_tags at where at.asset_id = ${assets.id} and at.tag_id in (${sql.join(
+        params.tags.map((tagId) => sql`${tagId}`),
+        sql`, `
+      )}))`
+    )
   }
 
   const whereExpr = conditions.length > 0 ? and(...conditions) : undefined

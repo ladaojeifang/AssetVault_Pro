@@ -222,7 +222,7 @@ export function LibrarySwitcherBar(): React.ReactElement {
               : 'bg-av-bg-primary/50 border-av-border/60 text-av-text-secondary hover:text-av-text-primary hover:bg-av-bg-hover'
           } ${busy ? 'opacity-60 pointer-events-none' : ''}`}
         >
-          <span className="shrink-0 w-6 h-6 rounded bg-av-accent-blue/25 flex items-center justify-center text-av-accent-blue">
+          <span className="shrink-0 w-6 h-6 rounded bg-av-accent-blue flex items-center justify-center text-av-bg-primary shadow-sm shadow-black/20">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
               <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
               <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />

@@ -46,7 +46,7 @@ const TitleBar: React.FC = () => {
   }
 
   function openSettings() {
-    window.dispatchEvent(new CustomEvent('assetvault:open-settings'))
+    void window.assetVaultAPI.window.openSettings()
   }
 
   return (
@@ -60,8 +60,8 @@ const TitleBar: React.FC = () => {
         </button>
 
         <div className="flex items-center gap-1.5 ml-1">
-          <div className="w-5 h-5 rounded bg-gradient-to-br from-av-accent-blue to-av-accent-purple flex items-center justify-center">
-            <span className="text-white text-[10px] font-bold">AV</span>
+          <div className="w-5 h-5 rounded bg-av-accent-blue flex items-center justify-center shadow-sm shadow-black/25">
+            <span className="text-av-bg-primary text-[10px] font-bold">AV</span>
           </div>
           <span className="text-sm font-semibold text-av-text-primary tracking-tight">
             {t('common:appName')}

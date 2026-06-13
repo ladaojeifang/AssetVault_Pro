@@ -11,11 +11,17 @@ import {
   getAiCanvasWindow,
   openAiCanvasWindow
 } from '../../services/aiCanvasWindow'
+import { getSettingsWindow, openSettingsWindow } from '../../services/settingsWindow'
 import { getMainBrowserWindow } from '../../services/mainWindowRef'
 
 export function handleWindowOperations(ipc: IpcMain): void {
   ipc.handle('window:open-ai-canvas', (_e, canvasId?: string | null) => {
     openAiCanvasWindow(canvasId ?? null)
+    return true
+  })
+
+  ipc.handle('window:open-settings', () => {
+    openSettingsWindow()
     return true
   })
 
@@ -28,6 +34,10 @@ export function handleWindowOperations(ipc: IpcMain): void {
     const canvas = getAiCanvasWindow()
     if (canvas && !canvas.isDestroyed() && event.sender.id === canvas.webContents.id) {
       return 'ai-canvas' as const
+    }
+    const settings = getSettingsWindow()
+    if (settings && !settings.isDestroyed() && event.sender.id === settings.webContents.id) {
+      return 'settings' as const
     }
     const main = getMainBrowserWindow()
     if (main && !main.isDestroyed() && event.sender.id === main.webContents.id) {

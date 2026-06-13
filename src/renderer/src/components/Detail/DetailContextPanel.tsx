@@ -174,7 +174,7 @@ function FolderContextView({ onClose }: { onClose: () => void }) {
             {iconSrc ? (
               <img src={iconSrc} alt="" className="w-16 h-16 rounded-lg object-cover border border-av-border" />
             ) : (
-              <FolderIconDisplay icon={folder.icon} fallbackEmoji="📂" size={48} />
+              <FolderIconDisplay icon={folder.icon} accentColor={accent} size={48} />
             )}
             <p className="text-xs text-av-text-muted">
               {t('context.folder.assetCount', { count: folder.assetCount })}
@@ -204,7 +204,7 @@ function FolderContextView({ onClose }: { onClose: () => void }) {
                 className="flex items-center gap-2 text-sm py-1 px-2 rounded-md bg-av-bg-primary/60"
                 style={{ borderLeft: `3px solid ${child.color ?? '#64748b'}` }}
               >
-                <FolderIconDisplay icon={child.icon} fallbackEmoji="📂" size={14} />
+                <FolderIconDisplay icon={child.icon} accentColor={child.color ?? '#64748b'} size={14} />
                 <span className="truncate flex-1">{child.name}</span>
                 <span className="text-[11px] text-av-text-muted tabular-nums">{child.assetCount}</span>
               </div>

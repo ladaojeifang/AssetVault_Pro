@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { getMainBrowserWindow } from './mainWindowRef'
+import { closeSettingsWindow } from './settingsWindow'
 
 const isDev = !app.isPackaged
 
@@ -104,9 +105,10 @@ export function closeAiCanvasWindow(): void {
   }
 }
 
-/** 主窗口关闭时一并关闭画布窗口 */
+/** 主窗口关闭时一并关闭画布与设置窗口 */
 export function attachMainWindowLifecycle(main: BrowserWindow): void {
   main.on('closed', () => {
     closeAiCanvasWindow()
+    closeSettingsWindow()
   })
 }

@@ -821,32 +821,37 @@ const FolderTreeItem: React.FC<FolderTreeItemProps> = ({
         <div key={folder.id}>
           <SidebarItem
               icon={
-                <span className="flex items-center gap-0.5 shrink-0">
-                  <span className="flex items-center w-3.5">
-                    {(folder.children?.length ?? 0) > 0 ? (
-                      <svg
-                        width="10"
-                        height="10"
-                        viewBox="0 0 10 10"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        className={`transition-transform ${expandedIds.has(folder.id) ? 'rotate-90' : ''}`}
-                      >
-                        <path d="M3 1l4 4-4 4" />
-                      </svg>
-                    ) : (
-                      <span className="w-[10px]" />
-                    )}
+                <span className="flex items-center gap-1.5 shrink-0">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: accent }}
+                  />
+                  <span className="flex items-center gap-0.5">
+                    <span className="flex items-center w-3.5">
+                      {(folder.children?.length ?? 0) > 0 ? (
+                        <svg
+                          width="10"
+                          height="10"
+                          viewBox="0 0 10 10"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          className={`transition-transform ${expandedIds.has(folder.id) ? 'rotate-90' : ''}`}
+                        >
+                          <path d="M3 1l4 4-4 4" />
+                        </svg>
+                      ) : (
+                        <span className="w-[10px]" />
+                      )}
+                    </span>
+                    <FolderIconDisplay icon={folder.icon} accentColor={accent} size={13} />
                   </span>
-                  <FolderIconDisplay icon={folder.icon} fallbackEmoji="📂" size={13} />
                 </span>
               }
               label={folder.name}
               active={currentId === folder.id}
               count={folder.assetCount}
               indent={level}
-              rowStyle={{ borderLeft: `3px solid ${accent}` }}
               onContextMenu={(e) => onFolderContextMenu(folder, e)}
               onDragOver={(e) => {
                 const types = e.dataTransfer.types

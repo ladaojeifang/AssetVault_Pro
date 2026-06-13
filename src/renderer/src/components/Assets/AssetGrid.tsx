@@ -986,18 +986,14 @@ function FolderBrowseCard({
             </span>
           </div>
         )}
-        <div className="absolute top-2 left-3 right-3 space-y-1 z-[1] pointer-events-none">
-          <div className="h-0.5 rounded-full bg-av-border" />
-          <div className="h-0.5 rounded-full bg-av-border/70 w-[92%]" />
-        </div>
-        <div className="aspect-[3/4] max-h-52 mx-auto flex items-center justify-center pt-7 px-2 pb-2">
+        <div className="aspect-[3/4] max-h-52 mx-auto flex items-center justify-center">
           {coverAssetId ? (
             <div className="w-full h-full rounded-lg overflow-hidden [&_img]:w-full [&_img]:h-full [&_img]:object-cover">
               <ThumbnailImage assetId={coverAssetId} onError={() => {}} />
             </div>
           ) : (
-            <div className="opacity-80 flex items-center justify-center" aria-hidden>
-              <FolderIconDisplay icon={folder.icon} fallbackEmoji="📁" size={44} />
+            <div className="w-[60%] h-[60%] flex items-center justify-center" aria-hidden>
+              <FolderIconDisplay icon={folder.icon} accentColor={accent} fillContainer />
             </div>
           )}
         </div>

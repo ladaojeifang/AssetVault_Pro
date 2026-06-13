@@ -220,10 +220,10 @@ function MasonryAssetTile({
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
         style={{ height: imageHeight }}
-        className={`group relative w-full rounded-lg overflow-hidden cursor-pointer transition-all duration-150 shrink-0 ${
+        className={`group relative w-full rounded-xl overflow-hidden cursor-pointer transition-all duration-150 shrink-0 ${
           selected
-            ? 'ring-2 ring-av-accent-blue shadow-lg shadow-av-accent-blue/20'
-            : 'hover:ring-2 hover:ring-av-border-light hover:shadow-md'
+            ? 'ring-2 ring-av-accent-blue shadow-lg shadow-av-accent-blue/25'
+            : 'hover:ring-1 hover:ring-av-border-light hover:shadow-md'
         }`}
       >
         <div className="absolute inset-0 bg-av-bg-tertiary">

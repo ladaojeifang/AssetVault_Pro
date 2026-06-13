@@ -911,7 +911,7 @@ function FolderChip({
         color: 'var(--color-text-primary, #e2e8f0)'
       }}
     >
-      <FolderIconDisplay icon={icon} fallbackEmoji="📂" size={13} className="shrink-0" />
+      <FolderIconDisplay icon={icon} accentColor={color} size={13} className="shrink-0" />
       <span className="truncate font-medium">{name}</span>
       <button type="button" onClick={onRemove} className="shrink-0 opacity-70 hover:opacity-100" title={t('removeFromFolder')}>
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8">

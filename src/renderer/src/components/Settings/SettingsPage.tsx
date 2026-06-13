@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Modal } from '@arco-design/web-react'
 import { LibrarySettingsPanel } from './LibrarySettingsPanel'
 import { FormatIconOverridesSection } from './FormatIconOverridesSection'
 import {
@@ -32,7 +31,6 @@ const GRID_SIZE_COLUMN_WIDTH: Record<string, number> = {
  * Storage paths, hotkey customization, appearance preferences
  */
 interface SettingsProps {
-  visible: boolean
   onClose: () => void
 }
 
@@ -42,7 +40,7 @@ function inferGridSizeFromColumnWidth(px: number): 'small' | 'medium' | 'large' 
   return 'medium'
 }
 
-const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
+const SettingsPage: React.FC<SettingsProps> = ({ onClose }) => {
   const { t } = useTranslation(['settings', 'common'])
   const [activeTab, setActiveTab] = useState('general')
   const [prefs, setPrefs] = useState<AppPreferences>({ ...DEFAULT_APP_PREFERENCES })
@@ -50,12 +48,11 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (!visible) return
     void window.assetVaultAPI.settings.getAppPreferences().then((p) => {
       setPrefs(p)
     })
     setGridSize(inferGridSizeFromColumnWidth(loadMasonryColumnWidth()))
-  }, [visible])
+  }, [])
 
   const updatePref = useCallback(<K extends keyof AppPreferences>(key: K, value: AppPreferences[K]) => {
     setPrefs((prev) => ({ ...prev, [key]: value }))
@@ -86,22 +83,10 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
   ]
 
   return (
-    <Modal
-      title={
-        <div className="flex items-center gap-2">
-          <span className="text-lg">{t('settings:title')}</span>
-        </div>
-      }
-      visible={visible}
-      onCancel={onClose}
-      footer={null}
-      unmountOnExit
-      style={{ width: 720, maxWidth: '90vw' }}
-      className="settings-modal"
-    >
-      <div className="flex p-0" style={{ minHeight: 500 }}>
+    <div className="flex flex-col h-screen min-h-0 bg-av-bg-primary text-av-text-primary">
+      <div className="flex flex-1 min-h-0">
         {/* Sidebar tabs */}
-        <div className="w-48 border-r border-av-border p-3 space-y-0.5">
+        <div className="w-48 shrink-0 border-r border-av-border p-3 space-y-0.5 overflow-y-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -119,7 +104,7 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
         </div>
 
         {/* Content area */}
-        <div className="flex-1 p-6 overflow-y-auto">
+        <div className="flex-1 min-w-0 p-6 overflow-y-auto">
           {activeTab === 'general' && <GeneralSettings prefs={prefs} onUpdate={updatePref} />}
           {activeTab === 'library' && <LibrarySettingsPanel />}
           {activeTab === 'appearance' && (
@@ -139,7 +124,7 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
       </div>
 
       {/* Footer */}
-      <div className="flex justify-end gap-3 px-6 py-4 border-t border-av-border">
+      <div className="flex justify-end gap-3 px-6 py-4 border-t border-av-border shrink-0">
         <button onClick={onClose} className="btn-secondary">
           {t('common:cancel')}
         </button>
@@ -153,7 +138,7 @@ const SettingsPage: React.FC<SettingsProps> = ({ visible, onClose }) => {
           {saving ? t('common:saving') : t('common:saveChanges')}
         </button>
       </div>
-    </Modal>
+    </div>
   )
 }
 

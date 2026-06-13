@@ -29,8 +29,10 @@ const api = {
     isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
     openAiCanvas: (canvasId?: string | null) =>
       ipcRenderer.invoke('window:open-ai-canvas', canvasId ?? null) as Promise<boolean>,
+    openSettings: () => ipcRenderer.invoke('window:open-settings') as Promise<boolean>,
     focusMain: () => ipcRenderer.invoke('window:focus-main') as Promise<boolean>,
-    getRole: () => ipcRenderer.invoke('window:get-role') as Promise<'main' | 'ai-canvas' | 'unknown'>
+    getRole: () =>
+      ipcRenderer.invoke('window:get-role') as Promise<'main' | 'ai-canvas' | 'settings' | 'unknown'>
   },
 
   assetDrag: {

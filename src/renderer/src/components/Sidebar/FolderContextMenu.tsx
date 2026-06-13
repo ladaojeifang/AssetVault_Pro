@@ -104,7 +104,9 @@ export function FolderContextMenu({
               ? 'text-av-text-muted/45 cursor-not-allowed'
               : item.danger
                 ? DESTRUCTIVE_MENU_ITEM_CLASS
-                : 'text-av-text-secondary hover:bg-av-bg-hover hover:text-av-text-primary'
+                : item.key === 'rename'
+                  ? 'text-av-accent-blue hover:bg-av-bg-hover'
+                  : 'text-av-text-secondary hover:bg-av-bg-hover hover:text-av-text-primary'
           }`}
           onClick={() => {
             if (item.disabled) return

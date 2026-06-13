@@ -72,10 +72,11 @@
 
   /* Custom button styles */
   .btn-primary {
-    @apply px-3 py-1.5 bg-av-accent-blue text-white rounded-md
+    @apply px-4 py-1.5 bg-av-accent-blue text-av-bg-primary rounded-full
            hover:bg-av-accent-blue-hover active:bg-av-accent-blue-pressed
-           transition-colors duration-150 text-sm font-medium
-           flex items-center gap-1.5 cursor-pointer border-none outline-none;
+           transition-colors duration-150 text-sm font-semibold
+           flex items-center gap-1.5 cursor-pointer border-none outline-none
+           shadow-sm shadow-black/20;
   }
 
   .btn-secondary {
@@ -119,16 +120,47 @@
   }
 
   .sidebar-section-title {
-    @apply text-xs font-semibold text-av-text-muted uppercase tracking-wider mb-2 px-1;
+    @apply text-[10px] font-semibold text-av-text-muted uppercase tracking-widest mb-2 px-1;
   }
 
   /** Custom portal context menus (AssetContextMenu, FolderContextMenu) — follow --av-* tokens */
   .av-context-menu {
-    @apply py-1 rounded-lg border border-av-border bg-av-bg-elevated shadow-2xl;
+    @apply py-2 rounded-[10px] border border-av-border-light bg-av-bg-elevated min-w-[220px];
+    box-shadow: 0 16px 48px var(--av-shadow-modal);
   }
 
   .av-context-menu-submenu {
-    @apply py-1 rounded-lg border border-av-border bg-av-bg-elevated shadow-2xl overflow-y-auto;
+    @apply py-2 rounded-[10px] border border-av-border-light bg-av-bg-elevated overflow-y-auto;
+    box-shadow: 0 12px 40px var(--av-shadow-modal);
+  }
+
+  .av-context-menu-section-title {
+    @apply px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-av-text-muted select-none;
+  }
+
+  .av-context-menu-item {
+    @apply w-full text-left px-3 py-2 text-[13px] flex items-center gap-2.5 transition-colors duration-100;
+  }
+
+  .av-context-menu-item-icon {
+    @apply w-4 h-4 shrink-0 opacity-90;
+  }
+
+  .av-context-menu-item-body {
+    @apply flex-1 min-w-0 flex items-center justify-between gap-3;
+  }
+
+  .av-context-menu-item-label {
+    @apply truncate;
+  }
+
+  .av-context-menu-item-hint {
+    @apply text-[11px] text-av-text-muted shrink-0 tabular-nums;
+  }
+
+  .av-context-menu-divider {
+    @apply h-px my-1.5 mx-2;
+    background-color: color-mix(in srgb, var(--av-border) 70%, transparent);
   }
 
   /**
@@ -184,10 +216,12 @@ body {
 .arco-btn-primary {
   background-color: var(--av-accent-blue) !important;
   border-color: var(--av-accent-blue) !important;
+  color: var(--av-bg-primary) !important;
 }
 .arco-btn-primary:hover {
   background-color: var(--av-accent-blue-hover) !important;
   border-color: var(--av-accent-blue-hover) !important;
+  color: var(--av-bg-primary) !important;
 }
 
 .arco-input-wrapper,
@@ -296,12 +330,12 @@ body {
   inset: 0;
   left: 2px;
   width: 2px;
-  background: #2d3044;
+  background: var(--av-border-light);
   transition: background 0.15s;
 }
 .av-workspace-divider:hover::after,
 .av-workspace-divider:active::after {
-  background: #3b82f6;
+  background: var(--av-accent-blue);
 }
 .ai-canvas-editor--embedded .ai-canvas-flow {
   border-radius: 0;
@@ -1374,7 +1408,7 @@ body {
 }
 .ai-gen-unit-progress-bar {
   height: 100%;
-  background: #3b82f6;
+  background: var(--av-accent-blue);
   transition: width 0.2s;
 }
 .ai-gen-unit-preview-actions {

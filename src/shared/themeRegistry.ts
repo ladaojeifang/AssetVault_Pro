@@ -148,6 +148,6 @@ export function getArcoThemeConfig(theme: AppTheme): ArcoThemeConfig {
     colorText: t.textPrimary,
     colorTextSecondary: t.textSecondary,
     colorBorder: t.border,
-    borderRadiusMedium: '6px'
+    borderRadiusMedium: '8px'
   }
 }

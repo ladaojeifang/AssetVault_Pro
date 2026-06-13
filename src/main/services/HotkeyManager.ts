@@ -1,4 +1,5 @@
 import { globalShortcut, BrowserWindow } from 'electron'
+import { openSettingsWindow } from './settingsWindow'
 
 /**
  * Optional OS-wide shortcuts via Electron `globalShortcut`.
@@ -105,8 +106,7 @@ const DEFAULT_HOTKEYS: HotkeyConfig[] = [
     accelerator: 'CommandOrCtrl+,',
     description: 'Open settings',
     handler: async () => {
-      const win = BrowserWindow.getFocusedWindow()
-      if (win) win.webContents.send('hotkey:open-settings')
+      openSettingsWindow()
     }
   },
   {

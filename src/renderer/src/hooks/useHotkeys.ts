@@ -92,7 +92,7 @@ const HOTKEY_MAP: Record<HotkeyId, (ctx: ReturnType<typeof useApp>) => void> = {
   },
 
   'open-settings': () => {
-    window.dispatchEvent(new CustomEvent('assetvault:open-settings'))
+    void window.assetVaultAPI.window.openSettings()
   },
 
   'focus-library-switcher': () => {

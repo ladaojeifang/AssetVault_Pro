@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect } from 'react'
 import { ConfigProvider } from '@arco-design/web-react'
 import Layout from './components/Layout/MainLayout'
 import AiCanvasApp from './AiCanvasApp'
+import SettingsWindowApp from './SettingsWindowApp'
 import { AppProvider, useApp } from './stores/AppContext'
 import { FormatIconOverridesProvider } from './stores/FormatIconOverridesContext'
 import { ThemeProvider, useAppTheme } from './stores/ThemeContext'
@@ -9,7 +10,6 @@ import { LocaleProvider, useAppLocale } from './stores/LocaleContext'
 import { ToastProvider } from './components/Common/Toast'
 import DuplicateImportBridge from './components/Import/DuplicateImportBridge'
 import DropZone from './components/Common/DropZone'
-import SettingsPage from './components/Settings/SettingsPage'
 import { useGlobalHotkeys } from './hooks/useHotkeys'
 
 export function isAiCanvasWindowLocation(): boolean {
@@ -17,15 +17,13 @@ export function isAiCanvasWindowLocation(): boolean {
   return h === 'ai-canvas' || h.startsWith('ai-canvas/')
 }
 
-const MainApp: React.FC = () => {
-  const [settingsVisible, setSettingsVisible] = useState(false)
-  const { openFontPreview } = useApp()
+export function isSettingsWindowLocation(): boolean {
+  const h = window.location.hash.replace(/^#\/?/, '')
+  return h === 'settings' || h.startsWith('settings/')
+}
 
-  useEffect(() => {
-    const open = () => setSettingsVisible(true)
-    window.addEventListener('assetvault:open-settings', open)
-    return () => window.removeEventListener('assetvault:open-settings', open)
-  }, [])
+const MainApp: React.FC = () => {
+  const { openFontPreview } = useApp()
 
   useEffect(() => {
     const unsub = window.assetVaultAPI.fonts.onOpenPreview(({ assetId }) => {
@@ -40,7 +38,6 @@ const MainApp: React.FC = () => {
     <>
       <Layout />
       <DropZone />
-      <SettingsPage visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
     </>
   )
 }
@@ -49,6 +46,7 @@ const ThemedShell: React.FC = () => {
   const { arcoTheme } = useAppTheme()
   const { arcoLocale } = useAppLocale()
   const canvasWindow = isAiCanvasWindowLocation()
+  const settingsWindow = isSettingsWindowLocation()
 
   return (
     <ConfigProvider theme={arcoTheme} locale={arcoLocale}>
@@ -56,7 +54,13 @@ const ThemedShell: React.FC = () => {
         <FormatIconOverridesProvider>
           <ToastProvider>
             <DuplicateImportBridge />
-            {canvasWindow ? <AiCanvasApp /> : <MainApp />}
+            {settingsWindow ? (
+              <SettingsWindowApp />
+            ) : canvasWindow ? (
+              <AiCanvasApp />
+            ) : (
+              <MainApp />
+            )}
           </ToastProvider>
         </FormatIconOverridesProvider>
       </AppProvider>
