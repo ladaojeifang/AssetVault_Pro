@@ -1,14 +1,24 @@
 # Local-only documentation (`doc-internal/`)
 
+> **中文说明：** [README.zh-CN.md](./README.zh-CN.md)
+
 The directory **`doc-internal/`** at the repository root is **not pushed to GitHub**. It is listed in `.gitignore`.
 
-Use it for:
+How this relates to public docs:
+
+| Location | Audience | Content |
+|----------|----------|---------|
+| [doc/help/](../doc/help/index.md) | End users | Install, usage, settings, FAQ (Chinese; shipped with the public repo) |
+| [doc/](../doc/README.md) | Developers / integrators | Web API, architecture, asset specs, OpenAPI |
+| **`doc-internal/`** | Maintainers | Roadmaps, hand-test checklists, fix plans, personal scripts, reference notes |
+
+Use `doc-internal/` for:
 
 - Product roadmaps and commercial planning (PRD, Hub, development plan)
 - Manual regression / smoke-test checklists
 - Fix plans and internal acceptance notes
 - Personal Web API examples and local smoke scripts
-- Reference notes (e.g. third-party extension research)
+- Third-party reference notes (e.g. Eagle import flow, resource pack format)
 
 ## First-time setup
 
@@ -37,13 +47,20 @@ This will:
 
 ```text
 doc-internal/
-├── README.md
-├── planning/          # PRD, DEVELOPMENT_PLAN, Hub
-├── maintenance/       # fix plans, i18n inventory, manual acceptance
-├── regression/        # hand-test checklists (from README)
-├── references/        # eagle extension notes, etc.
-├── examples/          # gulu2 import, personal tag scripts
-└── scripts/           # catalog merge smoke, check_remote_imports_refs
+├── README.md              # This guide (copied from doc-internal.template)
+├── README.zh-CN.md        # Chinese version of this guide
+├── planning/              # PRD, DEVELOPMENT_PLAN, Hub
+├── maintenance/           # fix plans, i18n inventory, manual acceptance
+├── regression/            # hand-test checklists (from doc-internal.template/regression/)
+├── references/            # third-party notes (Eagle import, resource packs, etc.)
+├── examples/              # gulu2 import, personal tag scripts
+└── scripts/               # catalog merge smoke, check_remote_imports_refs
 ```
 
-Do **not** remove `doc-internal/` from `.gitignore` unless you intend to publish that content.
+You may add files freely under each subdirectory; by default they live only in the nested local repo and are not pushed to the public remote.
+
+## Notes
+
+- Do **not** remove `doc-internal/` from `.gitignore` unless you intend to publish that content.
+- Public doc index: [doc/README.md](../doc/README.md) · User help: [doc/help/index.md](../doc/help/index.md)
+- Before pushing the public repo, you can run `node scripts/verify-push-safe.mjs` manually.

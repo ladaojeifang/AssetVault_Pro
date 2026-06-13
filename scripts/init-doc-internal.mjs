@@ -93,10 +93,12 @@ function initNestedGit() {
 console.log('Creating doc-internal/ …')
 mkdirSync(internalRoot, { recursive: true })
 
-const readmeSrc = join(root, 'doc-internal.template/README.md')
-const readmeDst = join(internalRoot, 'README.md')
-if (existsSync(readmeSrc)) {
-  cpSync(readmeSrc, readmeDst)
+for (const name of ['README.md', 'README.zh-CN.md']) {
+  const readmeSrc = join(root, 'doc-internal.template', name)
+  const readmeDst = join(internalRoot, name)
+  if (existsSync(readmeSrc)) {
+    cpSync(readmeSrc, readmeDst)
+  }
 }
 
 for (const { from, to } of MIGRATIONS) {
