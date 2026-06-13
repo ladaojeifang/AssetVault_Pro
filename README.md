@@ -1,5 +1,7 @@
 # AssetVault Pro
 
+> **中文说明：** [README.zh-CN.md](./README.zh-CN.md)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/ladaojeifang/AssetVault_Pro/actions/workflows/ci.yml/badge.svg)](https://github.com/ladaojeifang/AssetVault_Pro/actions/workflows/ci.yml)
 

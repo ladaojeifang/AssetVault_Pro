@@ -2,7 +2,7 @@
 
 本目录为 **GitHub 对外发布** 的开发者与用户文档。维护者专用材料（路线图、手测清单、个人脚本）在仓库根目录的 **`doc-internal/`**（已 gitignore，不推送）；首次克隆后运行 `node scripts/init-doc-internal.mjs`。
 
-根目录 [README.md](../README.md) 为快速开始入口。
+根目录 [README.md](../README.md)（英文）/ [README.zh-CN.md](../README.zh-CN.md)（中文）为快速开始入口。
 
 ---
 
