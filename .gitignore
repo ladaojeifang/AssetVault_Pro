@@ -28,4 +28,10 @@ testing/fixtures/large/
 doc-internal/
 
 # Local-only script outputs / scratch
-scripts/local/
+scripts/local/*
+.cursor/*
+.vscode/*
+.idea/*
+docs-internal/*
+.workbuddy/*
+.agents/*

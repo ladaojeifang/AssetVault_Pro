@@ -1,0 +1,194 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ─── Lint & Typecheck Before Packaging ──────────────────────────────
+  preflight:
+    name: Preflight Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run lint
+      - run: pnpm run test:ci
+
+  # ─── Package: Windows (NSIS installer) ──────────────────────────────
+  package-windows:
+    name: Package Windows
+    needs: preflight
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Fetch yt-dlp binary
+        run: pnpm run fetch:ytdlp
+        continue-on-error: true  # yt-dlp download may fail due to rate limit; packaged app can still function
+        env:
+          SKIP_YTDLP_FETCH: "0"
+      - name: Package (electron-builder --win)
+        run: pnpm run package
+      - name: List release artifacts
+        shell: pwsh
+        run: Get-ChildItem -Path release -Recurse -File | Select-Object FullName, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+          if-no-files-found: error
+
+  # ─── Package: macOS (DMG) ──────────────────────────────────────────
+  package-macos:
+    name: Package macOS
+    needs: preflight
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Fetch yt-dlp binary
+        run: pnpm run fetch:ytdlp
+        continue-on-error: true  # yt-dlp download may fail due to rate limit; packaged app can still function
+        env:
+          SKIP_YTDLP_FETCH: "0"
+      - name: Package (electron-builder --mac)
+        run: pnpm run package:mac
+      - name: List release artifacts
+        run: find release -type f -exec ls -lh {} \;
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: |
+            release/*.dmg
+            release/*.blockmap
+            release/latest-mac.yml
+          if-no-files-found: error
+
+  # ─── Package: Linux (AppImage / deb) ───────────────────────────────
+  package-linux:
+    name: Package Linux
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 \
+            xdg-utils libatspi2.0-0 libdrm2 libgbm1 \
+            libasound2t64 libxkbcommon0 \
+            dpkg fakeroot
+      - run: pnpm install --frozen-lockfile
+      - name: Fetch yt-dlp binary
+        run: pnpm run fetch:ytdlp
+        continue-on-error: true  # yt-dlp download may fail due to rate limit; packaged app can still function
+        env:
+          SKIP_YTDLP_FETCH: "0"
+      - name: Package (electron-builder --linux)
+        run: pnpm run package:linux
+      - name: List release artifacts
+        run: find release -type f -exec ls -lh {} \;
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
+            release/*.blockmap
+            release/latest-linux.yml
+          if-no-files-found: error
+
+  # ─── GitHub Release ────────────────────────────────────────────────
+  github-release:
+    name: Create GitHub Release
+    needs: [package-windows, package-macos, package-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist/
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          find dist/ -type f | while read f; do
+            base=$(basename "$f")
+            # Skip non-asset files
+            case "$base" in
+              *.exe|*.dmg|*.AppImage|*.deb|*.rpm|*.blockmap|latest*.yml)
+                cp "$f" "release-assets/$base"
+                ;;
+            esac
+          done
+          ls -lh release-assets/
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            echo "## Changes since $PREV_TAG" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" "$PREV_TAG..HEAD" >> CHANGELOG.md
+          else
+            echo "## Initial release" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" >> CHANGELOG.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "AssetVault Pro ${{ github.ref_name }}"
+          body_path: CHANGELOG.md
+          files: release-assets/*
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+          generate_release_notes: true
