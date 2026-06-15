@@ -3,6 +3,7 @@ import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import type { AssetItem, FileType, QueryParams, QueryResult } from '@/shared/types'
 import type { LocalizationState, StorageMode } from '@/shared/libraryTypes'
+import { normalizeExtensionFilter } from '@/shared/assetFilters'
 import { buildSearchCondition, tokenizeSearchQuery } from './assetSearch'
 import {
   buildColorBucketCondition,
@@ -20,6 +21,7 @@ function mapToAssetItem(row: DbAssetRow, tagIds: string[], folderIds: string[]):
   return {
     ...attachResolvedPaths(row),
     fileType: row.fileType as FileType,
+    typeId: row.typeId,
     storageMode: row.storageMode as StorageMode,
     localizationState: row.localizationState as LocalizationState,
     tagIds,
@@ -56,14 +58,31 @@ export async function queryAssets(params: QueryParams): Promise<QueryResult<Asse
     conditions.push(buildDatePresetCondition(params.datePreset))
   }
 
+  if (params.extension) {
+    const ext = normalizeExtensionFilter(params.extension)
+    if (ext) conditions.push(eq(assets.extension, ext))
+  }
+
   if (params.folderId) {
     conditions.push(
       sql`exists (select 1 from asset_folders af where af.asset_id = ${assets.id} and af.folder_id = ${params.folderId})`
     )
   }
 
-  if (params.fileType) {
-    conditions.push(eq(assets.fileType, params.fileType))
+  const typeFilterIds =
+    params.typeFilters?.length
+      ? params.typeFilters
+      : [
+          ...(params.fileType ? [`__sys:${params.fileType}`] : []),
+          ...(params.categories ?? [])
+        ]
+
+  if (typeFilterIds.length > 0) {
+    conditions.push(inArray(assets.typeId, typeFilterIds))
+  }
+
+  if (params.favoritesOnly) {
+    conditions.push(eq(assets.isFavorite, true))
   }
 
   if (params.tags?.length) {
@@ -138,6 +157,17 @@ export async function queryAssets(params: QueryParams): Promise<QueryResult<Asse
   }
 }
 
+export async function listDistinctExtensions(): Promise<string[]> {
+  const database = getDatabase()
+  const rows = await database
+    .select({ extension: assets.extension, cnt: count() })
+    .from(assets)
+    .groupBy(assets.extension)
+    .orderBy(desc(count()), asc(assets.extension))
+    .all()
+  return rows.map((row) => row.extension).filter((ext): ext is string => Boolean(ext))
+}
+
 export async function getAssetById(
   id: string,
   options?: { incrementViewCount?: boolean }
@@ -156,6 +186,16 @@ export async function getAssetById(
 
   const [tagIds, folderIds] = await Promise.all([getAssetTagIds(id), getAssetFolderIds(id)])
   return mapToAssetItem(item, tagIds, folderIds)
+}
+
+export async function countFavoriteAssets(): Promise<number> {
+  const database = getDatabase()
+  const totalResult = await database
+    .select({ count: count() })
+    .from(assets)
+    .where(eq(assets.isFavorite, true))
+    .get()
+  return totalResult?.count ?? 0
 }
 
 export async function deleteAssets(ids: string[]): Promise<number> {

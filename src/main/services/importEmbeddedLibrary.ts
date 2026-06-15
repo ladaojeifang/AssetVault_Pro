@@ -15,6 +15,8 @@ import { eq } from 'drizzle-orm'
 import { ALL_SUPPORTED_IMPORT_EXTENSIONS } from '@/shared/supportedFormats'
 import type { CreateEmbeddedLibraryResult, EmbeddedImportProgress } from '@/shared/libraryTypes'
 import { getFileType } from '../utils/fileUtils'
+import { systemTypeCategoryId } from '@/shared/assetTypeRegistry'
+import { resolveFormatCapabilities } from '@/shared/formatCapabilities'
 import { computeFileSha256 } from '../utils/contentHash'
 import { getThumbnailService } from './ThumbnailService'
 import {
@@ -45,17 +47,11 @@ import {
 } from './fontSettingsStore'
 import { shouldUseOriginalImageDimensions } from '../utils/thumbnailSizing'
 import { extractVideoFramePngBestEffort } from '../utils/videoFrame'
-import { isSvgExtension, isSvgOverRasterLimit } from '@/shared/svgFormats'
-import { isExrExtension } from '@/shared/exrFormats'
+import { isSvgOverRasterLimit } from '@/shared/svgFormats'
 import { resolveExrFileMetadata, exrStoredMetadataFromFileMeta } from '../utils/exrMetadata'
 import { parseSvgDimensions } from '../utils/svgDimensions'
 import { markSvgRasterSkipped } from './svgRasterSkip'
-import { schedule3dThumbnailAfterImport } from './regenerateModelThumbnails'
-import { scheduleEmbeddedDccThumbnailAfterImport } from './regenerateEmbeddedDccThumbnails'
-import { scheduleTextPreviewThumbnailAfterImport } from './regenerateTextPreviewThumbnails'
-import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
-import { isEmbeddedDccThumbExtension } from '@/shared/embeddedDccFormats'
-import { isTextPreviewExtension } from '@/shared/textPreviewFormats'
+import { scheduleDeferredThumbnailAfterImport } from './thumbnailJobs'
 
 let importInProgress = false
 
@@ -271,6 +267,7 @@ export async function createEmbeddedLibrary(
         const mimeType = mime.lookup(entry.absPath) || 'application/octet-stream'
         const extNoDot = entry.ext.replace(/^\./, '')
         const fileType = getFileType(mimeType, entry.ext)
+        const formatCaps = resolveFormatCapabilities(extNoDot)
         const filename = basename(entry.absPath, entry.ext)
         const originalName = basename(entry.absPath)
         const id = uuidv4()
@@ -289,9 +286,9 @@ export async function createEmbeddedLibrary(
         let thumbnailPath: string | undefined
         let metadataObj: Record<string, unknown> = {}
 
-        if (fileType === 'image') {
+        if (formatCaps.importPipeline === 'image') {
           try {
-            if (isSvgExtension(extNoDot)) {
+            if (formatCaps.imagePipeline === 'svg') {
               const svgText = require('fs').readFileSync(entry.absPath, 'utf-8')
               const dims = parseSvgDimensions(svgText)
               width = dims.width
@@ -314,7 +311,7 @@ export async function createEmbeddedLibrary(
                   }
                 }
               }
-            } else if (isExrExtension(extNoDot)) {
+            } else if (formatCaps.imagePipeline === 'exr') {
               const exrMeta = await resolveExrFileMetadata(entry.absPath)
               if (exrMeta) {
                 width = exrMeta.width
@@ -357,7 +354,7 @@ export async function createEmbeddedLibrary(
           } catch (imgErr) {
             console.error(`[EmbeddedLib] image processing error for ${entry.absPath}:`, imgErr)
           }
-        } else if (fileType === 'video') {
+        } else if (formatCaps.importPipeline === 'video') {
           try {
             const { parseFile } = await import('music-metadata')
             const mm = await parseFile(entry.absPath, { skipCovers: true, duration: true })
@@ -396,7 +393,7 @@ export async function createEmbeddedLibrary(
           } catch {
             /* optional */
           }
-        } else if (fileType === 'audio') {
+        } else if (formatCaps.importPipeline === 'audio') {
           try {
             const { parseFile } = await import('music-metadata')
             const mm = await parseFile(entry.absPath, { skipCovers: true, duration: true })
@@ -405,7 +402,7 @@ export async function createEmbeddedLibrary(
             /* optional */
           }
           metadataObj.duration = duration ?? null
-        } else if (fileType === 'font') {
+        } else if (formatCaps.importPipeline === 'font') {
           const parsed = parseFontFile(
             entry.absPath,
             getEffectiveThumbSampleText(),
@@ -442,6 +439,7 @@ export async function createEmbeddedLibrary(
           extension: extNoDot,
           mimeType,
           fileType,
+          typeId: systemTypeCategoryId(fileType),
           folderId: null,
           filePath: entry.relPath, // relative to library root (forward slashes)
           storageMode: 'embedded' as const,
@@ -472,16 +470,8 @@ export async function createEmbeddedLibrary(
           }
         })
 
-        // Schedule async thumbnails for 3D / text preview
-        if (fileType === '3d' && isModel3dPreviewExtension(extNoDot)) {
-          void schedule3dThumbnailAfterImport(database, id, entry.absPath, extNoDot)
-        } else if (fileType === '3d' && isEmbeddedDccThumbExtension('.' + extNoDot)) {
-          void scheduleEmbeddedDccThumbnailAfterImport(database, id, entry.absPath, extNoDot)
-        } else if (
-          (fileType === 'code' || fileType === 'document') &&
-          isTextPreviewExtension('.' + extNoDot)
-        ) {
-          void scheduleTextPreviewThumbnailAfterImport(database, id, entry.absPath, extNoDot, fileType)
+        if (formatCaps.asyncThumbnail) {
+          scheduleDeferredThumbnailAfterImport(database, id, entry.absPath, extNoDot)
         }
 
         added++

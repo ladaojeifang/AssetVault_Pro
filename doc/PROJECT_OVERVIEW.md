@@ -397,12 +397,13 @@ UI 搜索/过滤请求
   → IPC 'library:import-from-library'
     → 校验源库路径 + 模式 (archive/catalog)
     → 阶段1: 标签迁移 (phaseTags)
-    → 阶段2: 文件夹迁移 (phaseFolders)
-    → 阶段3: 资产迁移 (逐个)
+    → 阶段2: 用户分类迁移 (phaseCategories)
+    → 阶段3: 文件夹迁移 (phaseFolders)
+    → 阶段4: 资产迁移 (逐个)
       → SHA-256 去重
       → 新资产: cp items/ + INSERT
-      → 重复资产: mergeAssetMetadata (tag/folder 合并)
-    → 阶段4: 收尾 (refreshFolderAssetCounts, flushDatabase, 通知)
+      → 重复资产: mergeAssetMetadata (folder/tag 合并；type_id 保留目标库)
+    → 阶段5: 收尾 (refreshFolderAssetCounts, flushDatabase, 通知)
 ```
 
 ### 5.5 Web API 数据流

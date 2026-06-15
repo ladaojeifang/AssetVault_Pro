@@ -1,10 +1,14 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
-import type { AssetItem, FolderItem } from '@/shared/types'
+import type { AssetItem, CategoryItem, FolderItem } from '@/shared/types'
 import { flattenFolderTree } from '../../utils/flattenFolderTree'
 import { DESTRUCTIVE_MENU_ITEM_CLASS } from '../../theme/destructiveActionClasses'
 import { getHotkeyAccelerator } from '@/shared/hotkeyRegistry'
+import {
+  canUseAssetAsFolderCover,
+  supportsColorAnalysis
+} from '@/shared/formatCapabilities'
 
 export type AssetContextMenuState = {
   assetIds: string[]
@@ -21,7 +25,7 @@ type MenuItem = {
   accent?: boolean
   shortcut?: string
   hint?: string
-  submenu?: 'folders' | 'libraries'
+  submenu?: 'folders' | 'libraries' | 'categories'
 }
 
 type MenuSection = {
@@ -67,6 +71,14 @@ function MenuIcon({ name }: { name: string }) {
         <svg {...common}>
           <path d="M3 7h6l2 2h10v10H3V7z" />
           <path d="M12 11v4M10 13h4" />
+        </svg>
+      )
+    case 'add-category':
+      return (
+        <svg {...common}>
+          <path d="M4 7h16v3H4V7z" />
+          <path d="M6 13h12v4H6v-4z" />
+          <path d="M12 10v7M9.5 12.5h5" />
         </svg>
       )
     case 'add-library':
@@ -153,6 +165,7 @@ function itemToneClass(item: MenuItem): string {
 export function AssetContextMenu({
   state,
   folderTree,
+  categories,
   currentFolderId,
   recentLibraries,
   recentLibraryDisplayNames,
@@ -162,6 +175,7 @@ export function AssetContextMenu({
 }: {
   state: AssetContextMenuState
   folderTree: FolderItem[]
+  categories: CategoryItem[]
   currentFolderId: string | null
   recentLibraries: string[]
   recentLibraryDisplayNames?: string[]
@@ -172,7 +186,7 @@ export function AssetContextMenu({
   const { t } = useTranslation('assets')
   const menuRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
-  const [openSubmenu, setOpenSubmenu] = useState<'folders' | 'libraries' | null>(null)
+  const [openSubmenu, setOpenSubmenu] = useState<'folders' | 'libraries' | 'categories' | null>(null)
   const [submenuPos, setSubmenuPos] = useState<{ left: number; top: number } | null>(null)
 
   const flatFolders = flattenFolderTree(folderTree)
@@ -183,11 +197,10 @@ export function AssetContextMenu({
   const canSetCover =
     !!currentFolderId &&
     state != null &&
-    (state.primaryAsset.fileType === 'image' || state.primaryAsset.hasThumbnail)
+    canUseAssetAsFolderCover(state.primaryAsset.extension, state.primaryAsset.hasThumbnail)
 
   const canAnalyzeColors =
-    state != null &&
-    (state.primaryAsset.fileType === 'image' || state.primaryAsset.fileType === 'video')
+    state != null && supportsColorAnalysis(state.primaryAsset.extension)
 
   useLayoutEffect(() => {
     if (!state) {
@@ -250,6 +263,12 @@ export function AssetContextMenu({
       items: [
         { key: 'explorer', label: t('contextMenu.openExplorer') },
         { key: 'add-folder', label: t('contextMenu.addToFolder'), submenu: 'folders' },
+        {
+          key: 'add-category',
+          label: t('contextMenu.setAssetType'),
+          submenu: 'categories',
+          disabled: categories.length === 0
+        },
         {
           key: 'add-library',
           label: t('contextMenu.addToOtherLibrary'),
@@ -343,6 +362,51 @@ export function AssetContextMenu({
                 }}
               >
                 <span className="av-context-menu-item-label">{f.name}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )
+    }
+
+    if (item.submenu === 'categories' && openSubmenu === 'categories' && submenuPos) {
+      return (
+        <div
+          className="av-context-menu-submenu fixed z-[10001]"
+          style={{
+            left: submenuPos.left,
+            top: submenuPos.top,
+            width: SUBMENU_WIDTH,
+            maxHeight: SUBMENU_MAX_HEIGHT
+          }}
+        >
+          {categories.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-av-text-muted">{t('contextMenu.noCategories')}</p>
+          ) : (
+            categories.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                className="av-context-menu-item text-av-text-primary hover:bg-av-bg-hover truncate"
+                onClick={() => {
+                  onAction('add-category', assetIds, category.id)
+                  onClose()
+                }}
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: category.color }}
+                />
+                {category.icon ? (
+                  <span className="text-xs shrink-0">{category.icon}</span>
+                ) : null}
+                <span className="av-context-menu-item-label flex-1 min-w-0">
+                  {category.kind === 'system'
+                    ? t(`fileTypes.${category.fileType ?? category.name}` as 'fileTypes.image', {
+                        defaultValue: category.name
+                      })
+                    : category.name}
+                </span>
               </button>
             ))
           )}

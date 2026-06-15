@@ -1,6 +1,7 @@
 import type { AssetItem } from '@/shared/types'
 import { notify } from '../components/Common/notify'
 import { resolveAssetPreviewUrl } from './canvasAssetNodes'
+import { resolveFormatCapabilities } from '@/shared/formatCapabilities'
 
 export const IMAGE_IMPORT_FILTERS = [
   { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'exr'] }
@@ -25,11 +26,12 @@ export async function pickAndImportLibraryAsset(
   const asset = (await window.assetVaultAPI.assets.getById(assetId)) as AssetItem | null
   if (!asset) return null
 
-  if (kind === 'video' && asset.fileType !== 'video') {
+  const pipeline = resolveFormatCapabilities(asset.extension).importPipeline
+  if (kind === 'video' && pipeline !== 'video') {
     notify.warning('请选择视频文件')
     return null
   }
-  if (kind === 'image' && asset.fileType !== 'image') {
+  if (kind === 'image' && pipeline !== 'image') {
     notify.warning('请选择图片文件')
     return null
   }

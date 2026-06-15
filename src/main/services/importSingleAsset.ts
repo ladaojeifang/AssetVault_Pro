@@ -10,6 +10,7 @@ import { assets, assetFolders } from '../db/schema'
 import { eq, and } from 'drizzle-orm'
 import type { DuplicateImportAnswer, DuplicateImportPromptPayload, DuplicatePolicy, ImportAssetOptions } from '@/shared/importTypes'
 import { getFileType } from '../utils/fileUtils'
+import { resolveFormatCapabilities } from '@/shared/formatCapabilities'
 import { computeFileSha256 } from '../utils/contentHash'
 import { getThumbnailService } from './ThumbnailService'
 import { FONT_THUMB_CANVAS_SIZE } from '../utils/fontPreviewRender'
@@ -22,6 +23,7 @@ import { extractPaletteFromImageBuffer, serializePaletteColors } from '../utils/
 import { classifyColorBucket } from '@/shared/colorBucket'
 import { extractVideoFramePngBestEffort } from '../utils/videoFrame'
 import { getLibraryMode } from './libraryManifest'
+import { systemTypeCategoryId } from '@/shared/assetTypeRegistry'
 import {
   getLibraryRoot,
   itemPackFileRelative,
@@ -33,17 +35,11 @@ import { copyObjCompanionMtlForImport, posixRelToFsAbs } from './importSingleAss
 import { syncAssetSidecarFromDb, writeAssetSidecarMeta } from './assetSidecar'
 import { finalizeAssetRecords } from './assetSearchIndex'
 import { parseFontFile } from './fontMetadata'
-import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
-import { isEmbeddedDccThumbExtension } from '@/shared/embeddedDccFormats'
-import { isTextPreviewExtension } from '@/shared/textPreviewFormats'
-import { isSvgExtension, isSvgOverRasterLimit } from '@/shared/svgFormats'
-import { isExrExtension } from '@/shared/exrFormats'
+import { isSvgOverRasterLimit } from '@/shared/svgFormats'
 import { resolveExrFileMetadata, exrStoredMetadataFromFileMeta } from '../utils/exrMetadata'
 import { parseSvgDimensions } from '../utils/svgDimensions'
 import { markSvgRasterSkipped } from './svgRasterSkip'
-import { schedule3dThumbnailAfterImport } from './regenerateModelThumbnails'
-import { scheduleEmbeddedDccThumbnailAfterImport } from './regenerateEmbeddedDccThumbnails'
-import { scheduleTextPreviewThumbnailAfterImport } from './regenerateTextPreviewThumbnails'
+import { scheduleDeferredThumbnailAfterImport } from './thumbnailJobs'
 import { buildDuplicatePromptPayload, findAssetIdByContentHash } from './contentHashService'
 import { resolveExistingThumbnailRelPath } from './thumbnailRead'
 import { isEmbeddedInPlaceImport } from './embeddedAssetImport'
@@ -119,6 +115,7 @@ export async function importSingleAsset(
   const extNoDot = extWithDot.replace(/^\./, '')
   const mimeType = mime.lookup(filePathCanonical) || 'application/octet-stream'
   const fileType = getFileType(mimeType, extWithDot)
+  const formatCaps = resolveFormatCapabilities(extNoDot)
   const filename = basename(filePathCanonical, extWithDot)
   const originalName = basename(filePathCanonical)
   const storageFileName = sanitizeStorageFileName(originalName)
@@ -163,7 +160,7 @@ export async function importSingleAsset(
       importSourcePath = toCanonicalFilePath(destAbs)
       storageMode = 'local'
     }
-    if (extNoDot === 'obj') {
+    if (formatCaps.copyObjCompanionMtl) {
       copyObjCompanionMtlForImport(filePathCanonical, itemDirAbs)
     }
   } else if (catalogMode) {
@@ -205,7 +202,7 @@ export async function importSingleAsset(
     } else {
       copyOrHardlinkIntoLibrary(filePathCanonical, destAbs, true)
     }
-    if (extNoDot === 'obj') {
+    if (formatCaps.copyObjCompanionMtl) {
       copyObjCompanionMtlForImport(filePathCanonical, itemDirAbs)
     }
     storageMode = 'local'
@@ -223,9 +220,9 @@ export async function importSingleAsset(
   let thumbnailPath: string | undefined
   let metadataObj: Record<string, unknown> = {}
 
-  if (fileType === 'image') {
+  if (formatCaps.importPipeline === 'image') {
     try {
-      if (isSvgExtension(extNoDot)) {
+      if (formatCaps.imagePipeline === 'svg') {
         if (isSvgOverRasterLimit(stat.size)) {
           markSvgRasterSkipped(id, `oversized:${stat.size}`)
         } else {
@@ -252,7 +249,7 @@ export async function importSingleAsset(
             }
           }
         }
-      } else if (isExrExtension(extNoDot)) {
+      } else if (formatCaps.imagePipeline === 'exr') {
         const exrMeta = await resolveExrFileMetadata(destAbs)
         if (exrMeta) {
           width = exrMeta.width
@@ -320,7 +317,7 @@ export async function importSingleAsset(
     } catch (error) {
       console.error('[Import] Image processing error:', error)
     }
-  } else if (fileType === 'video') {
+  } else if (formatCaps.importPipeline === 'video') {
     try {
       const { parseFile } = await import('music-metadata')
       const mm = await parseFile(destAbs, { skipCovers: true, duration: true })
@@ -364,7 +361,7 @@ export async function importSingleAsset(
     } catch (error) {
       console.error('[Import] Video thumbnail error:', error)
     }
-  } else if (fileType === 'audio') {
+  } else if (formatCaps.importPipeline === 'audio') {
     try {
       const { parseFile } = await import('music-metadata')
       const mm = await parseFile(destAbs, { skipCovers: true, duration: true })
@@ -373,7 +370,7 @@ export async function importSingleAsset(
       // optional metadata
     }
     metadataObj.duration = duration ?? null
-  } else if (fileType === 'font') {
+  } else if (formatCaps.importPipeline === 'font') {
     const parsed = parseFontFile(
       destAbs,
       getEffectiveThumbSampleText(),
@@ -411,6 +408,7 @@ export async function importSingleAsset(
     extension: extNoDot,
     mimeType,
     fileType,
+    typeId: systemTypeCategoryId(fileType),
     folderId: null,
     filePath: storedFilePath,
     storageMode,
@@ -441,7 +439,6 @@ export async function importSingleAsset(
       return await finalizeImportedAsset(database, {
         id,
         targetFolderId,
-        fileType,
         destAbs,
         extNoDot,
         skipTextPreviewThumbnail: opts.skipTextPreviewThumbnail
@@ -493,7 +490,6 @@ export async function importSingleAsset(
   return await finalizeImportedAsset(database, {
     id,
     targetFolderId,
-    fileType,
     destAbs,
     extNoDot,
     skipTextPreviewThumbnail: opts.skipTextPreviewThumbnail
@@ -513,13 +509,12 @@ async function finalizeImportedAsset(
   opts: {
     id: string
     targetFolderId?: string
-    fileType: string
     destAbs: string
     extNoDot: string
     skipTextPreviewThumbnail?: boolean
   }
 ): Promise<string> {
-  const { id, targetFolderId, fileType, destAbs, extNoDot, skipTextPreviewThumbnail } = opts
+  const { id, targetFolderId, destAbs, extNoDot, skipTextPreviewThumbnail } = opts
 
   const row = await database.select().from(assets).where(eq(assets.id, id)).get()
   if (!row) {
@@ -545,16 +540,13 @@ async function finalizeImportedAsset(
 
   await finalizeAssetRecords(database, id)
 
-  if (fileType === '3d' && isModel3dPreviewExtension(extNoDot)) {
-    void schedule3dThumbnailAfterImport(database, id, destAbs, extNoDot)
-  } else if (fileType === '3d' && isEmbeddedDccThumbExtension('.' + extNoDot)) {
-    void scheduleEmbeddedDccThumbnailAfterImport(database, id, destAbs, extNoDot)
-  } else if (
-    (fileType === 'code' || fileType === 'document') &&
-    isTextPreviewExtension('.' + extNoDot) &&
-    !shouldSkipTextPreviewThumbnail(id, skipTextPreviewThumbnail)
-  ) {
-    void scheduleTextPreviewThumbnailAfterImport(database, id, destAbs, extNoDot, fileType)
+  const caps = resolveFormatCapabilities(extNoDot)
+  if (caps.asyncThumbnail) {
+    const skipText =
+      caps.asyncThumbnail === 'text-preview' && shouldSkipTextPreviewThumbnail(id, skipTextPreviewThumbnail)
+    if (!skipText) {
+      scheduleDeferredThumbnailAfterImport(database, id, destAbs, extNoDot)
+    }
   }
 
   return id

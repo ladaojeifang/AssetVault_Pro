@@ -1,5 +1,5 @@
 /**
- * 资产预览路由：从扩展名 / fileType 解析应打开的全页预览。
+ * 资产预览路由：从扩展名解析应打开的全页预览（格式驱动，不依赖 DB fileType）。
  */
 
 import {
@@ -13,6 +13,7 @@ import {
   isModel3dPreviewExtension,
   isSvgExtension
 } from './assetFormatRegistry'
+import { isFontPreviewExtension } from './formatCapabilities'
 
 export type { AssetOpenAction, AssetPreviewKind }
 export { ASSET_PREVIEW_DETAIL_LABEL_KEY, ASSET_PREVIEW_KIND_ORDER } from './assetPreviewCatalog'
@@ -23,10 +24,10 @@ export interface AssetPreviewCandidate {
 }
 
 const MATCHERS: Record<AssetPreviewKind, (asset: AssetPreviewCandidate) => boolean> = {
-  font: (a) => a.fileType === 'font',
-  model: (a) => a.fileType === '3d' && isModel3dPreviewExtension(a.extension ?? ''),
-  svg: (a) => a.fileType === 'image' && isSvgExtension(a.extension ?? ''),
-  exr: (a) => a.fileType === 'image' && isExrExtension(a.extension ?? ''),
+  font: (a) => isFontPreviewExtension(a.extension ?? ''),
+  model: (a) => isModel3dPreviewExtension(a.extension ?? ''),
+  svg: (a) => isSvgExtension(a.extension ?? ''),
+  exr: (a) => isExrExtension(a.extension ?? ''),
   markdown: (a) => isMarkdownExtension(a.extension ?? '')
 }
 

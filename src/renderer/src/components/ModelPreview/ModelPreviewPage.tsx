@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { AssetItem } from '@/shared/types'
 import { formatFileSize } from '@/shared/types'
 import { isModel3dPreviewExtension, type ModelAnimationClipInfo } from '@/shared/model3dFormats'
+import { canAssetPreview } from '@/shared/assetPreviewRegistry'
 import { useApp } from '../../stores/AppContext'
 import { ModelPreviewViewport, type ModelPreviewControls } from './ModelPreviewViewport'
 import { ModelAnimationTimeline } from './ModelAnimationTimeline'
@@ -93,7 +94,7 @@ const ModelPreviewPage: React.FC<ModelPreviewPageProps> = ({ assetId }) => {
   }, [assetId, modelFileUrl])
 
   useEffect(() => {
-    if (!asset || asset.fileType !== '3d') {
+    if (!asset || !canAssetPreview(asset, 'model')) {
       setModelFileUrl(null)
       return
     }
@@ -106,7 +107,7 @@ const ModelPreviewPage: React.FC<ModelPreviewPageProps> = ({ assetId }) => {
     return () => {
       cancelled = true
     }
-  }, [asset?.id, asset?.filePath, asset?.resolvedFilePath, asset?.fileType])
+  }, [asset?.id, asset?.filePath, asset?.resolvedFilePath, asset?.extension])
 
   const handleBack = useCallback(() => closeModelPreview(), [closeModelPreview])
 
@@ -168,7 +169,7 @@ const ModelPreviewPage: React.FC<ModelPreviewPageProps> = ({ assetId }) => {
     )
   }
 
-  if (!asset || asset.fileType !== '3d') {
+  if (!asset || !canAssetPreview(asset, 'model')) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-av-text-secondary">
         <p>{t('notFound3d')}</p>

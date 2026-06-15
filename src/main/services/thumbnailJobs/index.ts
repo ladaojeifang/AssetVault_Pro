@@ -26,17 +26,16 @@ export {
   runThumbnailJobForAsset
 }
 
-/** After import: pick job by file type + extension and enqueue. */
+/** After import: pick job by extension and enqueue. */
 export function scheduleDeferredThumbnailAfterImport(
   database: Database,
   assetId: string,
   absFile: string,
-  extNoDot: string,
-  fileType: string
+  extNoDot: string
 ): void {
-  const job = resolveAsyncThumbnailJob(fileType, extNoDot)
+  const job = resolveAsyncThumbnailJob(extNoDot)
   if (!job) return
-  scheduleAsyncThumbnailAfterImport(database, assetId, absFile, extNoDot, fileType, job)
+  scheduleAsyncThumbnailAfterImport(database, assetId, absFile, extNoDot, job)
 }
 
 export async function processAllPendingAsyncThumbnails(database: Database): Promise<void> {
@@ -65,7 +64,7 @@ export function schedule3dThumbnailAfterImport(
   destAbs: string,
   extNoDot: string
 ): void {
-  scheduleAsyncThumbnailAfterImport(database, assetId, destAbs, extNoDot, '3d', model3dThumbnailJob)
+  scheduleAsyncThumbnailAfterImport(database, assetId, destAbs, extNoDot, model3dThumbnailJob)
 }
 
 export function scheduleEmbeddedDccThumbnailAfterImport(
@@ -74,7 +73,7 @@ export function scheduleEmbeddedDccThumbnailAfterImport(
   destAbs: string,
   extNoDot: string
 ): void {
-  scheduleAsyncThumbnailAfterImport(database, assetId, destAbs, extNoDot, '3d', embeddedDccThumbnailJob)
+  scheduleAsyncThumbnailAfterImport(database, assetId, destAbs, extNoDot, embeddedDccThumbnailJob)
 }
 
 export function scheduleTextPreviewThumbnailAfterImport(
@@ -82,9 +81,9 @@ export function scheduleTextPreviewThumbnailAfterImport(
   assetId: string,
   destAbs: string,
   extNoDot: string,
-  fileType: string
+  _fileType?: string
 ): void {
-  scheduleAsyncThumbnailAfterImport(database, assetId, destAbs, extNoDot, fileType, textPreviewThumbnailJob)
+  scheduleAsyncThumbnailAfterImport(database, assetId, destAbs, extNoDot, textPreviewThumbnailJob)
 }
 
 export async function regenerateModelThumbnails(

@@ -5,7 +5,7 @@ import { and, eq } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { getDatabase } from '../db'
 import { openBetterSqliteDatabase } from '../db/betterSqliteNative'
-import { assets, assetFolders, assetTags, folders, tags } from '../db/schema'
+import { assets, assetFolders, assetTags, categories, folders, tags } from '../db/schema'
 import { createInitialSchemaOnSqlite } from '../db/sqliteSchema'
 import { wrapBetterSqlite } from '../db/rawSqlite'
 import {
@@ -16,6 +16,7 @@ import {
 } from './libraryBundle'
 import { finalizeAssetRecords } from './assetSearchIndex'
 import { writeAssetSidecarMeta } from './assetSidecar'
+import { mapSourceTypeIdToTarget } from './categoryService'
 import * as schema from '../db/schema'
 
 async function ensureTargetTag(
@@ -128,6 +129,13 @@ export async function copyAssetsToOtherLibrary(
         const thumbRel = row.hasThumbnail && row.thumbnailPath ? itemThumbRelative(newId) : null
         const now = new Date()
 
+        const mappedTypeId = await mapSourceTypeIdToTarget(
+          targetDb,
+          sourceDb,
+          row.typeId,
+          row.fileType
+        )
+
         await targetDb.insert(assets).values({
           id: newId,
           filename: row.filename,
@@ -135,6 +143,7 @@ export async function copyAssetsToOtherLibrary(
           extension: ext,
           mimeType: row.mimeType,
           fileType: row.fileType,
+          typeId: mappedTypeId,
           folderId: null,
           filePath,
           storageMode: row.storageMode ?? 'local',
@@ -155,6 +164,7 @@ export async function copyAssetsToOtherLibrary(
           metadata: row.metadata,
           notes: row.notes,
           sourceUrl: row.sourceUrl,
+          isFavorite: row.isFavorite ?? false,
           fileCreatedAt: row.fileCreatedAt,
           fileModifiedAt: row.fileModifiedAt,
           importedAt: now,
@@ -220,11 +230,19 @@ export async function copyAssetsToOtherLibrary(
             .innerJoin(folders, eq(assetFolders.folderId, folders.id))
             .where(eq(assetFolders.assetId, newId))
             .all()
+          const typeRow = mappedTypeId.startsWith('__sys:')
+            ? { id: mappedTypeId, name: mappedTypeId.slice('__sys:'.length) }
+            : await targetDb
+                .select({ id: categories.id, name: categories.name })
+                .from(categories)
+                .where(eq(categories.id, mappedTypeId))
+                .get()
           writeAssetSidecarMeta(
             inserted,
             assignedTags,
             folderMeta.map((f) => f.id),
-            targetRoot
+            targetRoot,
+            typeRow ? { id: typeRow.id, name: typeRow.name } : null
           )
         }
 

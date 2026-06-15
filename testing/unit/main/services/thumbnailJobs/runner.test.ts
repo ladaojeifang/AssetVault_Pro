@@ -7,12 +7,20 @@ import {
 } from '@main/services/thumbnailJobs/definitions'
 
 describe('thumbnailJobs definitions', () => {
-  it('resolves the correct job per asset type', () => {
-    expect(resolveAsyncThumbnailJob('3d', 'glb')?.id).toBe('model3d')
-    expect(resolveAsyncThumbnailJob('3d', 'max')?.id).toBe('embedded-dcc')
-    expect(resolveAsyncThumbnailJob('code', 'json')?.id).toBe('text-preview')
-    expect(resolveAsyncThumbnailJob('document', 'md')?.id).toBe('text-preview')
-    expect(resolveAsyncThumbnailJob('3d', 'usd')).toBeNull()
+  it('resolves the correct job per extension', () => {
+    expect(resolveAsyncThumbnailJob('glb')?.id).toBe('model3d')
+    expect(resolveAsyncThumbnailJob('max')?.id).toBe('embedded-dcc')
+    expect(resolveAsyncThumbnailJob('json')?.id).toBe('text-preview')
+    expect(resolveAsyncThumbnailJob('md')?.id).toBe('text-preview')
+    expect(resolveAsyncThumbnailJob('usd')).toBeNull()
+  })
+
+  it('matches assets by extension regardless of stored fileType', () => {
+    expect(model3dThumbnailJob.matchesAsset('glb')).toBe(true)
+    expect(model3dThumbnailJob.matchesAsset('usd')).toBe(false)
+    expect(embeddedDccThumbnailJob.matchesAsset('blend')).toBe(true)
+    expect(textPreviewThumbnailJob.matchesAsset('txt')).toBe(true)
+    expect(textPreviewThumbnailJob.matchesAsset('pdf')).toBe(false)
   })
 
   it('keeps distinct retry policies per job', () => {

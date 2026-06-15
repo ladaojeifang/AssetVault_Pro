@@ -11,9 +11,7 @@ import {
   writeCustomThumbnailFromImageBytes
 } from './customThumbnail'
 import { clearModelThumbnailSkip } from './modelThumbnailSkip'
-import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
-import { isEmbeddedDccThumbExtension } from '@/shared/embeddedDccFormats'
-import { isTextPreviewExtension } from '@/shared/textPreviewFormats'
+import { resolveFormatCapabilities } from '@/shared/formatCapabilities'
 import { syncAssetSidecarFromDb } from './assetSidecar'
 import { getEffectiveThumbSampleText } from './fontSettingsStore'
 import { parseFontFile } from './fontMetadata'
@@ -73,7 +71,10 @@ export async function refreshAssetThumbnail(
   if (!row) throw new Error('资产不存在')
 
   clearCustomThumbnail(assetId)
-  if (row.fileType === '3d') clearModelThumbnailSkip(assetId)
+  const caps = resolveFormatCapabilities(row.extension)
+  if (caps.asyncThumbnail === 'model3d' || caps.asyncThumbnail === 'embedded-dcc') {
+    clearModelThumbnailSkip(assetId)
+  }
 
   const thumbService = getThumbnailService()
   thumbService.invalidate(assetId)
@@ -90,13 +91,13 @@ export async function refreshAssetThumbnail(
 
   let gen = null
   const ext = row.extension
-
   const thumbOpts = thumbService.getGenerationDefaults()
-  if (row.fileType === 'image') {
+
+  if (caps.importPipeline === 'image') {
     gen = await thumbService.generate(absFile, assetId, thumbOpts)
-  } else if (row.fileType === 'video') {
+  } else if (caps.importPipeline === 'video') {
     gen = await thumbService.generateVideo(absFile, assetId, thumbOpts)
-  } else if (row.fileType === 'font') {
+  } else if (caps.importPipeline === 'font') {
     const parsed = parseFontFile(absFile, getEffectiveThumbSampleText(), 0)
     gen = await thumbService.generateFont(absFile, assetId, {
       width: FONT_THUMB_CANVAS_SIZE,
@@ -106,20 +107,17 @@ export async function refreshAssetThumbnail(
       ttcIndex: parsed?.ttcIndex ?? 0,
       force: true
     })
-  } else if (row.fileType === '3d' && isModel3dPreviewExtension(ext)) {
+  } else if (caps.asyncThumbnail === 'model3d') {
     gen = await thumbService.generateModel(absFile, assetId, ext, {
       ...thumbOpts,
       force: true
     })
-  } else if (row.fileType === '3d' && isEmbeddedDccThumbExtension('.' + ext)) {
+  } else if (caps.asyncThumbnail === 'embedded-dcc') {
     gen = await thumbService.generateEmbeddedDcc(absFile, assetId, ext, {
       ...thumbOpts,
       force: true
     })
-  } else if (
-    (row.fileType === 'code' || row.fileType === 'document') &&
-    isTextPreviewExtension('.' + ext)
-  ) {
+  } else if (caps.asyncThumbnail === 'text-preview') {
     gen = await thumbService.generateTextPreview(absFile, assetId, ext, {
       ...thumbOpts,
       force: true

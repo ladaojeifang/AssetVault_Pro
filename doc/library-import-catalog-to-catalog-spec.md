@@ -23,7 +23,7 @@
 | 能力 | 问题 |
 |------|------|
 | LIM V1（archive→archive） | 拒绝 catalog 源；策略是拷 `items/` |
-| `copyAssetsToOtherLibrary` | 无文件夹/去重；tag 不可靠 |
+| `copyAssetsToOtherLibrary` | 选中资产跨库复制（含文件夹、标签、`type_id`）；**无**整库去重，非整库合并 |
 | 单条 `localizeOneAsset` | 仅针对当前库 B 的引用路径，**不能**指定 A pack 为源 |
 
 ### 1.2 目标
@@ -35,7 +35,7 @@
 - **补本地化**（L2）：B 有同 hash 但为引用 → 用 **A pack** 本地化 B 已有条。
 - **去重跳过**（L3）：B 有同 hash 且已 local → 仅 merge 元数据。
 
-附加：来源库 **displayName tag**、文件夹树、SHA-256 去重，与 LIM V1 一致。
+附加：来源库 **displayName tag**、文件夹树、**用户分类定义与 type_id**、SHA-256 去重，与 LIM V1 一致。
 
 ### 1.3 非目标
 
@@ -81,7 +81,7 @@
   → 系统识别：A、B 均为索引库 → 进入 CC 流程
   → 预检报告（§4）
   → 确认对话框（统计 + 风险说明 §13）
-  → 后台导入（进度 IPC：validate → preflight → tags → folders → assets → finalize）
+  → 后台导入（进度 IPC：validate → preflight → tags → categories → folders → assets → finalize）
   → 完成报告（§10）
   → 刷新 B 的列表与文件夹树
 ```
@@ -140,6 +140,7 @@ type CatalogImportPreflight = {
 validateSourceCatalog
   → preflightScan
   → phaseTags          // 同 LIM V1
+  → phaseCategories    // 同 LIM V1，用户分类按 name 合并
   → phaseFolders       // 同 LIM V1，按 folders.path 合并
   → phaseAssets        // §7–§9
   → phaseFinalize      // folder.asset_count、assets_search、notify UI
@@ -148,11 +149,12 @@ validateSourceCatalog
 
 **打开源库 DB**：独立 `better-sqlite3` 连接，`readonly: true`；**不**切换 `getDatabase()`。
 
-### 6.2 `phaseTags` / `phaseFolders`
+### 6.2 `phaseTags` / `phaseCategories` / `phaseFolders`
 
 与 LIM V1 相同：
 
 - Tag：`Map<sourceTagId, targetTagId>` 按 name 合并
+- Category：`Map<sourceCategoryId, targetCategoryId>` 按 name 合并（用户分类）
 - Folder：按 `path` 合并；`level ASC` 保证父先于子
 - 不导入 A 的 `coverAssetId`（CC-V1 可省略，与 LIM 一致）
 
@@ -219,7 +221,7 @@ isBRef   = existingId 且非 isBLocal
 | **L2** | `isBRef` | **本地化 B 已有条**；拷贝源**仅** A pack（§9.2） | 不新建 UUID |
 | **L3** | `isBLocal` | **无文件操作** | 仅 metadata merge |
 
-每分支结束后：tags / folders / 来源 tag；L1/L2 写 sidecar + search。
+每分支结束后：folders / categories / tags / 来源 tag；L1/L2 写 sidecar + search。
 
 ### 9.1 L1 — B 无同 hash
 
@@ -259,6 +261,7 @@ isBRef   = existingId 且非 isBLocal
 |------|------|
 | notes | B 非空保留 B；B 空且 A 非空则写 A |
 | tags | 并集 + 来源库 tag |
+| type_id | 映射源库 `type_id`（用户分类按 name 与 B 合并） |
 | folders | 并集（`asset_folders` + legacy `folder_id`） |
 | file_path / storage_mode | L3、R 去重：**不动**；L2 由 localize 更新；L1 新建时已设定 |
 | view_count / access_count | 不覆盖 |
@@ -371,6 +374,7 @@ POST /api/v1/library/preflightImportFromLibrary
 | `assetsSkippedDuplicate` | L3 + R 去重（总数） |
 | `assetsFailed` | 含 L2 A pack 缺失等 |
 | `sourceLibraryTagName` | 来源 tag 名 |
+| `categoriesCreated` / `categoriesMerged` | 用户分类按 name 新建 / 复用（与 LIM 相同） |
 | `preflight` | 可选嵌入预检摘要 |
 
 ---
@@ -383,12 +387,12 @@ POST /api/v1/library/preflightImportFromLibrary
 | 2 | L，hash H | referenced，hash H | B 同 id 变 local；文件**必须**来自 A/items |
 | 2b | L，A pack 存在 | referenced，hash H，**B 引用已断链** | L2 成功 |
 | 2c | L，**A pack 缺失** | referenced，hash H，B 引用可读 | L2 **失败**，不回退 B 路径 |
-| 3 | L，hash H | local，hash H | 无拷贝；tag/folder/来源 tag merge |
+| 3 | L，hash H | local，hash H | 无拷贝；tag/folder/category/来源 tag merge |
 | 4 | R，外部路径 | 无 H | B referenced，绝对路径 |
 | 5 | R，hash H | local，hash H | 仅 merge，不改 B 文件 |
 | 6 | A archive | B catalog | `INVALID_SOURCE_MODE` |
 | 7 | A catalog | B archive | `TARGET_NOT_CATALOG` |
-| 8 | 全库 tags/folders | — | B 树与 tag 并集正确 |
+| 8 | 全库 tags/folders/categories | — | B 树、标签与 `type_id` 正确 |
 
 ---
 
@@ -397,7 +401,7 @@ POST /api/v1/library/preflightImportFromLibrary
 | 项 | 说明 |
 |----|------|
 | 入口 | 扩展 `importLibraryFromPath` 或 `importCatalogToCatalogFromPath`；`validateSource` 分支 |
-| 复用 LIM | `phaseTags`、`phaseFolders`、hash 去重、来源 tag、进度 IPC |
+| 复用 LIM | `phaseTags`、`phaseCategories`、`phaseFolders`、hash 去重、来源 tag、进度 IPC |
 | L1 | 复用 LIM pack `cpSync` + insert；`storage_mode=local` |
 | L2 | **`localizeAssetFromSource(existingId, sourceFromAPack)`**；禁止 `localizeOneAsset(existingId)` |
 | L3 / R merge | 现有 `assignTag` / folder link + `rebuildAssetSearchText` |
@@ -410,7 +414,7 @@ POST /api/v1/library/preflightImportFromLibrary
 
 | 阶段 | 内容 |
 |------|------|
-| **CC-V1** | validate + preflight + tags/folders + L/R/M + L1/L2/L3 + UI/API + 报告 |
+| **CC-V1** | validate + preflight + tags/categories/folders + L/R/M + L1/L2/L3 + UI/API + 报告 |
 | **CC-V1.1** | preflight API、取消导入、thumb-only 占位 |
 | **CC-V2** | 部分文件夹导入 |
 
@@ -426,6 +430,7 @@ POST /api/v1/library/preflightImportFromLibrary
 | 去重 | hash | hash |
 | L2 类场景 | N/A | B 引用 + A local → A pack 本地化 B |
 | 来源 tag | 有 | 有 |
+| 用户分类 | 有（`phaseCategories`） | 有（同 LIM） |
 
 ---
 

@@ -20,6 +20,7 @@ tags:
   - name: asset
   - name: folder
   - name: tag
+  - name: category
 
 components:
   securitySchemes:
@@ -85,7 +86,8 @@ components:
       properties:
         id: { type: string, format: uuid }
         filename: { type: string }
-        fileType: { type: string }
+        fileType: { type: string, description: '检测格式（管线）' }
+        typeId: { type: string, description: '有效类型 __sys:{fileType} 或用户 uuid' }
         filePath: { type: string }
         resolvedFilePath: { type: string }
         notes: { type: string }
@@ -93,6 +95,11 @@ components:
         importedAt: { type: string, format: date-time }
         tagIds: { type: array, items: { type: string } }
         folderIds: { type: array, items: { type: string } }
+        categoryIds:
+          type: array
+          deprecated: true
+          description: '兼容：[typeId]'
+          items: { type: string }
     AssetListPage:
       type: object
       properties:
@@ -118,6 +125,82 @@ components:
         name: { type: string }
         color: { type: string }
         usageCount: { type: integer }
+    CategoryDto:
+      type: object
+      properties:
+        id: { type: string, description: '用户 uuid 或系统 __sys:{fileType}' }
+        name: { type: string }
+        color: { type: string }
+        icon: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        usageCount: { type: integer }
+        sortOrder: { type: integer }
+        kind: { type: string, enum: [system, user] }
+        fileType: { type: string, description: 'kind=system 时存在' }
+        createdAt: { type: string, format: date-time }
+    ImportLibrarySuccess:
+      type: object
+      description: |
+        `POST /library/importFromLibrary` 成功时 JSend `data` 形状（含 `ok: true`）。
+        同步阻塞直至完成；进度事件仅桌面端 IPC（`library:import-progress`），HTTP 无 SSE。
+      required:
+        - ok
+        - sourceDisplayName
+        - sourceLibraryRoot
+        - assetsAdded
+        - assetsSkippedDuplicate
+        - assetsFailed
+        - foldersCreated
+        - foldersMerged
+        - tagsCreated
+        - tagsMerged
+        - categoriesCreated
+        - categoriesMerged
+        - sourceLibraryTagName
+        - errors
+      properties:
+        ok: { type: boolean, enum: [true] }
+        importMode:
+          type: string
+          enum: [archive_to_archive, catalog_to_catalog_same_machine]
+          description: catalog 合并时存在
+        sourceDisplayName: { type: string }
+        sourceLibraryRoot: { type: string }
+        assetsAdded: { type: integer }
+        assetsSkippedDuplicate: { type: integer }
+        assetsFailed: { type: integer }
+        foldersCreated: { type: integer }
+        foldersMerged: { type: integer }
+        tagsCreated: { type: integer }
+        tagsMerged: { type: integer }
+        categoriesCreated:
+          type: integer
+          description: 目标库新建的用户分类数（按 name 与已有合并的不计）
+        categoriesMerged:
+          type: integer
+          description: 与目标库同名复用的用户分类数
+        sourceLibraryTagName: { type: string, description: 源库 displayName 写入目标库的标签名 }
+        assetsAddedLocal:
+          type: integer
+          description: catalog 合并：新建本地副本数
+        assetsAddedReferenced:
+          type: integer
+          description: catalog 合并：新建引用路径数
+        assetsLocalizedOnImport:
+          type: integer
+          description: catalog 合并：导入时本地化已有引用条数
+        assetsSkippedDuplicateLocal:
+          type: integer
+          description: catalog 合并：跳过且目标侧已是本地副本数
+        errors:
+          type: array
+          items:
+            type: object
+            required: [sourceAssetId, filename, reason]
+            properties:
+              sourceAssetId: { type: string }
+              filename: { type: string }
+              reason: { type: string }
 
 paths:
   /app/info:
@@ -174,6 +257,10 @@ paths:
     post:
       tags: [library]
       summary: 从其它资料库整库导入（archive→archive 或 catalog→catalog）
+      description: |
+        源库与当前活动库须同为 **archive** 或同为 **catalog**（同机路径）。
+        按 SHA-256 去重；合并文件夹树、标签、**用户分类**（`categories` 按 name 合并）及资产 `type_id`、notes 等元数据。
+        源库 `displayName` 作为额外标签写入。详见 [library-import-from-library-spec.md](./library-import-from-library-spec.md)。
       requestBody:
         required: true
         content:
@@ -188,6 +275,13 @@ paths:
       responses:
         '200':
           description: 导入成功（catalog 合并时 data 含 importMode、assetsAddedLocal 等扩展字段）
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/JSendSuccess'
+                  - properties:
+                      data: { $ref: '#/components/schemas/ImportLibrarySuccess' }
         '400':
           description: 无效路径、源库模式不符或 archive/catalog 组合不支持
         '409':
@@ -202,7 +296,34 @@ paths:
         - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 1000 } }
         - { name: search, in: query, schema: { type: string } }
         - { name: folderId, in: query, schema: { type: string } }
-        - { name: fileType, in: query, schema: { type: string } }
+        - { name: fileType, in: query, schema: { type: string }, description: 'Deprecated; use typeFilters=__sys:{fileType}' }
+        - name: typeFilters
+          in: query
+          description: Comma-separated type ids (__sys:image or user category uuid); OR union
+          schema: { type: string }
+        - name: categories
+          in: query
+          description: Comma-separated user category uuids (legacy; merged into type filter)
+          schema: { type: string }
+        - name: tags
+          in: query
+          description: Comma-separated tag ids (OR union)
+          schema: { type: string }
+        - name: colorBucket
+          in: query
+          schema: { type: string }
+        - name: sizePreset
+          in: query
+          schema: { type: string, enum: [small, medium, large] }
+        - { name: minFileSizeMb, in: query, schema: { type: number } }
+        - { name: maxFileSizeMb, in: query, schema: { type: number } }
+        - name: datePreset
+          in: query
+          schema: { type: string, enum: [today, week, month, year] }
+        - name: extension
+          in: query
+          description: Exact extension without leading dot (e.g. png)
+          schema: { type: string }
         - { name: sortBy, in: query, schema: { type: string } }
         - { name: sortOrder, in: query, schema: { type: string, enum: [asc, desc] } }
       responses:
@@ -225,6 +346,28 @@ paths:
       responses:
         '200': { description: OK }
 
+  /asset/extensions:
+    get:
+      tags: [asset]
+      summary: 列出资料库已使用的扩展名
+      description: 按资产数量降序；值为不含点的扩展名（如 png）
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/JSendSuccess'
+                  - properties:
+                      data:
+                        type: object
+                        required: [extensions]
+                        properties:
+                          extensions:
+                            type: array
+                            items: { type: string }
+
   /asset/info:
     get:
       tags: [asset]
@@ -239,6 +382,9 @@ paths:
     post:
       tags: [asset]
       summary: 从本机路径导入
+      description: |
+        不支持请求体传入 `tagIds` / `typeId` / `categoryIds`；可选 `targetFolderId` 指定逻辑文件夹。
+        标签与用户分类须在导入成功后调用 `POST /tag/assign`、`POST /category/assign`（见 guide §3.7）。
       requestBody:
         required: true
         content:
@@ -260,6 +406,8 @@ paths:
     post:
       tags: [asset]
       summary: 从 URL 导入直链媒体（主进程下载；作品页 URL 返回 400 并提示 pageVideoImport）
+      description: |
+        不支持 `tagIds` / `typeId` / `categoryIds`；导入后分别调用 `POST /tag/assign`、`POST /category/assign`（`typeId`）。
       requestBody:
         required: true
         content:
@@ -915,5 +1063,117 @@ paths:
               properties:
                 assetIds: { type: array, items: { type: string } }
                 tagIds: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /category/get:
+    get:
+      tags: [category]
+      summary: 类型列表（用户分类 + 系统格式）
+      responses:
+        '200': { description: OK }
+
+  /category/info:
+    get:
+      tags: [category]
+      summary: 单个类型
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /category/create:
+    post:
+      tags: [category]
+      summary: 创建用户分类
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                color: { type: string }
+                icon: { type: string, nullable: true }
+                description: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /category/update:
+    patch:
+      tags: [category]
+      summary: 更新用户分类
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                name: { type: string }
+                color: { type: string }
+                icon: { type: string, nullable: true }
+                description: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /category/delete:
+    delete:
+      tags: [category]
+      summary: 删除用户分类
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /category/assign:
+    post:
+      tags: [category]
+      summary: 设置资产有效类型（每资产唯一）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetIds]
+              properties:
+                assetIds: { type: array, items: { type: string } }
+                typeId:
+                  type: string
+                  description: '__sys:{fileType} 或用户分类 uuid'
+                categoryIds:
+                  type: array
+                  maxItems: 1
+                  deprecated: true
+                  description: '兼容：单元素数组，等同 typeId'
+                  items: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /category/remove:
+    post:
+      tags: [category]
+      summary: 将资产类型重置为检测格式（__sys:{file_type}）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetIds]
+              properties:
+                assetIds: { type: array, items: { type: string } }
+                categoryIds:
+                  type: array
+                  deprecated: true
+                  description: '已忽略；保留兼容旧客户端'
+                  items: { type: string }
       responses:
         '200': { description: OK }

@@ -1,8 +1,12 @@
 import type { getDatabase } from '../db'
 import { getRawSqlite } from '../db'
 import { wrapBetterSqlite } from '../db/rawSqlite'
-import { tags, assetTags, assetsSearch, assets } from '../db/schema'
+import { tags, assetTags, categories, assetsSearch, assets } from '../db/schema'
 import { eq } from 'drizzle-orm'
+import {
+  fileTypeFromSystemTypeCategoryId,
+  isSystemTypeCategoryId
+} from '@/shared/assetTypeRegistry'
 import { syncAssetSidecarFromDb } from './assetSidecar'
 
 type Database = ReturnType<typeof getDatabase>
@@ -15,9 +19,31 @@ export async function finalizeAssetRecords(database: Database, assetId: string):
   await syncAssetSidecarFromDb(database, assetId)
 }
 
+async function typeNameForAsset(
+  database: Database,
+  typeId: string
+): Promise<string | null> {
+  if (isSystemTypeCategoryId(typeId)) {
+    const ft = fileTypeFromSystemTypeCategoryId(typeId)
+    return ft ?? null
+  }
+  const row = await database
+    .select({ name: categories.name })
+    .from(categories)
+    .where(eq(categories.id, typeId))
+    .get()
+  return row?.name ?? null
+}
+
 export async function rebuildAssetSearchText(database: Database, assetId: string): Promise<void> {
   const asset = await database
-    .select({ filename: assets.filename, originalName: assets.originalName, notes: assets.notes, sourceUrl: assets.sourceUrl })
+    .select({
+      filename: assets.filename,
+      originalName: assets.originalName,
+      notes: assets.notes,
+      sourceUrl: assets.sourceUrl,
+      typeId: assets.typeId
+    })
     .from(assets)
     .where(eq(assets.id, assetId))
     .get()
@@ -31,9 +57,12 @@ export async function rebuildAssetSearchText(database: Database, assetId: string
     .all()
 
   const tagPart = tagRows.map((t) => t.name).join(' ')
+  const typeName = await typeNameForAsset(database, asset.typeId)
+  const typePart = typeName ?? ''
+
   const notesPart = asset.notes?.trim() ?? ''
   const urlPart = asset.sourceUrl?.trim() ?? ''
-  const searchText = `${asset.filename} ${asset.originalName}${tagPart ? ` ${tagPart}` : ''}${notesPart ? ` ${notesPart}` : ''}${urlPart ? ` ${urlPart}` : ''}`.trim()
+  const searchText = `${asset.filename} ${asset.originalName}${tagPart ? ` ${tagPart}` : ''}${typePart ? ` ${typePart}` : ''}${notesPart ? ` ${notesPart}` : ''}${urlPart ? ` ${urlPart}` : ''}`.trim()
 
   const existing = await database
     .select({ assetId: assetsSearch.assetId })
@@ -55,6 +84,20 @@ export async function rebuildSearchTextForTag(database: Database, tagId: string)
     .where(eq(assetTags.tagId, tagId))
     .all()
   for (const { assetId } of links) {
+    await rebuildAssetSearchText(database, assetId)
+  }
+}
+
+export async function rebuildSearchTextForCategory(
+  database: Database,
+  categoryId: string
+): Promise<void> {
+  const links = await database
+    .select({ id: assets.id })
+    .from(assets)
+    .where(eq(assets.typeId, categoryId))
+    .all()
+  for (const { id: assetId } of links) {
     await rebuildAssetSearchText(database, assetId)
   }
 }

@@ -1,5 +1,11 @@
-import type { AssetItem, FolderItem, TagItem } from '@/shared/types'
-import type { JSendSuccess, WebApiAssetDto, WebApiFolderDto, WebApiTagDto } from '@/shared/webApiTypes'
+import type { AssetItem, CategoryItem, FolderItem, TagItem } from '@/shared/types'
+import type {
+  JSendSuccess,
+  WebApiAssetDto,
+  WebApiCategoryDto,
+  WebApiFolderDto,
+  WebApiTagDto
+} from '@/shared/webApiTypes'
 
 function toIso(value: Date | string | null | undefined): string | null {
   if (value == null) return null
@@ -44,7 +50,9 @@ export function serializeAsset(row: AssetItem): WebApiAssetDto {
     importedAt: toIso(row.importedAt) ?? '',
     updatedAt: toIso(row.updatedAt) ?? '',
     tagIds: row.tagIds,
-    folderIds: row.folderIds
+    folderIds: row.folderIds,
+    typeId: row.typeId,
+    categoryIds: [row.typeId]
   }
 }
 
@@ -75,6 +83,21 @@ export function serializeTag(row: TagItem): WebApiTagDto {
     description: row.description ?? null,
     usageCount: row.usageCount,
     createdAt: toIso(row.createdAt) ?? ''
+  }
+}
+
+export function serializeCategory(row: CategoryItem): WebApiCategoryDto {
+  return {
+    id: row.id,
+    name: row.name,
+    color: row.color,
+    icon: row.icon ?? null,
+    description: row.description ?? null,
+    usageCount: row.usageCount,
+    sortOrder: row.sortOrder,
+    kind: row.kind,
+    fileType: row.fileType,
+    createdAt: row.createdAt ? toIso(row.createdAt) ?? undefined : undefined
   }
 }
 

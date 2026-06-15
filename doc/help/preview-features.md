@@ -2,7 +2,7 @@
 
 AssetVault Pro 提供网格缩略图、详情面板内嵌预览，以及若干**全页预览**（替换主资料库区域）。
 
-全页预览类型由 `src/shared/assetPreviewRegistry.ts` 解析，当前支持：**font**、**model**、**svg**、**exr**、**markdown**。
+全页预览类型由 `src/shared/assetPreviewRegistry.ts` 按**扩展名**解析（不依赖可改的 `file_type`），当前支持：**font**、**model**、**svg**、**exr**、**markdown**。
 
 ---
 

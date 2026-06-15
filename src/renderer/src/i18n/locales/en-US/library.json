@@ -64,7 +64,7 @@
   "importComplete": "Import complete: {{name}}",
   "importSummary": "Added {{added}} · Skipped duplicates {{skipped}} · Failed {{failed}}",
   "importCatalogStats": "Local added {{local}} · Reference added {{ref}} · Localized on import {{localized}} · Local duplicate skipped {{skippedLocal}}",
-  "importFolderTagStats": "Folders +{{created}} / merged {{merged}} · Tags +{{tagsCreated}} / merged {{tagsMerged}}",
+  "importFolderTagStats": "Folders +{{created}} / merged {{merged}} · Tags +{{tagsCreated}} / merged {{tagsMerged}} · Types +{{categoriesCreated}} / merged {{categoriesMerged}}",
   "sourceLibraryTag": "Source library tag: {{name}}",
   "failureDetails": "{{count}} failure details",
   "dismiss": "Dismiss",

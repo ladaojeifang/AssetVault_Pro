@@ -26,7 +26,7 @@ async function resolveExrAbsPathForAsset(assetId: string): Promise<
 > {
   const asset = await getAssetById(assetId, { incrementViewCount: false })
   if (!asset) return { ok: false, error: '资产不存在' }
-  if (asset.fileType !== 'image' || !isExrExtension(asset.extension ?? '')) {
+  if (!isExrExtension(asset.extension ?? '')) {
     return { ok: false, error: '不是 EXR 图像资产' }
   }
 

@@ -13,6 +13,7 @@ import { exposureAppliesToDisplayMode } from '@/shared/exrAovDisplay'
 import { formatExrPreviewError } from '@/shared/exrPreviewErrors'
 import { partitionExrLayerChannelSuffixes } from '@/shared/exrLayerGrouping'
 import { isExrExtension } from '@/shared/exrFormats'
+import { canAssetPreview } from '@/shared/assetPreviewRegistry'
 import { useApp } from '../../stores/AppContext'
 import { useTranslation } from 'react-i18next'
 import { DESTRUCTIVE_MESSAGE_CLASS } from '../../theme/destructiveActionClasses'
@@ -258,7 +259,7 @@ const ExrPreviewPage: React.FC<ExrPreviewPageProps> = ({ assetId }) => {
     )
   }
 
-  if (!asset || asset.fileType !== 'image' || !isExr) {
+  if (!asset || !canAssetPreview(asset, 'exr')) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-av-text-secondary">
         <p>{t('notFoundExr')}</p>

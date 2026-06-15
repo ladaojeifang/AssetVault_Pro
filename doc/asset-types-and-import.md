@@ -5,9 +5,13 @@
 | 模块 | 路径 |
 |------|------|
 | **格式统一配置（新增扩展名优先改这里）** | `src/shared/assetFormatCatalog.ts` |
+| **格式能力注册表（行为驱动）** | `src/shared/formatCapabilities.ts` |
 | 注册表 / 查询 API | `src/shared/assetFormatRegistry.ts` |
 | 扩展名矩阵（由注册表导出） | `src/shared/supportedFormats.ts` |
-| 类型分类 | `src/main/utils/fileUtils.ts` → `getFileType()` |
+| 侧栏筛选标签（入库默认写入 DB） | `getFileType()` → `assets.file_type`（检测格式，管线用） |
+| 有效类型（侧栏筛选 / 详情） | `assets.type_id`（`__sys:{fileType}` 或用户分类 uuid） |
+| 类型注册表（系统 + 用户统一 id） | `src/shared/assetTypeRegistry.ts` |
+| 用户分类定义 | `categories` 表（每资产仅一个 `type_id` 可指向用户项） |
 | 单文件入库 | `src/main/services/importSingleAsset.ts` |
 | 批量/文件夹 | `src/main/services/assetImportService.ts` |
 | 缩略图 | `src/main/services/ThumbnailService.ts` |
@@ -23,9 +27,28 @@
 image | video | audio | font | design | document | 3d | code | other
 ```
 
-定义见 `src/shared/types.ts`。分类**优先看扩展名**，MIME 为 `application/octet-stream` 的设计/3D/代码文件仍能落入正确桶（见 `getFileType` 注释）。
+定义见 `src/shared/types.ts`。入库时由扩展名映射写入 `assets.file_type`，用于缩略图、预览、色彩分析等**管线**；与用户在侧栏看到的「类型」可不同。
 
-### 1.2 资料库模式对入库的影响
+侧栏 **「类型」** 区块统一展示两类条目（同一 `CategoryItem` 数据模型，见 `src/shared/assetTypeRegistry.ts`）：
+
+| `kind` | 来源 | 可编辑 | 筛选 / 归属依据 |
+|--------|------|--------|-----------------|
+| `system` | 合成项，id 为 `__sys:{fileType}` | 否（名称走 i18n） | `assets.type_id` |
+| `user` | `categories` 表 | 是（右键编辑/删除） | `assets.type_id` |
+
+入库默认 `type_id = __sys:{file_type}`。用户可在详情面板改为用户分类或其它系统类型；改后**不再**按 `file_type` 参与类型筛选。
+
+多选类型筛选时为 **OR 并集**（例如同时选「图片」与「参考图」→ `type_id` 为 `__sys:image` **或** 用户分类「参考图」的资产）。列表视图「类型」列筛选与侧栏共用 `typeFilters`（匹配 `assets.type_id`）。
+
+### 1.2 格式 vs 有效类型
+
+```text
+extension（扩展名）     → formatCapabilities → 入库 / 缩略图 / 预览 / 分析
+file_type              → assets.file_type   → 检测格式（管线只读）
+type_id (__sys:*|uuid) → assets.type_id     → 侧栏类型 / 筛选 / 详情展示（每资产唯一）
+```
+
+### 1.3 资料库模式对入库的影响
 
 | 模式 | 行为 |
 |------|------|
@@ -34,22 +57,25 @@ image | video | audio | font | design | document | 3d | code | other
 
 每条资产入库后写入 SQLite `assets` 表，并在 `items/{id}/meta.json` 写侧车（标签、文件夹、contentHash 等）。
 
-### 1.3 通用入库流程（`importSingleAsset`）
+### 1.4 通用入库流程（`importSingleAsset`）
 
 对所有通过扫描/拖放/API 进入的**单个支持扩展名文件**：
 
 1. **去重**：同 `importSource` 路径跳过；SHA-256 + 文件大小匹配时可 `ask` / `use_existing` / `import_copy`
-2. **分类**：`mime-types` + 扩展名 → `fileType`
-3. **落盘**：见 §1.2；生成 `items/{uuid}/` 目录
-4. **类型专属处理**：缩略图、尺寸、调色板、EXIF、字体/视频元数据等（见各节）
-5. **写库 + 侧车**：`writeAssetSidecarMeta`；可选分配文件夹
-6. **异步 3D 缩略图**：仅 `fileType=3d` 且扩展名在预览白名单内（§3.7）
+2. **格式能力**：`resolveFormatCapabilities(ext)` → 同步入库分支（image/video/audio/font）与异步缩略图任务
+3. **检测格式**：`getFileType(mime, ext)` → 写入 `file_type`；`type_id = __sys:{file_type}`
+4. **落盘**：见 §1.3；生成 `items/{uuid}/` 目录
+5. **格式专属处理**：缩略图、尺寸、调色板、EXIF、字体/视频元数据等（见各节）
+6. **写库 + 侧车**：`writeAssetSidecarMeta`；可选分配文件夹
+7. **异步缩略图**：由 `formatCapabilities.asyncThumbnail` 决定（3D 渲染 / DCC 嵌入图 / 文本预览）
 
 **文件夹递归导入**（`importAssetFolder`）：只导入扩展名在 `ALL_SUPPORTED_IMPORT_EXTENSIONS` 内的文件；**不会**把 `.mtl`、`.bin`、贴图等未列入矩阵的扩展名单独建资产。
 
 ---
 
 ## 2. 按 `file_type` 分类详表
+
+下列按系统 **file_type** 分组，便于查阅扩展名与入库差异。**实现上**各类型的缩略图/预览/元数据提取由 `formatCapabilities` 按扩展名分支，而非运行时读取可修改的 `file_type`。侧栏中对应 9 个系统类型项（不可重命名）。
 
 ### 2.1 图片 `image`
 
@@ -240,7 +266,7 @@ items/{assetId}/
 
 ### 3.3 meta.json
 
-每条资产侧车路径：`items/{id}/meta.json`。内容与 DB 行同步（文件名、hash、thumb、标签、文件夹等）。跨库导入时会复制或合并 pack 内除 `meta.json`/`thumb.*` 外的文件（`importLibraryShared.ts`）。
+每条资产侧车路径：`items/{id}/meta.json`。内容与 DB 行同步（文件名、hash、thumb、标签、**有效类型**、文件夹等）。`typeId` 为 `__sys:{fileType}` 或用户分类 uuid；`type` 为 `{ id, name }` 快照。跨库导入时会复制或合并 pack 内除 `meta.json`/`thumb.*` 外的文件（`importLibraryShared.ts`）。
 
 ---
 
@@ -250,14 +276,14 @@ items/{assetId}/
 
 | 路径 | 产物类型 | 处理摘要 |
 |------|----------|----------|
-| **拖放 / 打开对话框 / 文件夹扫描** | 各支持扩展名 | §1.3 |
+| **拖放 / 打开对话框 / 文件夹扫描** | 各支持扩展名 | §1.4 |
 | **URL 直链下载**（`urlAssetImportService`） | 按响应/扩展名分类 | 下载到临时或 `remote-imports/{sha256}/` 再 import |
 | **data URL**（`dataUrlAssetImportService`） | 多为 `image` | 解码 → `remote-imports/` → import；限 300MB |
 | **整页截图会话**（`fullPageSession`） | `image`（`.jpg`/`.png`） | 浏览器条带图纵向拼接 → 单张长图 → import |
 | **Markdown 资料包会话**（`articleBundleSession`） | `document`（`.md`） | 多文件写入同一 `items/{id}/` → 以 md 注册资产 |
 | **作品页视频**（`pageVideoImport` + yt-dlp） | `video` | 下载到 job 临时目录 → `importAssetFromPath`；写 `sourceUrl`、`metadata.importPipeline` |
 | **AI Canvas 输出**（`importCanvasOutput`） | 按输出文件 | 临时文件 → import |
-| **跨资料库导入**（`importLibraryFromPath` 等） | 复制 pack | 复制 `items/{id}/` 内容 + 合并 DB |
+| **跨资料库导入**（`importLibraryFromPath` 等） | 复制 pack | 复制 `items/{id}/` 内容 + 合并 DB（含标签、文件夹、**type_id**） |
 
 ---
 
@@ -306,10 +332,11 @@ items/{assetId}/
 
 ## 8. 维护提示
 
-1. 新增扩展名：改 `supportedFormats.ts` 对应 Set，并确认 `getFileType` 优先级；若需缩略图/预览，在 `importSingleAsset` / `ThumbnailService` 增加分支。
-2. 新增「伴随文件」逻辑：参考 OBJ+MTL，在 `importSingleAssetHelpers.ts` 扩展，并在**完整库**与**本地化**两条路径保持一致。
-3. 文件夹扫描与对话框过滤均依赖 `ALL_SUPPORTED_IMPORT_EXTENSIONS`，Companion 文件若不应单独成资产则**不要**加入该集合。
-4. Web API / 扩展会话类导入需同步更新 `doc/web-api-v1-openapi.yaml` 与扩展 contract。
+1. **新增扩展名**：改 `assetFormatCatalog.ts`；若需新行为，在 `formatCapabilities.ts` 确认 `importPipeline` / `asyncThumbnail` / `imagePipeline` 映射；`assetFormatRegistry` 与 `supportedFormats` 会自动导出 Set。
+2. **新增缩略图/预览**：优先扩展 `formatCapabilities` 与 `ThumbnailService`，避免新增 `if (fileType === …)` 分支。
+3. 新增「伴随文件」逻辑：参考 OBJ+MTL，在 `importSingleAssetHelpers.ts` 扩展，并在**完整库**与**本地化**两条路径保持一致。
+4. 文件夹扫描与对话框过滤均依赖 `ALL_SUPPORTED_IMPORT_EXTENSIONS`，Companion 文件若不应单独成资产则**不要**加入该集合。
+5. Web API / 扩展会话类导入需同步更新 `doc/web-api-v1-openapi.yaml` 与扩展 contract。
 
 ---
 

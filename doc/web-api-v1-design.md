@@ -234,15 +234,21 @@ interface LibraryStateResponse {
 
 #### `POST /library/importFromLibrary`
 
-从其它 **archive** 资料库整库导入到当前库（标签、文件夹、资产；SHA-256 去重；来源库 displayName 作为 tag）。
+从其它资料库**整库**导入到当前活动库。源库与目标库须同为 **archive** 或同为 **catalog**（同机路径）。
 
 ```json
-{ "sourceLibraryRoot": "G:\\other-archive-library" }
+{ "sourceLibraryRoot": "G:\\other-library" }
 ```
 
-**映射：** `importLibraryFromPath(sourceLibraryRoot)`。进度仅 IPC（`library:import-progress`），HTTP 为同步阻塞直至完成。
+**行为：** SHA-256 去重；合并文件夹树、标签、**用户分类**（`categories` 按 name 与目标库合并，资产 `type_id` 映射）；源库 `displayName` 作为额外标签；重复资产补全元数据、不重复拷贝 `items/`（archive）或按 catalog 规格本地化/引用。
 
-**Response `data`:** `ImportLibrarySuccess`（见 `src/shared/libraryTypes.ts`）。
+**Response `data`:** `ImportLibrarySuccess`（`src/shared/libraryTypes.ts`），含 `categoriesCreated`、`categoriesMerged`、`foldersCreated`、`tagsCreated` 等。catalog 合并时另有 `importMode: "catalog_to_catalog_same_machine"` 与 `assetsAddedLocal` 等字段。
+
+**映射：** `importLibraryFromPath(sourceLibraryRoot)`。HTTP **同步阻塞**；进度仅 IPC `library:import-progress`。
+
+**错误 code：** `INVALID_SOURCE_MODE`、`SAME_LIBRARY`、`SOURCE_NOT_FOUND`、`SOURCE_DB_ERROR`、`TARGET_NOT_ARCHIVE`、`TARGET_NOT_CATALOG`、`LIBRARY_BUSY`。
+
+详见 [library-import-from-library-spec.md](./library-import-from-library-spec.md)。
 
 #### `POST /library/switch`（Phase 1 可选，默认 defer）
 
@@ -268,18 +274,31 @@ interface LibraryStateResponse {
 | `page` / `pageSize` | int | 可选，转为 offset |
 | `search` | string | 多 token AND 搜索 |
 | `folderId` | uuid | 逻辑文件夹过滤 |
-| `fileType` | FileType | image/video/… |
+| `fileType` | FileType | **兼容**；等价于 `typeFilters` 含 `__sys:{fileType}` |
+| `typeFilters` | string[] / 逗号分隔 | 系统类型 `__sys:image` 或用户分类 uuid；多项 **OR** |
+| `categories` | string[] / 逗号分隔 | **兼容**；用户分类 uuid，并入 `typeFilters` |
 | `tags` | string | 逗号分隔 tagId，或重复 `tags=id1&tags=id2` |
 | `colorBucket` | ColorBucket | |
 | `sizePreset` | small\|medium\|large | 与 min/maxMb 互斥 |
 | `minFileSizeMb` / `maxFileSizeMb` | number | |
 | `datePreset` | today\|week\|month\|year | |
+| `extension` | string | 精确匹配 `assets.extension`（不含点，如 `png`；可传 `.png`，服务端规范化） |
 | `sortBy` | QueryParams['sortBy'] | 默认 importedAt |
 | `sortOrder` | asc\|desc | 默认 desc |
 
 **Response `data`:** 分页包装 + `AssetDto[]`（见 §5.1）。
 
 **映射：** 抽取 `queryAssets(params) → { items, total, offset, limit }`。
+
+---
+
+#### `GET /asset/extensions`
+
+返回当前资料库已入库资产的扩展名列表（按数量降序），供 UI 下拉与 API 客户端填充选项。
+
+**Response `data`:** `{ extensions: string[] }`（不含点，如 `png`）。
+
+**映射：** `listDistinctExtensions()` / IPC `assets:list-extensions`。
 
 ---
 
@@ -585,6 +604,29 @@ interface AssetImportFromUrlBatchResponse {
 
 ---
 
+### 4.6 Category（类型 / 用户分类）
+
+| 方法 | 路径 | 映射 |
+|------|------|------|
+| GET | `/category/get` | categories:list（含系统 `__sys:*` 项） |
+| GET | `/category/info?id=` | getCategoryById |
+| POST | `/category/create` | categories:create |
+| PATCH | `/category/update` | categories:update（拒绝系统 id） |
+| DELETE | `/category/delete` | categories:delete |
+| POST | `/category/assign` | setAssetsType（`typeId` 或兼容单元素 `categoryIds`） |
+| POST | `/category/remove` | resetAssetsTypeToDetected（仅需 `assetIds`） |
+
+**Assign body**（每资产唯一；`typeId` 为 `__sys:{fileType}` 或用户 uuid）：
+
+```json
+{
+  "assetIds": ["a1"],
+  "typeId": "__sys:image"
+}
+```
+
+---
+
 ## 5. 数据模型（DTO）
 
 ### 5.1 `AssetDto`
@@ -620,12 +662,15 @@ interface AssetDto {
   updatedAt: string
   tagIds?: string[]
   folderIds?: string[]
+  typeId: string
+  /** @deprecated Use typeId; API may return categoryIds: [typeId] */
+  categoryIds?: string[]
 }
 ```
 
-### 5.2 `FolderDto` / `TagDto`
+### 5.2 `FolderDto` / `TagDto` / `CategoryDto`
 
-同 `FolderItem` / `TagItem`，`createdAt`/`updatedAt` → ISO string。
+同 `FolderItem` / `TagItem` / `CategoryItem`（含 `kind`、`fileType`），`createdAt`/`updatedAt` → ISO string。
 
 ---
 
@@ -719,7 +764,7 @@ interface WebApiPreferences {
 | localhost 免 token | 同左；远程需 token |
 | JSend + offset/limit | 同左 |
 
-差异：**v1 不提供 multipart 直传**；浏览器扩展对**直链**用 `importFromURL`，对**作品页视频**用 `pageVideoImport`（yt-dlp）。标签在 Eagle 扩展侧可随单条请求携带；AssetVault v1 为 **导入 + `tag/assign` 两步**。
+差异：**v1 不提供 multipart 直传**；浏览器扩展对**直链**用 `importFromURL`，对**作品页视频**用 `pageVideoImport`（yt-dlp）。标签在 Eagle 扩展侧可随单条请求携带；AssetVault v1 单资产导入为 **导入 + `tag/assign` + `category/assign` 分步**（`typeId` 为 `__sys:*` 或用户 uuid，每资产唯一）。整库合并 `library/importFromLibrary` 自动迁移标签与 `type_id`。
 
 ---
 

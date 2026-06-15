@@ -29,7 +29,9 @@ export const assets = sqliteTable('assets', {
   originalName: text('original_name').notNull(),
   extension: text('extension').notNull(),
   mimeType: text('mime_type').notNull(),
-  fileType: text('file_type').notNull(), // image|video|audio|font|design|document|3d|code|other
+  fileType: text('file_type').notNull(), // image|video|... — detected format (pipeline / preview)
+  /** Effective sidebar type: `__sys:{fileType}` or user category uuid; user may override default */
+  typeId: text('type_id').notNull(),
   folderId: text('folder_id').references(() => folders.id, { onDelete: 'cascade' }),
   filePath: text('file_path').notNull().unique(),
   /** local = file under items/{id}/; referenced = absolute path to external file (catalog libraries). */
@@ -74,6 +76,9 @@ export const assets = sqliteTable('assets', {
   viewCount: integer('view_count').notNull().default(0),
   accessCount: integer('access_count').notNull().default(0),
 
+  /** User-marked favorite for quick access in sidebar */
+  isFavorite: integer('is_favorite', { mode: 'boolean' }).notNull().default(false),
+
   // Timestamps
   fileCreatedAt: integer('file_created_at', { mode: 'timestamp' }),
   fileModifiedAt: integer('file_modified_at', { mode: 'timestamp' }),
@@ -94,7 +99,23 @@ export const tags = sqliteTable('tags', {
 })
 
 /**
- * Asset-Tags junction table - 澶氬澶氬叧绯? */
+ * User-defined categories — flexible organization parallel to system file_type.
+ */
+export const categories = sqliteTable('categories', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  color: text('color').notNull().default('#FF9F1C'),
+  /** Optional emoji icon for sidebar */
+  icon: text('icon'),
+  description: text('description'),
+  usageCount: integer('usage_count').notNull().default(0),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
+})
+
+/**
+ * Asset-Tags junction table - 多对多关系
+ */
 export const assetTags = sqliteTable('asset_tags', {
   assetId: text('asset_id')
     .notNull()
@@ -104,6 +125,23 @@ export const assetTags = sqliteTable('asset_tags', {
     .references(() => tags.id, { onDelete: 'cascade' }),
   assignedAt: integer('assigned_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
 })
+
+/** @deprecated Replaced by assets.type_id (single type per asset). Table dropped in schema v8. */
+export const assetCategories = sqliteTable(
+  'asset_categories',
+  {
+    assetId: text('asset_id')
+      .notNull()
+      .references(() => assets.id, { onDelete: 'cascade' }),
+    categoryId: text('category_id')
+      .notNull()
+      .references(() => categories.id, { onDelete: 'cascade' }),
+    assignedAt: integer('assigned_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`)
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.assetId, t.categoryId] })
+  })
+)
 
 /** 璧勪骇 鈫?閫昏緫鏂囦欢澶?澶氬澶?*/
 export const assetFolders = sqliteTable(
@@ -142,6 +180,9 @@ export type Asset = typeof assets.$inferSelect
 export type NewAsset = typeof assets.$inferInsert
 export type Tag = typeof tags.$inferSelect
 export type NewTag = typeof tags.$inferInsert
+export type Category = typeof categories.$inferSelect
+export type NewCategory = typeof categories.$inferInsert
 export type AssetTag = typeof assetTags.$inferSelect
+export type AssetCategory = typeof assetCategories.$inferSelect
 export type AssetFolder = typeof assetFolders.$inferSelect
 export type AssetSearch = typeof assetsSearch.$inferSelect

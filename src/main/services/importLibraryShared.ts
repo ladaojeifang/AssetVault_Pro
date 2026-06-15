@@ -3,10 +3,11 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statS
 import { basename, join, normalize, sep, isAbsolute } from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import type { BrowserWindow } from 'electron'
-import { and, countDistinct, eq } from 'drizzle-orm'
+import { and, countDistinct, desc, eq } from 'drizzle-orm'
 import { getDatabase } from '../db'
 import { openBetterSqliteDatabase } from '../db/betterSqliteNative'
-import { assets, assetFolders, assetTags, folders, tags } from '../db/schema'
+import { resolveImportedTypeId } from '@/shared/assetTypeRegistry'
+import { assets, assetFolders, assetTags, categories, folders, tags } from '../db/schema'
 import { getLibraryRoot, ITEMS_DIR, LIBRARY_DB_NAME } from './libraryBundle'
 import { readLibraryManifestFile, readLibraryDisplayName } from './libraryManifest'
 import { syncAssetSidecarFromDb, writeAssetSidecarMeta } from './assetSidecar'
@@ -57,10 +58,21 @@ export type SourceAssetRow = {
   metadata: string | null
   notes: string | null
   source_url: string | null
+  is_favorite: number
   file_created_at: number | null
   file_modified_at: number | null
   imported_at: number
   updated_at: number
+  type_id?: string | null
+}
+
+export type SourceCategoryRow = {
+  id: string
+  name: string
+  color: string
+  icon: string | null
+  description: string | null
+  sort_order: number
 }
 
 export type BaseImportStats = {
@@ -68,6 +80,8 @@ export type BaseImportStats = {
   foldersMerged: number
   tagsCreated: number
   tagsMerged: number
+  categoriesCreated: number
+  categoriesMerged: number
   assetsAdded: number
   assetsSkippedDuplicate: number
   assetsFailed: number
@@ -289,6 +303,81 @@ export async function phaseTags(
   return { tagMap, sourceLibraryTagId }
 }
 
+export async function mapOrCreateTargetCategory(
+  targetDb: ReturnType<typeof getDatabase>,
+  name: string,
+  color: string,
+  icon: string | null,
+  description: string | null,
+  sortOrder: number,
+  stats?: Pick<BaseImportStats, 'categoriesCreated' | 'categoriesMerged'>
+): Promise<string> {
+  const trimmed = name.trim()
+  const existing = await targetDb.select().from(categories).where(eq(categories.name, trimmed)).get()
+  if (existing) {
+    stats && stats.categoriesMerged++
+    return existing.id
+  }
+
+  const last = await targetDb
+    .select({ sortOrder: categories.sortOrder })
+    .from(categories)
+    .orderBy(desc(categories.sortOrder))
+    .limit(1)
+    .get()
+  const nextSort = sortOrder >= 0 ? sortOrder : (last?.sortOrder ?? -1) + 1
+
+  const id = uuidv4()
+  await targetDb.insert(categories).values({
+    id,
+    name: trimmed,
+    color: color || '#FF9F1C',
+    icon,
+    description,
+    sortOrder: nextSort
+  } as any)
+  stats && stats.categoriesCreated++
+  return id
+}
+
+export function readSourceCategories(sourceDb: SqliteDatabase): SourceCategoryRow[] {
+  try {
+    return sourceDb
+      .prepare(
+        'SELECT id, name, color, icon, description, sort_order FROM categories ORDER BY sort_order ASC'
+      )
+      .all() as SourceCategoryRow[]
+  } catch {
+    return []
+  }
+}
+
+export async function phaseCategories(
+  sourceDb: SqliteDatabase,
+  targetDb: ReturnType<typeof getDatabase>,
+  stats: BaseImportStats
+): Promise<Map<string, string>> {
+  const categoryMap = new Map<string, string>()
+  const sourceCategories = readSourceCategories(sourceDb)
+
+  for (const sc of sourceCategories) {
+    const name = sc.name?.trim()
+    if (!name) continue
+    const targetId = await mapOrCreateTargetCategory(
+      targetDb,
+      name,
+      sc.color,
+      sc.icon,
+      sc.description,
+      sc.sort_order ?? 0,
+      stats
+    )
+    categoryMap.set(sc.id, targetId)
+  }
+
+  return categoryMap
+}
+
 export async function phaseFolders(
   sourceDb: SqliteDatabase,
   targetDb: ReturnType<typeof getDatabase>,
@@ -415,6 +504,13 @@ export async function mergeAssetMetadata(
       .where(eq(assets.id, targetAssetId))
   }
 
+  if (sourceRow.is_favorite && !targetRow.isFavorite) {
+    await targetDb
+      .update(assets)
+      .set({ isFavorite: true, updatedAt: new Date() })
+      .where(eq(assets.id, targetAssetId))
+  }
+
   await applySourceFolders(targetDb, targetAssetId, sourceRow, folderMap, sourceDb)
   await applySourceTagsAndLibraryTag(
     targetDb,
@@ -432,7 +528,9 @@ export async function insertLocalAssetFromSourcePack(
   sourceRoot: string,
   sourceRow: SourceAssetRow,
   contentHash: string,
-  contentAbs: string
+  contentAbs: string,
+  categoryMap: Map<string, string> = new Map(),
+  sourceDb?: SqliteDatabase
 ): Promise<string> {
   const newId = uuidv4()
   const srcItemDir = join(sourceRoot, ITEMS_DIR, sourceRow.id)
@@ -447,6 +545,9 @@ export async function insertLocalAssetFromSourcePack(
   const now = new Date()
   const ext = sourceRow.extension.replace(/^\./, '').toLowerCase()
 
+  const rawTypeId = sourceDb ? resolveSourceAssetTypeId(sourceDb, sourceRow) : sourceRow.type_id
+  const typeId = resolveImportedTypeId(rawTypeId, sourceRow.file_type, categoryMap)
+
   try {
     await targetDb.insert(assets).values({
     id: newId,
@@ -455,6 +556,7 @@ export async function insertLocalAssetFromSourcePack(
     extension: ext,
     mimeType: sourceRow.mime_type,
     fileType: sourceRow.file_type,
+    typeId,
     folderId: null,
     filePath,
     storageMode: 'local',
@@ -473,6 +575,7 @@ export async function insertLocalAssetFromSourcePack(
     metadata: sourceRow.metadata,
     notes: sourceRow.notes,
     sourceUrl: sourceRow.source_url,
+    isFavorite: Boolean(sourceRow.is_favorite),
     fileCreatedAt: tsToDate(sourceRow.file_created_at),
     fileModifiedAt: tsToDate(sourceRow.file_modified_at),
     importedAt: now,
@@ -517,12 +620,37 @@ export async function refreshFolderAssetCounts(targetDb: ReturnType<typeof getDa
   }
 }
 
+export function resolveSourceAssetTypeId(sourceDb: SqliteDatabase, row: SourceAssetRow): string {
+  if (row.type_id?.trim()) return row.type_id.trim()
+  try {
+    const link = sourceDb
+      .prepare(
+        `SELECT ac.category_id FROM asset_categories ac
+         INNER JOIN categories c ON c.id = ac.category_id
+         WHERE ac.asset_id = ?
+         ORDER BY c.sort_order ASC, ac.assigned_at ASC
+         LIMIT 1`
+      )
+      .get(row.id) as { category_id: string } | undefined
+    if (link?.category_id) return link.category_id
+  } catch {
+    /* legacy source without asset_categories */
+  }
+  return resolveImportedTypeId(null, row.file_type, new Map())
+}
+
 export function loadSourceAssets(sourceDb: SqliteDatabase): SourceAssetRow[] {
+  const hasTypeId = (
+    sourceDb
+      .prepare(`SELECT COUNT(*) as c FROM pragma_table_info('assets') WHERE name = 'type_id'`)
+      .get() as { c: number }
+  ).c > 0
+  const typeSelect = hasTypeId ? 'type_id' : `NULL AS type_id`
   return sourceDb
     .prepare(
-      `SELECT id, filename, original_name, extension, mime_type, file_type, folder_id, file_path,
+      `SELECT id, filename, original_name, extension, mime_type, file_type, ${typeSelect}, folder_id, file_path,
         storage_mode, import_source, file_size, content_hash, content_hash_computed_at, width, height,
-        dominant_color, colors, duration, thumbnail_path, has_thumbnail, metadata, notes, source_url,
+        dominant_color, colors, duration, thumbnail_path, has_thumbnail, metadata, notes, source_url, is_favorite,
         file_created_at, file_modified_at, imported_at, updated_at
        FROM assets ORDER BY imported_at ASC`
     )

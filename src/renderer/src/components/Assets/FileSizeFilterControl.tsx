@@ -156,7 +156,7 @@ export function FileSizeFilterControl({
   }
 
   return (
-    <div className={`flex flex-col gap-1 min-w-0 w-full ${compact ? '' : ''}`}>
+    <div className={`flex flex-col gap-0.5 min-w-0 w-full ${compact ? '' : ''}`}>
       {presetSelect}
       {mbInputs}
     </div>

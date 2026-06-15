@@ -16,14 +16,17 @@ export function getListColumnLabels(): string[] {
   ]
 }
 /** 默认列宽（px），与原先 grid 比例接近 */
-export const DEFAULT_LIST_COLUMN_WIDTHS: readonly number[] = [40, 200, 132, 72, 56, 96, 64]
+export const DEFAULT_LIST_COLUMN_WIDTHS: readonly number[] = [40, 200, 140, 84, 72, 100, 100]
 
-export const MIN_LIST_COLUMN_WIDTHS: readonly number[] = [36, 72, 112, 48, 40, 72, 58]
+export const MIN_LIST_COLUMN_WIDTHS: readonly number[] = [36, 72, 124, 72, 64, 80, 88]
 
-export const MAX_LIST_COLUMN_WIDTHS: readonly number[] = [56, 640, 280, 160, 120, 180, 88]
+export const MAX_LIST_COLUMN_WIDTHS: readonly number[] = [56, 640, 280, 180, 120, 180, 128]
 
-/** 窗口变宽时吸收剩余宽度的列（名称） */
+/** @deprecated 历史：仅名称列拉伸；现改为多列按比例分配剩余宽度 */
 export const LIST_FLEX_GROW_COLUMN_INDEX = 1
+
+/** 窗口变宽时保持固定宽度、不参与 fr 分配的列（缩略图） */
+export const LIST_FIXED_STRETCH_COLUMN_INDICES = new Set([0])
 
 const STORAGE_KEY = 'assetvault.listColumnWidths.v2'
 
@@ -34,10 +37,12 @@ export function buildGridTemplateColumns(widths: number[], stretch = false): str
   return widths
     .map((w, i) => {
       const px = Math.round(w)
-      if (stretch && i === LIST_FLEX_GROW_COLUMN_INDEX) {
-        return `minmax(${px}px, 1fr)`
+      if (!stretch || LIST_FIXED_STRETCH_COLUMN_INDICES.has(i)) {
+        return `${px}px`
       }
-      return `${px}px`
+      const min = MIN_LIST_COLUMN_WIDTHS[i] ?? px
+      // 按用户列宽比例分配剩余空间（非仅名称列）
+      return `minmax(${min}px, ${px}fr)`
     })
     .join(' ')
 }

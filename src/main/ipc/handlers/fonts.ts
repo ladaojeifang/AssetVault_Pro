@@ -19,6 +19,7 @@ import {
 import { renderFontPreviewPngWithOptions } from '../../utils/fontPreviewRender'
 import type { FontAppSettings } from '@/shared/fontSettings'
 import { assertFiniteNumber, assertPlainObject, assertString } from '../ipcGuards'
+import { isFontPreviewExtension } from '@/shared/formatCapabilities'
 
 function parseFontMetaFromRow(metadata: string | null | undefined): ParsedFontMetadata | null {
   if (!metadata) return null
@@ -62,7 +63,7 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
     const database = getDatabase()
     assertString('assetId', assetId)
     const row = await database.select().from(assets).where(eq(assets.id, assetId)).get()
-    if (!row || row.fileType !== 'font') return []
+    if (!row || !isFontPreviewExtension(row.extension)) return []
     const abs = resolveLibraryPath(row.filePath)
     return listFontFacesFromFile(abs)
   })
@@ -91,7 +92,7 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
       assertString('assetId', assetId)
       assertFiniteNumber('ttcIndex', ttcIndex)
       const row = await database.select().from(assets).where(eq(assets.id, assetId)).get()
-      if (!row || row.fileType !== 'font') return { ok: false as const, error: '不是字体资产' }
+      if (!row || !isFontPreviewExtension(row.extension)) return { ok: false as const, error: '不是字体资产' }
       const abs = resolveLibraryPath(row.filePath)
       if (!existsSync(abs)) return { ok: false as const, error: '文件不存在' }
 
@@ -154,7 +155,7 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
     const database = getDatabase()
     assertString('assetId', assetId)
     const row = await database.select().from(assets).where(eq(assets.id, assetId)).get()
-    if (!row || row.fileType !== 'font') return { ok: false as const, error: '不是字体资产' }
+    if (!row || !isFontPreviewExtension(row.extension)) return { ok: false as const, error: '不是字体资产' }
     const abs = resolveLibraryPath(row.filePath)
     if (!existsSync(abs)) return { ok: false as const, error: '文件不存在' }
     return installFontToUserWindows(abs)
@@ -164,7 +165,7 @@ export function handleFontOperations(ipc: typeof ipcMain): void {
     const database = getDatabase()
     assertString('assetId', assetId)
     const row = await database.select().from(assets).where(eq(assets.id, assetId)).get()
-    if (!row || row.fileType !== 'font') return { ok: false as const, error: '不是字体资产' }
+    if (!row || !isFontPreviewExtension(row.extension)) return { ok: false as const, error: '不是字体资产' }
     const abs = resolveLibraryPath(row.filePath)
     if (!existsSync(abs)) return { ok: false as const, error: '文件不存在' }
 

@@ -12,6 +12,7 @@ import {
   parseFontMetadataFromAsset
 } from '../../utils/fontAssetMeta'
 import { notify } from '../Common/notify'
+import { canAssetPreview } from '@/shared/assetPreviewRegistry'
 
 interface FontPreviewPageProps {
   assetId: string
@@ -179,7 +180,7 @@ const FontPreviewPage: React.FC<FontPreviewPageProps> = ({ assetId }) => {
     )
   }
 
-  if (!asset || asset.fileType !== 'font') {
+  if (!asset || !canAssetPreview(asset, 'font')) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-av-text-secondary">
         <p>{t('notFoundFont')}</p>

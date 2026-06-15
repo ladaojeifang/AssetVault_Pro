@@ -69,6 +69,8 @@ export type ImportLibrarySuccess = {
   foldersMerged: number
   tagsCreated: number
   tagsMerged: number
+  categoriesCreated: number
+  categoriesMerged: number
   sourceLibraryTagName: string
   assetsAddedLocal?: number
   assetsAddedReferenced?: number

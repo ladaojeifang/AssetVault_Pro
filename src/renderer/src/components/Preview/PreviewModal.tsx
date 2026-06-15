@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { AssetItem } from '@/shared/types'
 import { FONT_THUMB_SAMPLE_TEXT } from '@/shared/fontTypes'
 import { ModelViewer } from './ModelViewer'
-import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
-import { isSvgExtension } from '@/shared/svgFormats'
+import { canAssetPreview } from '@/shared/assetPreviewRegistry'
+import { resolveFormatCapabilities } from '@/shared/formatCapabilities'
 import { loadSvgPreviewObjectUrl, revokeSvgPreviewObjectUrl } from '../../utils/loadSvgPreviewUrl'
 import { useFontFace } from '../../hooks/useFontFace'
 import { fontFamilyLabel, parseFontMetadataFromAsset } from '../../utils/fontAssetMeta'
@@ -54,7 +54,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
     setLoading(true)
     setModelFileUrl(null)
     try {
-      if (asset.fileType === 'image' && isSvgExtension(asset.extension)) {
+      const caps = resolveFormatCapabilities(asset.extension)
+      if (caps.imagePipeline === 'svg') {
         const target = asset.resolvedFilePath ?? asset.filePath
         if (target) {
           revokeSvgPreviewObjectUrl(previewBlobRef.current)
@@ -64,15 +65,15 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
         } else {
           setPreviewUrl(null)
         }
-      } else if (asset.fileType === 'image') {
+      } else if (caps.importPipeline === 'image') {
         const thumbData = await window.assetVaultAPI.assets.getThumbnail(asset.id)
         setPreviewUrl(thumbData as string ?? null)
-      } else if (asset.fileType === '3d' && isModel3dPreviewExtension(asset.extension)) {
+      } else if (canAssetPreview(asset, 'model')) {
         const target = asset.resolvedFilePath ?? asset.filePath
         const href = await window.assetVaultAPI.fs.pathToFileUrl(target)
         setModelFileUrl(href)
         setPreviewUrl(null)
-      } else if (['video', 'audio'].includes(asset.fileType)) {
+      } else if (caps.importPipeline === 'video' || caps.importPipeline === 'audio') {
         setPreviewUrl(null)
       } else {
         setPreviewUrl(null)
@@ -175,7 +176,23 @@ function renderContent(
 ) {
   if (!currentAsset) return null
 
-  switch (currentAsset.fileType) {
+  const caps = resolveFormatCapabilities(currentAsset.extension)
+
+  if (canAssetPreview(currentAsset, 'model')) {
+    return modelFileUrl ? (
+      <div className="w-[min(90vw,960px)] h-[min(80vh,720px)]">
+        <ModelViewer
+          fileUrl={modelFileUrl}
+          extension={currentAsset.extension}
+          className="w-full h-full"
+        />
+      </div>
+    ) : (
+      <FilePreviewPlaceholder asset={currentAsset} />
+    )
+  }
+
+  switch (caps.importPipeline) {
     case 'image':
       return previewUrl ? (
         <img
@@ -195,19 +212,6 @@ function renderContent(
 
     case 'font':
       return <FontPreview asset={currentAsset} />
-
-    case '3d':
-      return modelFileUrl ? (
-        <div className="w-[min(90vw,960px)] h-[min(80vh,720px)]">
-          <ModelViewer
-            fileUrl={modelFileUrl}
-            extension={currentAsset.extension}
-            className="w-full h-full"
-          />
-        </div>
-      ) : (
-        <FilePreviewPlaceholder asset={currentAsset} />
-      )
 
     default:
       return <FilePreviewPlaceholder asset={currentAsset} />

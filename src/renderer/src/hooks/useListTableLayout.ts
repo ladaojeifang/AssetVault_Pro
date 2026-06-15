@@ -6,7 +6,7 @@ import {
   listTableMinWidth
 } from '../utils/listViewColumns'
 
-/** 随窗口变宽时，由该列吸收剩余空间（名称） */
+/** 随窗口变宽时，各列按保存宽度比例分配剩余空间（缩略图列固定） */
 export function useListTableLayout(
   measureRef: RefObject<HTMLElement | null>,
   columnWidths: number[],

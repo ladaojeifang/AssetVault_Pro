@@ -26,6 +26,8 @@ export type AssetFilterState = {
   /** Inclusive max file size in megabytes. */
   fileSizeMaxMb: number | null
   datePreset: DatePreset | null
+  /** Normalized extension without leading dot, e.g. `png`. */
+  extension: string | null
 }
 
 export function parseMbInput(raw: string): number | null {
@@ -43,13 +45,26 @@ export function formatFileSizeMbFilterLabel(minMb: number | null, maxMb: number 
   return ''
 }
 
+export function normalizeExtensionFilter(raw: string): string | null {
+  const t = raw.trim().toLowerCase().replace(/^\./, '')
+  if (!t) return null
+  if (!/^[a-z0-9][a-z0-9.]*$/.test(t)) return null
+  return t
+}
+
+export function formatExtensionFilterLabel(ext: string | null | undefined): string {
+  if (!ext) return ''
+  return ext.startsWith('.') ? ext : `.${ext}`
+}
+
 export function hasActiveAssetFilters(f: AssetFilterState): boolean {
   return !!(
     f.colorBucket ||
     f.sizePreset ||
     f.fileSizeMinMb != null ||
     f.fileSizeMaxMb != null ||
-    f.datePreset
+    f.datePreset ||
+    f.extension
   )
 }
 
@@ -57,12 +72,12 @@ export function hasActiveAssetFilters(f: AssetFilterState): boolean {
 export function hasActiveAssetListQuery(p: {
   debouncedSearch?: string
   tagFilters?: string[]
-  fileTypeFilter?: string | null
+  typeFilters?: string[]
 } & AssetFilterState): boolean {
   return !!(
     String(p.debouncedSearch ?? '').trim() ||
     (p.tagFilters?.length ?? 0) > 0 ||
-    p.fileTypeFilter ||
+    (p.typeFilters?.length ?? 0) > 0 ||
     hasActiveAssetFilters(p)
   )
 }

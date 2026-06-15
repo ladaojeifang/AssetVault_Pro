@@ -1,5 +1,5 @@
 import type { LibraryLocalizationManifest, LibraryMode, LibraryModeStats } from './libraryTypes'
-import type { FileType, QueryParams } from './types'
+import type { FileType, QueryParams, CategoryKind } from './types'
 
 export type JSendSuccess<T> = { status: 'success'; data: T }
 export type JSendError = { status: 'error'; code: string; message: string }
@@ -41,6 +41,9 @@ export type WebApiAssetDto = {
   updatedAt: string
   tagIds?: string[]
   folderIds?: string[]
+  typeId: string
+  /** @deprecated API compat alias; use typeId */
+  categoryIds?: string[]
 }
 
 export type WebApiPaged<T> = {
@@ -187,4 +190,17 @@ export type WebApiTagDto = {
   description?: string | null
   usageCount: number
   createdAt: string
+}
+
+export type WebApiCategoryDto = {
+  id: string
+  name: string
+  color: string
+  icon?: string | null
+  description?: string | null
+  usageCount: number
+  sortOrder: number
+  kind: CategoryKind
+  fileType?: FileType
+  createdAt?: string
 }

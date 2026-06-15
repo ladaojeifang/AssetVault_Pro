@@ -23,7 +23,7 @@
 | [资产管理](asset-management.md) | 导入、浏览、搜索、筛选 |
 | [资产详情面板](asset-details.md) | 信息、标签、备注、引用修复 |
 | [资料库管理](library-management.md) | archive / catalog / embedded 与迁移 |
-| [文件夹与标签系统](folders-tags.md) | 组织与筛选 |
+| [文件夹、标签与类型](folders-tags.md) | 组织与筛选 |
 
 ### 预览与查看
 

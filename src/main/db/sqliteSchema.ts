@@ -6,7 +6,7 @@ const SCHEMA_META_KEY = 'schema_version'
  * Monotonic library DB schema revision. Bump when adding a new branch in
  * `runLibrarySchemaMigrations` ??do not edit old steps in place.
  */
-export const CURRENT_LIBRARY_SCHEMA_VERSION = 5
+export const CURRENT_LIBRARY_SCHEMA_VERSION = 8
 
 /** Current persisted schema version, or 0 if meta table / row missing. */
 export function getLibrarySchemaVersion(sqlite: RawSqliteDb): number {
@@ -80,6 +80,89 @@ export function runLibrarySchemaMigrations(sqlite: RawSqliteDb): void {
     // runLibrarySchemaMigrations. If this assumption ever changes,
     // add: ALTER TABLE assets ADD COLUMN source_url TEXT
     v = 5
+    setLibrarySchemaVersion(sqlite, v)
+  }
+
+  if (v < 6) {
+    try {
+      sqlite.run(
+        `ALTER TABLE assets ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0 CHECK(is_favorite IN (0, 1))`
+      )
+    } catch {
+      /* column already exists */
+    }
+    v = 6
+    setLibrarySchemaVersion(sqlite, v)
+  }
+
+  if (v < 7) {
+    sqlite.run(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        color TEXT NOT NULL DEFAULT '#FF9F1C',
+        icon TEXT,
+        description TEXT,
+        usage_count INTEGER NOT NULL DEFAULT 0,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      )
+    `)
+    sqlite.run(`
+      CREATE TABLE IF NOT EXISTS asset_categories (
+        asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+        category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+        assigned_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        PRIMARY KEY(asset_id, category_id)
+      )
+    `)
+    sqlite.run(`CREATE INDEX IF NOT EXISTS idx_asset_categories_category_id ON asset_categories(category_id)`)
+    sqlite.run(`CREATE INDEX IF NOT EXISTS idx_asset_categories_asset_id ON asset_categories(asset_id)`)
+    sqlite.run(`
+      CREATE TRIGGER IF NOT EXISTS tr_category_usage_insert AFTER INSERT ON asset_categories BEGIN
+        UPDATE categories SET usage_count = usage_count + 1 WHERE id = new.category_id;
+      END
+    `)
+    sqlite.run(`
+      CREATE TRIGGER IF NOT EXISTS tr_category_usage_delete AFTER DELETE ON asset_categories BEGIN
+        UPDATE categories SET usage_count = MAX(0, usage_count - 1) WHERE id = old.category_id;
+      END
+    `)
+    v = 7
+    setLibrarySchemaVersion(sqlite, v)
+  }
+
+  if (v < 8) {
+    try {
+      sqlite.run(`ALTER TABLE assets ADD COLUMN type_id TEXT`)
+    } catch {
+      /* column already exists */
+    }
+    sqlite.run(`
+      UPDATE assets SET type_id = '__sys:' || file_type
+      WHERE type_id IS NULL OR trim(type_id) = ''
+    `)
+    sqlite.run(`
+      UPDATE assets SET type_id = (
+        SELECT ac.category_id
+        FROM asset_categories ac
+        INNER JOIN categories c ON c.id = ac.category_id
+        WHERE ac.asset_id = assets.id
+        ORDER BY c.sort_order ASC, ac.assigned_at ASC
+        LIMIT 1
+      )
+      WHERE EXISTS (SELECT 1 FROM asset_categories ac WHERE ac.asset_id = assets.id)
+    `)
+    sqlite.run(`DROP TRIGGER IF EXISTS tr_category_usage_insert`)
+    sqlite.run(`DROP TRIGGER IF EXISTS tr_category_usage_delete`)
+    sqlite.run(`DROP TABLE IF EXISTS asset_categories`)
+    sqlite.run(`
+      UPDATE categories SET usage_count = COALESCE((
+        SELECT COUNT(*) FROM assets WHERE assets.type_id = categories.id
+      ), 0)
+    `)
+    sqlite.run(`CREATE INDEX IF NOT EXISTS idx_assets_type_id ON assets(type_id)`)
+    v = 8
     setLibrarySchemaVersion(sqlite, v)
   }
 
@@ -205,6 +288,22 @@ export function createInitialSchemaOnSqlite(sqlite: RawSqliteDb): void {
   } catch {
     /* column already exists */
   }
+  try {
+    sqlite.run(
+      `ALTER TABLE assets ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0 CHECK(is_favorite IN (0, 1))`
+    )
+  } catch {
+    /* column already exists */
+  }
+  try {
+    sqlite.run(`ALTER TABLE assets ADD COLUMN type_id TEXT`)
+  } catch {
+    /* column already exists */
+  }
+  sqlite.run(`
+    UPDATE assets SET type_id = '__sys:' || file_type
+    WHERE type_id IS NULL OR trim(type_id) = ''
+  `)
   sqlite.run(`
     UPDATE assets SET storage_mode = 'referenced'
     WHERE (storage_mode IS NULL OR trim(storage_mode) = '')
@@ -264,6 +363,19 @@ export function createInitialSchemaOnSqlite(sqlite: RawSqliteDb): void {
   `)
 
   sqlite.run(`
+    CREATE TABLE IF NOT EXISTS categories (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      color TEXT NOT NULL DEFAULT '#FF9F1C',
+      icon TEXT,
+      description TEXT,
+      usage_count INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )
+  `)
+
+  sqlite.run(`
     CREATE TABLE IF NOT EXISTS assets_search (
       asset_id TEXT PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
       search_text TEXT NOT NULL,
@@ -280,6 +392,7 @@ export function createInitialSchemaOnSqlite(sqlite: RawSqliteDb): void {
   sqlite.run(`CREATE INDEX IF NOT EXISTS idx_folders_parent_id ON folders(parent_id);`)
   sqlite.run(`CREATE INDEX IF NOT EXISTS idx_asset_tags_tag_id ON asset_tags(tag_id);`)
   sqlite.run(`CREATE INDEX IF NOT EXISTS idx_asset_tags_asset_id ON asset_tags(asset_id);`)
+  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_assets_type_id ON assets(type_id);`)
   sqlite.run(`CREATE INDEX IF NOT EXISTS idx_assets_search_text ON assets_search(search_text);`)
 
   sqlite.run(`

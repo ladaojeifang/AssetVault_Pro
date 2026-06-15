@@ -1,5 +1,9 @@
 {
   "allAssets": "全部资产",
+  "favorites": "收藏",
+  "addFavorite": "加入收藏",
+  "removeFavorite": "取消收藏",
+  "emptyFavorites": "暂无收藏。在资产卡片上点击星标即可收藏。",
   "parent": "上级",
   "folder": "文件夹",
   "backTo": "← 返回「{{name}}」",
@@ -21,6 +25,12 @@
   "all": "全部",
   "filterByType": "按类型筛选",
   "filterByDate": "按导入日期筛选",
+  "filterByExtension": "按扩展名筛选",
+  "extensionFilter": {
+    "selectTitle": "从资料库已有扩展名中选择",
+    "inputTitle": "输入扩展名（可带点或不带点）",
+    "placeholder": "如 png"
+  },
   "sortBy": "按{{label}}排序",
   "columns": {
     "thumb": "图",
@@ -38,6 +48,7 @@
     "font": "字体",
     "design": "设计",
     "document": "文档",
+    "3d": "3D",
     "code": "代码",
     "other": "其他"
   },
@@ -55,6 +66,8 @@
     "sectionThumbnail": "缩略图",
     "openExplorer": "在资源管理器打开",
     "addToFolder": "添加至文件夹",
+    "setAssetType": "设置类型",
+    "addToCategory": "添加至分类",
     "addToOtherLibrary": "添加至其它资源库",
     "setCover": "设为文件夹封面",
     "rename": "重命名",
@@ -72,10 +85,14 @@
     "refreshThumb": "刷新缩略图",
     "delete": "删除",
     "deleteMulti": "删除 ({{count}})",
-    "noFolders": "暂无文件夹"
+    "noFolders": "暂无文件夹",
+    "noCategories": "暂无分类"
   },
+  "category": "分类",
   "notify": {
     "addedToFolder": "已将 {{count}} 项加入「{{name}}」",
+    "setAssetType": "已将 {{count}} 项的类型设为「{{name}}」",
+    "addedToCategory": "已将 {{count}} 项加入分类「{{name}}」",
     "addToFolderFailed": "加入文件夹失败",
     "confirmDelete": "确定删除 {{count}} 项？",
     "copiedToLibrary": "已复制 {{copied}} 项到其它资料库",
@@ -113,8 +130,11 @@
     "dominantColor": "主色",
     "importDate": "导入日期",
     "date": "日期",
-    "clear": "清除筛选"
+    "clear": "清除筛选",
+    "activeTypes": "侧栏类型筛选",
+    "activeTags": "侧栏标签筛选"
   },
+  "userCategoriesOnCard": "{{count}} 个用户分类",
   "colorBuckets": {
     "red": "红",
     "orange": "橙",

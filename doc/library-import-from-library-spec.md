@@ -12,10 +12,11 @@
 
 - 文件夹树
 - 标签及资产关联
+- **用户分类**（`categories`）及资产的 `type_id`
 - 文件内容（去重，不重复占盘）
 - **来源可追溯**：为本次导入的资产打上「源库名称」标签
 
-现有 **「复制到其它资料库」**（`copyAssetsToOtherLibrary`）不满足：不迁文件夹、标签不可靠、无去重。
+**「复制到其它资料库」**（`copyAssetsToOtherLibrary`）适用于在 UI 中**选中部分资产**跨库复制：会迁移文件夹、标签与 `type_id`，但**不做 SHA-256 去重**、不合并整库。整库合并请用本节「从其它资料库导入」流程。
 
 **V1 目标**：在当前库 B 提供 **「从其它资料库导入…」**，选择源库 A 根目录，一次后台任务完成合并。
 
@@ -29,7 +30,7 @@
 |----|------|
 | 源库类型 | 仅 **archive**（`manifest.libraryMode === 'archive'`） |
 | 导入粒度 | **整库**（A 内全部资产） |
-| 元数据 | 文件夹树、`tags`、`asset_folders`、`asset_tags`、资产 notes 等（见 §5） |
+| 元数据 | 文件夹树、`tags`、`categories`、`asset_folders`、`asset_tags`、资产 `type_id`、notes 等（见 §5） |
 | 文件 | 从 A 的 `items/{id}/` 拷贝到 B；缩略图一并处理 |
 | 去重 | 按 **SHA-256 content_hash**（与单文件导入一致） |
 | 源库 tag | 以 A 的 `displayName`（fallback 文件夹名）为 tag 名，写入 B 并关联到本批触及的资产 |
@@ -84,6 +85,7 @@
 ```text
 validateSource → openSourceDb (readonly)
   → phaseTags
+  → phaseCategories
   → phaseFolders
   → phaseAssets (per asset: dedupe | copy | link metadata)
   → phaseFinalize (folder counts, FTS/search, notify UI)
@@ -106,6 +108,13 @@ validateSource → openSourceDb (readonly)
 2. 建立 `Map<sourceTagId, targetTagId>`：
    - B 中按 **name** 查找；有则映射，无则 `uuid` 新建并插入 B
 3. 确保 **源库名称 tag**（§4）存在，记 `sourceLibraryTagId`（不参与 source→target 映射表中的 A tag 替换，单独处理）
+
+### 5.3.1 阶段 `phaseCategories`
+
+1. 读取 A：`SELECT * FROM categories ORDER BY sort_order`
+2. 建立 `Map<sourceCategoryId, targetCategoryId>`：
+   - B 中按 **name** 查找；有则映射，无则 `uuid` 新建并插入 B（保留 color/icon/description/sort_order）
+3. 源库无 `categories` 表时跳过（兼容旧库）
 
 ### 5.4 阶段 `phaseFolders`
 
@@ -138,11 +147,15 @@ validateSource → openSourceDb (readonly)
    - 读 A `asset_folders`（及 legacy `assets.folder_id` 若仍在用）  
    - 映射为 B 的 `folderId`，`INSERT OR IGNORE` 进 `asset_folders`
 
-5. **标签**  
+5. **有效类型**  
+   - 读 A `assets.type_id`（旧库无列时从 `asset_categories` 回退一条）  
+   - 用户 uuid 经 `categoryMap` 映射；`__sys:*` 原样写入 B
+
+6. **标签**  
    - A `asset_tags` → 映射 tag id → B 插入  
    - 追加 **源库名称 tag**（§4）
 
-6. **进度**  
+7. **进度**  
    - `emit('library:import-progress', { phase: 'assets', current, total, filename, status })`
 
 ### 5.6 重复项 metadata merge（默认）
@@ -151,6 +164,7 @@ validateSource → openSourceDb (readonly)
 |------|------|
 | notes | B 已有非空则 **保留 B**；B 空且 A 非空则写入 A |
 | tags | **并集**（含源库 tag） |
+| type_id | 新建资产：映射源 `type_id`；重复项：**保留 B** |
 | folders | **并集**（`asset_folders`） |
 | 文件 / file_path | **不动** B |
 | view_count 等 | 不覆盖 |
@@ -211,6 +225,8 @@ export interface ImportLibraryResult {
   foldersMerged: number
   tagsCreated: number
   tagsMerged: number
+  categoriesCreated: number
+  categoriesMerged: number
   sourceLibraryTagName: string
   errors: Array<{ sourceAssetId: string; filename: string; reason: string }>
 } | {
@@ -253,7 +269,7 @@ export interface ImportLibraryResult {
 
 | HTTP | code | 说明 |
 |------|------|------|
-| 400 | `INVALID_SOURCE_MODE` | 源库非 archive |
+| 400 | `INVALID_SOURCE_MODE` | 源库与目标库模式组合不支持（须同为 archive 或同为 catalog） |
 | 400 | `SAME_LIBRARY` | 源与目标相同 |
 | 404 | `SOURCE_NOT_FOUND` | 路径无效 |
 | 409 | `LIBRARY_BUSY` | 可选：已有导入任务运行中 |
@@ -291,9 +307,10 @@ export interface ImportLibraryResult {
 |----|------|--------|------|------|
 | LIM-01 | 新增 `importLibraryFromPath.ts`：`validateSource` + 只读打开源 DB | P0 | 4h | — |
 | LIM-02 | `phaseTags` + 源库名称 tag | P0 | 3h | LIM-01 |
+| LIM-02b | `phaseCategories`（name 映射） | P0 | 2h | LIM-01 |
 | LIM-03 | `phaseFolders`（path 映射、层级） | P0 | 6h | LIM-01 |
 | LIM-04 | `phaseAssets`：拷贝条目 + 新资产入库 | P0 | 8h | LIM-02, LIM-03 |
-| LIM-05 | 去重 + 重复项 tag/folder/notes 合并 | P0 | 6h | LIM-04 |
+| LIM-05 | 去重 + 重复项 tag/folder/category/notes 合并 | P0 | 6h | LIM-04 |
 | LIM-06 | `phaseFinalize`：search、folder count、通知 | P0 | 3h | LIM-05 |
 | LIM-07 | IPC + `libraryTypes` + preload | P0 | 3h | LIM-06 |
 | LIM-08 | `LibrarySettingsPanel` UI + 进度订阅 | P0 | 4h | LIM-07 |
@@ -306,7 +323,7 @@ export interface ImportLibraryResult {
 ### 10.2 建议实施顺序
 
 ```text
-LIM-01 → LIM-02 → LIM-03 → LIM-04 → LIM-05 → LIM-06
+LIM-01 → LIM-02 → LIM-02b → LIM-03 → LIM-04 → LIM-05 → LIM-06
   → LIM-07 → LIM-08（可交付 UI 版本）
   → LIM-09 → LIM-10（API + 文档）
   → LIM-11

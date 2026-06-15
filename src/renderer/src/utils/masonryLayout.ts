@@ -1,4 +1,5 @@
 import type { AssetItem } from '@/shared/types'
+import { defaultLayoutAspectRatio } from '@/shared/formatCapabilities'
 
 export const MASONRY_GAP = 8
 export const MASONRY_COLUMN_WIDTH_MIN = 96
@@ -74,18 +75,7 @@ function assetAspectRatio(asset: AssetItem): number {
   if (asset.width && asset.height && asset.height > 0) {
     return asset.width / asset.height
   }
-  switch (asset.fileType) {
-    case 'video':
-      return 16 / 9
-    case 'font':
-      return 1
-    case 'document':
-      return 3 / 4
-    case 'audio':
-      return 1.2
-    default:
-      return 1
-  }
+  return defaultLayoutAspectRatio(asset.extension ?? '')
 }
 
 const CAPTION_BLOCK_HEIGHT = 34

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { formatFileSizeMbFilterLabel } from '@/shared/assetFilters'
+import { formatFileSizeMbFilterLabel, formatExtensionFilterLabel } from '@/shared/assetFilters'
 import type { DatePreset, SizePreset } from '@/shared/assetFilters'
 import type { FontAppSettings } from '@/shared/fontSettings'
 import type { FontFamilyGroup } from '@/shared/fontTypes'
@@ -21,6 +21,7 @@ function buildFontFilterChips(
     fileSizeMinMb: number | null
     fileSizeMaxMb: number | null
     datePresetFilter: DatePreset | null
+    extensionFilter: string | null
     tagFilters: string[]
   }
 ): string[] {
@@ -40,6 +41,11 @@ function buildFontFilterChips(
   if (p.datePresetFilter) {
     filters.push(
       t('context.filter.date', { value: translateDatePresetLabel(ta, p.datePresetFilter) })
+    )
+  }
+  if (p.extensionFilter) {
+    filters.push(
+      t('context.filter.extension', { value: formatExtensionFilterLabel(p.extensionFilter) })
     )
   }
   if (p.tagFilters.length > 0) {
@@ -205,6 +211,7 @@ export function FontTypeContextView({ onClose }: { onClose: () => void }) {
     fileSizeMinMb,
     fileSizeMaxMb,
     datePresetFilter,
+    extensionFilter,
     tagFilters,
     selectedFontFamilyKey,
     setSelectedFontFamilyKey,
@@ -231,6 +238,7 @@ export function FontTypeContextView({ onClose }: { onClose: () => void }) {
     fileSizeMinMb,
     fileSizeMaxMb,
     datePresetFilter,
+    extensionFilter,
     tagFilters
   })
 

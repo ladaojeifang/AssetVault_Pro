@@ -2,9 +2,9 @@ import { eq, or } from 'drizzle-orm'
 import { assets } from '../../db/schema'
 import { getThumbnailService } from '../ThumbnailService'
 import { waitForModelSnapshotBridge } from '../modelThumbnailRenderer'
-import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
 import { isEmbeddedDccThumbExtension } from '@/shared/embeddedDccFormats'
 import { isTextPreviewExtension } from '@/shared/textPreviewFormats'
+import { resolveAsyncThumbnailKind } from '@/shared/formatCapabilities'
 import type { AssetThumbRow, AsyncThumbnailJob, Database } from './types'
 
 const ASSET_THUMB_COLUMNS = {
@@ -29,8 +29,16 @@ async function loadTextRows(database: Database): Promise<AssetThumbRow[]> {
     .all()
 }
 
-function isTextPreviewAsset(fileType: string, extNoDot: string): boolean {
-  return (fileType === 'code' || fileType === 'document') && isTextPreviewExtension('.' + extNoDot)
+function matchesModel3d(extNoDot: string): boolean {
+  return resolveAsyncThumbnailKind(extNoDot) === 'model3d'
+}
+
+function matchesEmbeddedDcc(extNoDot: string): boolean {
+  return resolveAsyncThumbnailKind(extNoDot) === 'embedded-dcc'
+}
+
+function matchesTextPreview(extNoDot: string): boolean {
+  return resolveAsyncThumbnailKind(extNoDot) === 'text-preview'
 }
 
 const thumbService = () => getThumbnailService()
@@ -38,8 +46,7 @@ const thumbService = () => getThumbnailService()
 export const model3dThumbnailJob: AsyncThumbnailJob = {
   id: 'model3d',
   logTag: 'ModelThumbnail',
-  matchesAsset: (fileType, extNoDot) =>
-    fileType === '3d' && isModel3dPreviewExtension(extNoDot),
+  matchesAsset: matchesModel3d,
   loadRows: load3dRows,
   rowsAreCandidatesOnly: false,
   beforeBatch: async () => {
@@ -60,8 +67,7 @@ export const model3dThumbnailJob: AsyncThumbnailJob = {
 export const embeddedDccThumbnailJob: AsyncThumbnailJob = {
   id: 'embedded-dcc',
   logTag: 'EmbeddedDccThumbnail',
-  matchesAsset: (fileType, extNoDot) =>
-    fileType === '3d' && isEmbeddedDccThumbExtension('.' + extNoDot),
+  matchesAsset: matchesEmbeddedDcc,
   loadRows: async (database) => {
     const rows = await load3dRows(database)
     return rows.filter((r) => isEmbeddedDccThumbExtension('.' + r.extension))
@@ -79,10 +85,10 @@ export const embeddedDccThumbnailJob: AsyncThumbnailJob = {
 export const textPreviewThumbnailJob: AsyncThumbnailJob = {
   id: 'text-preview',
   logTag: 'TextPreviewThumbnail',
-  matchesAsset: isTextPreviewAsset,
+  matchesAsset: matchesTextPreview,
   loadRows: async (database) => {
     const rows = await loadTextRows(database)
-    return rows.filter((r) => isTextPreviewAsset(r.fileType, r.extension))
+    return rows.filter((r) => isTextPreviewExtension('.' + r.extension))
   },
   rowsAreCandidatesOnly: true,
   generate: (absFile, assetId, extNoDot, opts) =>
@@ -101,9 +107,6 @@ export const ASYNC_THUMBNAIL_JOBS: AsyncThumbnailJob[] = [
   textPreviewThumbnailJob
 ]
 
-export function resolveAsyncThumbnailJob(
-  fileType: string,
-  extNoDot: string
-): AsyncThumbnailJob | null {
-  return ASYNC_THUMBNAIL_JOBS.find((job) => job.matchesAsset(fileType, extNoDot)) ?? null
+export function resolveAsyncThumbnailJob(extNoDot: string): AsyncThumbnailJob | null {
+  return ASYNC_THUMBNAIL_JOBS.find((job) => job.matchesAsset(extNoDot)) ?? null
 }

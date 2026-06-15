@@ -1,5 +1,31 @@
 {
   "closePanel": "关闭面板",
+  "fileInfoSection": "文件信息",
+  "assetId": "资产 ID",
+  "type": "类型",
+  "size": "大小",
+  "dimensions": "尺寸",
+  "duration": "时长",
+  "imported": "导入时间",
+  "views": "浏览次数",
+  "tagsSection": "标签",
+  "categoriesSection": "类型",
+  "categoriesHint": "每个资产仅有一种类型——可为系统格式类型或自定义分类；修改类型不会改变预览管线（仍按文件格式处理）。",
+  "resetTypeToFormat": "恢复为检测到的格式类型",
+  "addCategory": "添加分类…",
+  "categoryNamePlaceholder": "分类名称…",
+  "createNewCategory": "+ 新建分类",
+  "addTag": "添加标签…",
+  "tagNamePlaceholder": "标签名称…",
+  "createTag": "创建",
+  "createNewTag": "+ 新建标签",
+  "colorAnalysisSection": "色彩分析",
+  "dominantColor": "主色",
+  "sourceLinkSection": "来源链接",
+  "openFile": "打开",
+  "showInExplorer": "在资源管理器中显示",
+  "deleteAsset": "删除资产",
+  "confirmDeleteAsset": "确定删除「{{name}}」？",
   "storage": "存储",
   "storageRefMissing": "引用（源缺失）",
   "storageRefOnly": "仅引用",
@@ -56,13 +82,21 @@
     "type": {
       "subtitle": "类型筛选",
       "infoSection": "类型信息",
-      "footerHint": "侧栏 Types 中再次点击可取消类型筛选，返回资料库概览。"
+      "footerHint": "侧栏「类型」中再次点击可取消筛选，返回资料库概览。"
+    },
+    "category": {
+      "subtitle": "分类筛选",
+      "infoSection": "分类信息",
+      "assetCount": "共 {{count}} 项素材",
+      "footerHint": "侧栏「类型」中再次点击可取消类型筛选，返回资料库概览。"
     },
     "labels": {
       "name": "名称",
       "totalAssets": "素材总数",
       "folders": "文件夹",
       "tags": "标签",
+      "categories": "分类",
+      "usageCount": "关联素材",
       "itemPacks": "条目包",
       "dbRows": "数据库行",
       "assetCount": "素材数",
@@ -82,7 +116,10 @@
       "sizePreset": "尺寸 {{value}}",
       "volume": "体积 {{value}}",
       "date": "日期 {{value}}",
-      "tags": "{{count}} 个标签筛选"
+      "extension": "扩展名 {{value}}",
+      "tags": "{{count}} 个标签筛选",
+      "types": "{{count}} 个类型筛选",
+      "categories": "{{count}} 个分类筛选"
     },
     "fileTypeDesc": {
       "image": "图片与照片类素材",

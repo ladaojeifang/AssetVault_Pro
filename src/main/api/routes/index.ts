@@ -4,6 +4,7 @@ import { handleLibraryInfo, handleLibraryState, handleLibrarySwitch, handleLibra
 import {
   handleAssetDelete,
   handleAssetGet,
+  handleAssetListExtensions,
   handleAssetImport,
   handleAssetImportFromUrl,
   handleAssetImportBatch,
@@ -56,6 +57,15 @@ import {
   handleTagRemove,
   handleTagUpdate
 } from '../handlers/tag'
+import {
+  handleCategoryAssign,
+  handleCategoryCreate,
+  handleCategoryDelete,
+  handleCategoryGet,
+  handleCategoryInfo,
+  handleCategoryRemove,
+  handleCategoryUpdate
+} from '../handlers/category'
 
 type RouteHandler = (ctx: ApiRequestContext) => Promise<unknown>
 
@@ -84,6 +94,7 @@ const routes: RouteDef[] = [
 
   { method: 'GET', path: `${API_PREFIX}/asset/get`, handler: (ctx) => handleAssetGet({ ...ctx.query }) },
   { method: 'POST', path: `${API_PREFIX}/asset/get`, handler: (ctx) => handleAssetGet(ctx.body) },
+  { method: 'GET', path: `${API_PREFIX}/asset/extensions`, handler: async () => handleAssetListExtensions() },
   { method: 'GET', path: `${API_PREFIX}/asset/info`, handler: (ctx) => handleAssetInfo(ctx.query.id) },
   { method: 'POST', path: `${API_PREFIX}/asset/import`, handler: (ctx) => handleAssetImport(ctx.body) },
   { method: 'POST', path: `${API_PREFIX}/asset/importFromURL`, handler: (ctx) => handleAssetImportFromUrl(ctx.body) },
@@ -123,7 +134,15 @@ const routes: RouteDef[] = [
   { method: 'PATCH', path: `${API_PREFIX}/tag/update`, handler: (ctx) => handleTagUpdate(ctx.body) },
   { method: 'DELETE', path: `${API_PREFIX}/tag/delete`, handler: (ctx) => handleTagDelete(ctx.body) },
   { method: 'POST', path: `${API_PREFIX}/tag/assign`, handler: (ctx) => handleTagAssign(ctx.body) },
-  { method: 'POST', path: `${API_PREFIX}/tag/remove`, handler: (ctx) => handleTagRemove(ctx.body) }
+  { method: 'POST', path: `${API_PREFIX}/tag/remove`, handler: (ctx) => handleTagRemove(ctx.body) },
+
+  { method: 'GET', path: `${API_PREFIX}/category/get`, handler: () => handleCategoryGet() },
+  { method: 'GET', path: `${API_PREFIX}/category/info`, handler: (ctx) => handleCategoryInfo(ctx.query.id) },
+  { method: 'POST', path: `${API_PREFIX}/category/create`, handler: (ctx) => handleCategoryCreate(ctx.body) },
+  { method: 'PATCH', path: `${API_PREFIX}/category/update`, handler: (ctx) => handleCategoryUpdate(ctx.body) },
+  { method: 'DELETE', path: `${API_PREFIX}/category/delete`, handler: (ctx) => handleCategoryDelete(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/category/assign`, handler: (ctx) => handleCategoryAssign(ctx.body) },
+  { method: 'POST', path: `${API_PREFIX}/category/remove`, handler: (ctx) => handleCategoryRemove(ctx.body) }
 ]
 
 const FULLPAGE_SESSION_ID_RE = /^\/api\/v1\/asset\/fullPageSession\/([^/]+)$/

@@ -5,13 +5,7 @@ import { createFlowNodeId } from '../components/AiCanvas/genNodeData'
 import { parseFontMetadataFromAsset, fontFamilyLabel } from './fontAssetMeta'
 import { FONT_THUMB_SAMPLE_TEXT } from '@/shared/fontTypes'
 import { toBlobPart } from '@/shared/blobUtils'
-
-const FILE_TYPE_TO_BASE: Partial<Record<AssetItem['fileType'], FlowNodeType>> = {
-  image: 'base_image',
-  video: 'base_video',
-  audio: 'base_audio',
-  font: 'base_text'
-}
+import { resolveCanvasFlowType, resolveFormatCapabilities } from '@/shared/formatCapabilities'
 
 const MEDIA_MIME: Record<string, string> = {
   mp4: 'video/mp4',
@@ -65,7 +59,8 @@ export function revokePreviewUrlsFromNodes(nodes: Node[]): void {
 }
 
 export async function resolveAssetPreviewUrl(asset: AssetItem): Promise<string | null> {
-  if (asset.fileType === 'video' || asset.fileType === 'audio') {
+  const pipeline = resolveFormatCapabilities(asset.extension).importPipeline
+  if (pipeline === 'video' || pipeline === 'audio') {
     return resolveMediaBlobUrl(asset)
   }
 
@@ -76,7 +71,7 @@ export async function resolveAssetPreviewUrl(asset: AssetItem): Promise<string |
     /* ignore */
   }
 
-  if (asset.fileType === 'image') {
+  if (pipeline === 'image') {
     return resolveMediaBlobUrl(asset)
   }
 
@@ -113,7 +108,7 @@ export async function buildBaseAssetNodesFromAssetIds(
       continue
     }
 
-    const flowType = FILE_TYPE_TO_BASE[asset.fileType]
+    const flowType = resolveCanvasFlowType(asset.extension)
     if (!flowType) {
       skipped++
       continue
@@ -126,7 +121,7 @@ export async function buildBaseAssetNodesFromAssetIds(
     let content = ''
     let fontAssetId: string | undefined
     let fontFamilyName: string | undefined
-    if (asset.fileType === 'font') {
+    if (resolveFormatCapabilities(asset.extension).importPipeline === 'font') {
       const meta = parseFontMetadataFromAsset(asset)
       content = meta?.sampleText?.trim() || FONT_THUMB_SAMPLE_TEXT
       fontAssetId = asset.id

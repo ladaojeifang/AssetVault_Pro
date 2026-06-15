@@ -1,8 +1,9 @@
 import type { QueryParams } from '@/shared/types'
 import type { ColorBucket } from '@/shared/colorBucket'
 import type { DatePreset, SizePreset } from '@/shared/assetFilters'
+import { normalizeExtensionFilter } from '@/shared/assetFilters'
 import type { FileType } from '@/shared/types'
-import { queryAssets, getAssetById, deleteAssets } from '../../services/assetQueryService'
+import { queryAssets, getAssetById, deleteAssets, listDistinctExtensions } from '../../services/assetQueryService'
 import {
   importAssetFromPath,
   importAssetFiles,
@@ -59,6 +60,8 @@ export function parseAssetQueryInput(input: Record<string, unknown>): QueryParam
     folderId: typeof input.folderId === 'string' ? input.folderId : undefined,
     fileType: typeof input.fileType === 'string' ? (input.fileType as FileType) : undefined,
     tags: parseTags(input.tags ?? input.tagIds),
+    categories: parseTags(input.categories ?? input.categoryIds),
+    typeFilters: parseTags(input.typeFilters ?? input.typeFilterIds),
     colorBucket:
       typeof input.colorBucket === 'string' ? (input.colorBucket as ColorBucket) : undefined,
     sizePreset:
@@ -69,6 +72,10 @@ export function parseAssetQueryInput(input: Record<string, unknown>): QueryParam
       input.maxFileSizeMb !== undefined ? parseIntParam(input.maxFileSizeMb, 0) : undefined,
     datePreset:
       typeof input.datePreset === 'string' ? (input.datePreset as DatePreset) : undefined,
+    extension:
+      typeof input.extension === 'string'
+        ? normalizeExtensionFilter(input.extension) ?? undefined
+        : undefined,
     sortBy:
       typeof input.sortBy === 'string'
         ? (input.sortBy as QueryParams['sortBy'])
@@ -102,6 +109,12 @@ export async function handleAssetGet(input: Record<string, unknown>) {
     offset,
     limit: result.pageSize
   })
+}
+
+export async function handleAssetListExtensions() {
+  assertLibraryReady()
+  const extensions = await listDistinctExtensions()
+  return jsendSuccess({ extensions })
 }
 
 export async function handleAssetInfo(id: string | undefined, incrementView = true) {

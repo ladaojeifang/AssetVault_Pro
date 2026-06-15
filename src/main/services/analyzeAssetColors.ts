@@ -1,6 +1,7 @@
 import { readFileSync, statSync, existsSync } from 'fs'
 import { isSvgFilePath } from '@/shared/svgFormats'
 import { isExrFilePath } from '@/shared/exrFormats'
+import { resolveFormatCapabilities } from '@/shared/formatCapabilities'
 import { renderExrThumbnailWebp } from './exrThumbnailRender'
 import { extractPaletteFromImageBuffer, serializePaletteColors } from '../utils/colorPalette'
 import {
@@ -19,15 +20,17 @@ export type AssetColorAnalysis = {
 
 async function loadRasterForColorAnalysis(
   absPath: string,
-  fileType: string,
+  extension: string,
   absThumbnailPath?: string,
   assetId?: string
 ): Promise<Buffer | null> {
-  if (fileType === 'video' && existsSync(absPath)) {
+  const caps = resolveFormatCapabilities(extension)
+
+  if (caps.importPipeline === 'video' && existsSync(absPath)) {
     return extractVideoFramePngBestEffort(absPath)
   }
 
-  if (fileType === 'image' && existsSync(absPath)) {
+  if (caps.importPipeline === 'image' && existsSync(absPath)) {
     if (isSvgFilePath(absPath)) {
       if (assetId && isSvgRasterSkipped(assetId)) {
         return null
@@ -59,11 +62,15 @@ async function loadRasterForColorAnalysis(
     // Guard against loading huge source images for palette extraction
     try {
       const st = statSync(absPath)
-      if (st.size > 200 * 1024 * 1024) { // 200MB limit for palette
-        console.warn(`[analyzeColors] Skipping large source for palette (${(st.size / 1024 / 1024).toFixed(1)}MB): ${absPath}`)
+      if (st.size > 200 * 1024 * 1024) {
+        console.warn(
+          `[analyzeColors] Skipping large source for palette (${(st.size / 1024 / 1024).toFixed(1)}MB): ${absPath}`
+        )
         return null
       }
-    } catch { /* if stat fails, let readFileSync report the error */ }
+    } catch {
+      /* if stat fails, let readFileSync report the error */
+    }
     return readFileSync(absPath)
   }
 
@@ -81,12 +88,12 @@ async function loadRasterForColorAnalysis(
 
 export async function analyzeColorsFromFile(
   absPath: string,
-  fileType: string,
+  extension: string,
   absThumbnailPath?: string,
   assetId?: string
 ): Promise<AssetColorAnalysis | null> {
   try {
-    const buffer = await loadRasterForColorAnalysis(absPath, fileType, absThumbnailPath, assetId)
+    const buffer = await loadRasterForColorAnalysis(absPath, extension, absThumbnailPath, assetId)
     if (!buffer?.length) return null
 
     const { dominantColor, colors } = await extractPaletteFromImageBuffer(buffer)

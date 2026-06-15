@@ -1,5 +1,9 @@
 {
   "allAssets": "All Assets",
+  "favorites": "Favorites",
+  "addFavorite": "Add to favorites",
+  "removeFavorite": "Remove from favorites",
+  "emptyFavorites": "No favorites yet. Click the star on an asset card to save it here.",
   "parent": "Parent",
   "folder": "Folder",
   "backTo": "← Back to \"{{name}}\"",
@@ -21,6 +25,12 @@
   "all": "All",
   "filterByType": "Filter by type",
   "filterByDate": "Filter by import date",
+  "filterByExtension": "Filter by extension",
+  "extensionFilter": {
+    "selectTitle": "Pick an extension from this library",
+    "inputTitle": "Type an extension (with or without a dot)",
+    "placeholder": "e.g. png"
+  },
   "sortBy": "Sort by {{label}}",
   "columns": {
     "thumb": "Img",
@@ -38,6 +48,7 @@
     "font": "Font",
     "design": "Design",
     "document": "Document",
+    "3d": "3D",
     "code": "Code",
     "other": "Other"
   },
@@ -55,6 +66,8 @@
     "sectionThumbnail": "Thumbnail",
     "openExplorer": "Open in Explorer",
     "addToFolder": "Add to folder",
+    "setAssetType": "Set type",
+    "addToCategory": "Add to category",
     "addToOtherLibrary": "Add to another library",
     "setCover": "Set as folder cover",
     "rename": "Rename",
@@ -72,10 +85,14 @@
     "refreshThumb": "Refresh thumbnail",
     "delete": "Delete",
     "deleteMulti": "Delete ({{count}})",
-    "noFolders": "No folders"
+    "noFolders": "No folders",
+    "noCategories": "No categories"
   },
+  "category": "Category",
   "notify": {
     "addedToFolder": "Added {{count}} item(s) to \"{{name}}\"",
+    "setAssetType": "Set type on {{count}} item(s): \"{{name}}\"",
+    "addedToCategory": "Added {{count}} item(s) to category \"{{name}}\"",
     "addToFolderFailed": "Failed to add to folder",
     "confirmDelete": "Delete {{count}} item(s)?",
     "copiedToLibrary": "Copied {{copied}} item(s) to another library",
@@ -113,8 +130,11 @@
     "dominantColor": "Dominant color",
     "importDate": "Import date",
     "date": "Date",
-    "clear": "Clear filters"
+    "clear": "Clear filters",
+    "activeTypes": "Sidebar type filters",
+    "activeTags": "Sidebar tag filters"
   },
+  "userCategoriesOnCard": "{{count}} user categories",
   "colorBuckets": {
     "red": "Red",
     "orange": "Orange",

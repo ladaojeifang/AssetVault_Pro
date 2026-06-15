@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { handleFolderOperations } from './handlers/folders'
 import { handleAssetOperations } from './handlers/assets'
 import { handleTagOperations } from './handlers/tags'
+import { handleCategoryOperations } from './handlers/categories'
 import { handleFsOperations } from './handlers/fs'
 import { handleLibraryOperations } from './handlers/library'
 import { handleAiCanvasOperations } from './handlers/aiCanvas'
@@ -44,6 +45,7 @@ export function registerIpcHandlers(ipc: typeof ipcMain): void {
   handleFolderOperations(ipc)
   handleAssetOperations(ipc)
   handleTagOperations(ipc)
+  handleCategoryOperations(ipc)
   handleFsOperations(ipc)
   handleLibraryOperations(ipc)
   handleAiCanvasOperations(ipc)

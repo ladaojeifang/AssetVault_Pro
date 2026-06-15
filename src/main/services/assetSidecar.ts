@@ -2,9 +2,13 @@ import { writeFileSync, renameSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { eq } from 'drizzle-orm'
 import { getDatabase } from '../db'
-import { assets, tags, assetTags, assetFolders } from '../db/schema'
+import { assets, tags, assetTags, assetFolders, categories } from '../db/schema'
 import { getLibraryRoot, itemThumbRelative } from './libraryBundle'
 import { CONTENT_HASH_ALGO } from '@/shared/importTypes'
+import {
+  fileTypeFromSystemTypeCategoryId,
+  isSystemTypeCategoryId
+} from '@/shared/assetTypeRegistry'
 
 /** Relative path to meta.json for a given asset id */
 export function metaJsonRelative(assetId: string): string {
@@ -14,6 +18,7 @@ export function metaJsonRelative(assetId: string): string {
 type Db = ReturnType<typeof getDatabase>
 
 export type SidecarTag = { id: string; name: string }
+export type SidecarType = { id: string; name: string }
 
 export function writeAssetSidecarMeta(
   row: {
@@ -23,6 +28,7 @@ export function writeAssetSidecarMeta(
     extension: string
     mimeType: string
     fileType: string
+    typeId?: string
     folderId: string | null
     filePath: string
     fileSize: number
@@ -45,7 +51,8 @@ export function writeAssetSidecarMeta(
   },
   tagList: SidecarTag[],
   folderIds: string[] = [],
-  libraryRoot?: string
+  libraryRoot?: string,
+  typeInfo: SidecarType | null = null
 ): void {
   const root = libraryRoot ?? getLibraryRoot()
   const dir = join(root, 'items', row.id)
@@ -62,6 +69,7 @@ export function writeAssetSidecarMeta(
   const ts = (d: Date | null | undefined) =>
     d instanceof Date ? Math.floor(d.getTime() / 1000) : null
 
+  const typeId = row.typeId ?? typeInfo?.id ?? `__sys:${row.fileType}`
   const payload = {
     id: row.id,
     metaVersion: 1,
@@ -70,6 +78,10 @@ export function writeAssetSidecarMeta(
     extension: row.extension.replace(/^\./, '').toLowerCase(),
     mimeType: row.mimeType,
     fileType: row.fileType,
+    typeId,
+    type: typeInfo ?? (isSystemTypeCategoryId(typeId)
+      ? { id: typeId, name: fileTypeFromSystemTypeCategoryId(typeId) ?? row.fileType }
+      : null),
     folderId: row.folderId,
     folderIds,
     fileSize: row.fileSize,
@@ -99,7 +111,6 @@ export function writeAssetSidecarMeta(
     }
   }
 
-  // Atomic write: write to tmp then rename to avoid corrupt meta.json on crash
   const metaPath = join(dir, 'meta.json')
   const tmpPath = metaPath + '.tmp.' + Date.now()
   const content = JSON.stringify(payload, null, 2)
@@ -107,8 +118,28 @@ export function writeAssetSidecarMeta(
   renameSync(tmpPath, metaPath)
 }
 
-export async function syncAssetSidecarFromDb(database: Db, assetId: string): Promise<void> {
-  const root = getLibraryRoot()
+async function resolveSidecarType(
+  database: Db,
+  typeId: string
+): Promise<SidecarType | null> {
+  if (isSystemTypeCategoryId(typeId)) {
+    const ft = fileTypeFromSystemTypeCategoryId(typeId)
+    return ft ? { id: typeId, name: ft } : null
+  }
+  const row = await database
+    .select({ id: categories.id, name: categories.name })
+    .from(categories)
+    .where(eq(categories.id, typeId))
+    .get()
+  return row ?? null
+}
+
+export async function syncAssetSidecarFromDb(
+  database: Db,
+  assetId: string,
+  libraryRoot?: string
+): Promise<void> {
+  const root = libraryRoot ?? getLibraryRoot()
   const itemDir = join(root, 'items', assetId)
   if (!existsSync(itemDir)) return
 
@@ -128,5 +159,13 @@ export async function syncAssetSidecarFromDb(database: Db, assetId: string): Pro
     .where(eq(assetFolders.assetId, assetId))
     .all()
 
-  writeAssetSidecarMeta(row, tagRows, folderIdRows.map((r) => r.id))
+  const typeInfo = await resolveSidecarType(database, row.typeId)
+
+  writeAssetSidecarMeta(
+    row,
+    tagRows,
+    folderIdRows.map((r) => r.id),
+    root,
+    typeInfo
+  )
 }

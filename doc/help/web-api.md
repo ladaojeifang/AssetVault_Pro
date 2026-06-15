@@ -69,7 +69,7 @@ Playground 需加载 CDN 上的 Swagger UI；离线环境请直接阅读 OpenAPI
 | GET | `/api/v1/library/info` | 当前库信息与统计 |
 | GET | `/api/v1/library/state` | 活动库路径、最近列表等 |
 | POST | `/api/v1/library/switch` | 切换资料库 |
-| POST | `/api/v1/library/importFromLibrary` | 从其他资料库合并导入 |
+| POST | `/api/v1/library/importFromLibrary` | 从其他资料库合并导入（文件夹、标签、`type_id`；SHA-256 去重） |
 
 ### 资产 `asset`
 
@@ -133,6 +133,26 @@ Playground 需加载 CDN 上的 Swagger UI；离线环境请直接阅读 OpenAPI
 | PATCH | `/api/v1/tag/update` |
 | DELETE | `/api/v1/tag/delete` |
 
+### 类型 `category`（用户分类 + 系统格式）
+
+| 方法 | 路径 |
+|------|------|
+| GET | `/api/v1/category/get` · `/info` |
+| POST | `/api/v1/category/create` · `/assign` · `/remove` |
+| PATCH | `/api/v1/category/update` |
+| DELETE | `/api/v1/category/delete` |
+
+---
+
+## 导入与元数据
+
+| 场景 | API | 标签 / 类型 |
+|------|-----|-------------|
+| 本机文件、URL、截图等单资产导入 | `POST /asset/import*`、会话 `finish` | **分两步**：导入后 `POST /tag/assign`、`POST /category/assign`（`typeId`；不可内联 `tagIds` / `typeId` 于导入体） |
+| 整库合并 | `POST /library/importFromLibrary` | 自动按源库合并文件夹、标签、`type_id` |
+
+单资产导入字段为 `filePath`（非 `path`）。详见 [web-api-v1-guide.md](../web-api-v1-guide.md) §3.7、§5.2.1。
+
 ---
 
 ## 浏览器扩展
@@ -167,15 +187,19 @@ BASE = "http://127.0.0.1:41596/api/v1"
 
 # 导入本地文件
 r = requests.post(f"{BASE}/asset/import", json={
-    "path": "C:/Users/example/image.png"
+    "filePath": "C:/Users/example/image.png",
+    "duplicatePolicy": "use_existing"
 })
 print(r.json())
 
-# 从 URL 导入
+# 从 URL 导入后打标签与用户分类
 r = requests.post(f"{BASE}/asset/importFromURL", json={
     "url": "https://example.com/photo.jpg"
 })
-print(r.json())
+asset_id = r.json()["data"]["assetId"]
+requests.post(f"{BASE}/tag/assign", json={"assetIds": [asset_id], "tagIds": ["标签UUID"]})
+requests.post(f"{BASE}/category/assign", json={"assetIds": [asset_id], "typeId": "分类UUID"})
+# 或系统类型： "typeId": "__sys:image"
 ```
 
 远程访问时须在请求头添加 `Authorization: Bearer <your-token>`。

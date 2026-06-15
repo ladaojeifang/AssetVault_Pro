@@ -19,6 +19,7 @@ import {
   mergeAssetMetadata,
   openSourceLibraryDb,
   phaseFolders,
+  phaseCategories,
   phaseTags,
   readSourceDisplayName,
   readSourceLibraryMode,
@@ -74,6 +75,8 @@ async function importArchiveToArchiveFromPath(
     foldersMerged: 0,
     tagsCreated: 0,
     tagsMerged: 0,
+    categoriesCreated: 0,
+    categoriesMerged: 0,
     assetsAdded: 0,
     assetsSkippedDuplicate: 0,
     assetsFailed: 0,
@@ -82,11 +85,17 @@ async function importArchiveToArchiveFromPath(
 
   try {
     emitImportProgress(onProgress, win, { phase: 'tags', current: 0, total: 1, filename: '', status: 'processing' })
-    const { tagMap, sourceLibraryTagId, folderMap } = await withSqliteTransaction(async () => {
+    const { tagMap, sourceLibraryTagId, folderMap, categoryMap } = await withSqliteTransaction(async () => {
       const tagsResult = await phaseTags(sourceDb, targetDb, sourceLibraryTagName, stats)
+      const categoryMapResult = await phaseCategories(sourceDb, targetDb, stats)
       emitImportProgress(onProgress, win, { phase: 'folders', current: 0, total: 1, filename: '', status: 'processing' })
       const folderMapResult = await phaseFolders(sourceDb, targetDb, stats)
-      return { tagMap: tagsResult.tagMap, sourceLibraryTagId: tagsResult.sourceLibraryTagId, folderMap: folderMapResult }
+      return {
+        tagMap: tagsResult.tagMap,
+        sourceLibraryTagId: tagsResult.sourceLibraryTagId,
+        folderMap: folderMapResult,
+        categoryMap: categoryMapResult
+      }
     })
 
     const sourceAssets = loadSourceAssets(sourceDb)
@@ -162,7 +171,9 @@ async function importArchiveToArchiveFromPath(
             sourceRoot,
             row,
             contentHash,
-            contentAbs
+            contentAbs,
+            categoryMap,
+            sourceDb
           )
 
           await applySourceFolders(targetDb, newId, row, folderMap, sourceDb)
@@ -223,6 +234,8 @@ async function importArchiveToArchiveFromPath(
       foldersMerged: stats.foldersMerged,
       tagsCreated: stats.tagsCreated,
       tagsMerged: stats.tagsMerged,
+      categoriesCreated: stats.categoriesCreated,
+      categoriesMerged: stats.categoriesMerged,
       sourceLibraryTagName,
       errors: stats.errors
     }

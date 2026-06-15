@@ -6,17 +6,27 @@ import { getDatabase } from '../db'
 import { assets } from '../db/schema'
 import { getLibraryRoot, itemPackFileRelative, ITEMS_DIR } from './libraryBundle'
 import { getFileType } from '../utils/fileUtils'
+import { systemTypeCategoryId } from '@/shared/assetTypeRegistry'
+import { resolveFormatCapabilities } from '@/shared/formatCapabilities'
 import { finalizeAssetRecords } from './assetSearchIndex'
-import { schedule3dThumbnailAfterImport } from './regenerateModelThumbnails'
-import { scheduleEmbeddedDccThumbnailAfterImport } from './regenerateEmbeddedDccThumbnails'
-import { scheduleTextPreviewThumbnailAfterImport } from './regenerateTextPreviewThumbnails'
+import { scheduleDeferredThumbnailAfterImport } from './thumbnailJobs'
 import { isModelThumbnailSkipped } from './modelThumbnailSkip'
-import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
-import { isEmbeddedDccThumbExtension } from '@/shared/embeddedDccFormats'
-import { isTextPreviewExtension } from '@/shared/textPreviewFormats'
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function scheduleRepairThumbnails(
+  database: ReturnType<typeof getDatabase>,
+  id: string,
+  origAbs: string,
+  extNoDot: string,
+  hasThumbnail: boolean
+): void {
+  const caps = resolveFormatCapabilities(extNoDot)
+  if (!caps.asyncThumbnail || hasThumbnail) return
+  if (caps.asyncThumbnail === 'model3d' && isModelThumbnailSkipped(id)) return
+  scheduleDeferredThumbnailAfterImport(database, id, origAbs, extNoDot)
+}
 
 /**
  * Recover items/{id}/original.* folders that were copied but never got meta.json / DB rows
@@ -52,27 +62,7 @@ export async function repairOrphanItemPacks(): Promise<number> {
     const existing = await database.select().from(assets).where(eq(assets.id, id)).get()
     if (existing) {
       await finalizeAssetRecords(database, id)
-      if (
-        existing.fileType === '3d' &&
-        isModel3dPreviewExtension(extNoDot) &&
-        !existing.hasThumbnail &&
-        !isModelThumbnailSkipped(id)
-      ) {
-        void schedule3dThumbnailAfterImport(database, id, origAbs, extNoDot)
-      } else if (
-        existing.fileType === '3d' &&
-        isEmbeddedDccThumbExtension('.' + extNoDot) &&
-        !existing.hasThumbnail &&
-        !isModelThumbnailSkipped(id)
-      ) {
-        void scheduleEmbeddedDccThumbnailAfterImport(database, id, origAbs, extNoDot)
-      } else if (
-        (existing.fileType === 'code' || existing.fileType === 'document') &&
-        isTextPreviewExtension('.' + extNoDot) &&
-        !existing.hasThumbnail
-      ) {
-        void scheduleTextPreviewThumbnailAfterImport(database, id, origAbs, extNoDot, existing.fileType)
-      }
+      scheduleRepairThumbnails(database, id, origAbs, extNoDot, existing.hasThumbnail)
       repaired++
       continue
     }
@@ -93,6 +83,7 @@ export async function repairOrphanItemPacks(): Promise<number> {
         extension: extNoDot,
         mimeType,
         fileType,
+        typeId: systemTypeCategoryId(fileType),
         folderId: null,
         filePath: relOriginal,
         importSource: `orphan-repair:${id}`,
@@ -109,16 +100,7 @@ export async function repairOrphanItemPacks(): Promise<number> {
       const row = await database.select().from(assets).where(eq(assets.id, id)).get()
       if (row) {
         await finalizeAssetRecords(database, id)
-        if (fileType === '3d' && isModel3dPreviewExtension(extNoDot) && !isModelThumbnailSkipped(id)) {
-          void schedule3dThumbnailAfterImport(database, id, origAbs, extNoDot)
-        } else if (fileType === '3d' && isEmbeddedDccThumbExtension('.' + extNoDot) && !isModelThumbnailSkipped(id)) {
-          void scheduleEmbeddedDccThumbnailAfterImport(database, id, origAbs, extNoDot)
-        } else if (
-          (fileType === 'code' || fileType === 'document') &&
-          isTextPreviewExtension('.' + extNoDot)
-        ) {
-          void scheduleTextPreviewThumbnailAfterImport(database, id, origAbs, extNoDot, fileType)
-        }
+        scheduleRepairThumbnails(database, id, origAbs, extNoDot, false)
       }
       repaired++
       console.log(`[Library] Repaired orphan item pack: ${id}`)

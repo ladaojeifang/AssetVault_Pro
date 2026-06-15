@@ -12,6 +12,7 @@ import { toCanonicalFilePath } from '../../utils/pathUtils'
 import { assertPlainObject, assertString, assertStringArray } from '../ipcGuards'
 import { MAX_FOLDER_LEVEL } from '@/shared/folderLimits'
 import { getMimeForExtension, isFolderIconExtension } from '@/shared/assetFormatRegistry'
+import { canUseAssetAsFolderCover } from '@/shared/formatCapabilities'
 const FOLDER_ICONS_PREFIX = 'folder-icons/'
 
 function isFolderIconStoredPath(icon: string): boolean {
@@ -63,7 +64,7 @@ export function handleFolderOperations(ipc: typeof ipcMain): void {
     assertString('assetId', assetId)
     const asset = await database.select().from(assets).where(eq(assets.id, assetId)).get()
     if (!asset) throw new Error('资产不存在')
-    if (asset.fileType !== 'image' && !asset.hasThumbnail) {
+    if (!canUseAssetAsFolderCover(asset.extension, asset.hasThumbnail)) {
       throw new Error('仅支持有缩略图的图片或视频作为封面')
     }
     const link = await database

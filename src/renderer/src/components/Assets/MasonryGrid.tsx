@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AssetItem } from '@/shared/types'
+import type { AssetItem, CategoryItem } from '@/shared/types'
 import { formatFileSize } from '@/shared/types'
 import { canAssetPreview } from '@/shared/assetPreviewRegistry'
+import { shouldRenderThumbnailSlot, usesContainThumbnailFit } from '@/shared/formatCapabilities'
 import { FileTypePlaceholder } from '../Common/FileTypePlaceholder'
+import { FavoriteStarButton } from '../Common/FavoriteStarButton'
 import {
   MASONRY_GAP,
   MASONRY_COLUMN_WIDTH_CHANGED,
@@ -21,6 +23,7 @@ export interface MasonryGridProps {
   scrollElementRef: React.RefObject<HTMLElement | null>
   /** Bump when folder chrome above the grid changes height */
   layoutKey?: string
+  categoryMap?: Map<string, CategoryItem>
   selectedIds: Set<string>
   showCaptions?: boolean
   onAssetClick: (id: string, e: React.MouseEvent) => void
@@ -30,18 +33,21 @@ export interface MasonryGridProps {
     asset: { id: string; filename: string; filePath: string; resolvedFilePath?: string }
   ) => void
   onAssetContextMenu: (e: React.MouseEvent, asset: AssetItem) => void
+  onToggleFavorite: (id: string, favorite: boolean) => void
 }
 
 const MasonryGrid: React.FC<MasonryGridProps> = ({
   assets,
   scrollElementRef,
   layoutKey = '',
+  categoryMap,
   selectedIds,
   showCaptions = false,
   onAssetClick,
   onAssetDoubleClick,
   onDragStart,
-  onAssetContextMenu
+  onAssetContextMenu,
+  onToggleFavorite
 }) => {
   const rootRef = useRef<HTMLDivElement>(null)
   const [columnWidth, setColumnWidth] = useState(loadMasonryColumnWidth)
@@ -175,10 +181,12 @@ const MasonryGrid: React.FC<MasonryGridProps> = ({
                 imageHeight={item.imageHeight}
                 selected={selectedIds.has(asset.id)}
                 showCaption={showCaptions}
+                categoryMap={categoryMap}
                 onClick={(e) => onAssetClick(asset.id, e)}
                 onDoubleClick={() => onAssetDoubleClick(asset.id)}
                 onDragStart={(e) => onDragStart(e, asset)}
                 onContextMenu={(e) => onAssetContextMenu(e, asset)}
+                onToggleFavorite={onToggleFavorite}
               />
             </div>
           )
@@ -193,23 +201,30 @@ function MasonryAssetTile({
   imageHeight,
   selected,
   showCaption,
+  categoryMap,
   onClick,
   onDoubleClick,
   onDragStart,
-  onContextMenu
+  onContextMenu,
+  onToggleFavorite
 }: {
   asset: AssetItem
   imageHeight: number
   selected: boolean
   showCaption?: boolean
+  categoryMap?: Map<string, CategoryItem>
   onClick: (e: React.MouseEvent) => void
   onDoubleClick: () => void
   onDragStart: (e: React.DragEvent) => void
   onContextMenu: (e: React.MouseEvent) => void
+  onToggleFavorite: (id: string, favorite: boolean) => void
 }) {
   const { t } = useTranslation('assets')
   const [imgError, setImgError] = useState(false)
   const can3dPreview = canAssetPreview(asset, 'model')
+  const assetType = categoryMap?.get(asset.typeId)
+  const assetUserType =
+    assetType && assetType.kind === 'user' ? assetType : undefined
 
   return (
     <div className="flex flex-col h-full min-w-0">
@@ -228,15 +243,11 @@ function MasonryAssetTile({
       >
         <div className="absolute inset-0 bg-av-bg-tertiary">
           {!imgError &&
-          (asset.fileType === 'image' ||
-            asset.fileType === 'video' ||
-            asset.fileType === 'font' ||
-            can3dPreview ||
-            asset.hasThumbnail) ? (
+          (shouldRenderThumbnailSlot(asset.extension, asset.hasThumbnail) || can3dPreview) ? (
             <MasonryThumbnail
               assetId={asset.id}
               cacheKey={asset.updatedAt.getTime()}
-              objectFit={asset.fileType === 'font' ? 'contain' : 'cover'}
+              objectFit={usesContainThumbnailFit(asset.extension) ? 'contain' : 'cover'}
               retryWhileEmpty={can3dPreview && !asset.hasThumbnail}
               onError={() => setImgError(true)}
             />
@@ -270,7 +281,26 @@ function MasonryAssetTile({
             </div>
           )}
 
-          <div className="absolute inset-0 bg-transparent group-hover:bg-av-media-overlay-hover transition-colors duration-150 flex items-end justify-between p-2 opacity-0 group-hover:opacity-100 z-10">
+          <FavoriteStarButton
+            isFavorite={Boolean(asset.isFavorite)}
+            onToggle={() => onToggleFavorite(asset.id, !asset.isFavorite)}
+            className="absolute bottom-2 right-2 z-20 w-7 h-7 bg-black/45 hover:bg-black/60"
+          />
+
+          {assetUserType ? (
+            <div
+              className="absolute bottom-2 left-2 z-10 flex items-center gap-0.5 max-w-[55%]"
+              aria-label={assetUserType.name}
+            >
+              <span
+                className="w-2 h-2 rounded-full shrink-0 ring-1 ring-black/35"
+                style={{ backgroundColor: assetUserType.color }}
+                title={assetUserType.icon ? `${assetUserType.icon} ${assetUserType.name}` : assetUserType.name}
+              />
+            </div>
+          ) : null}
+
+          <div className="absolute inset-0 bg-transparent group-hover:bg-av-media-overlay-hover transition-colors duration-150 flex items-end justify-between p-2 opacity-0 group-hover:opacity-100 z-10 pointer-events-none">
             <span className="text-[10px] text-av-media-overlay-text font-medium truncate max-w-[70%]">
               {asset.filename}
             </span>
@@ -281,6 +311,24 @@ function MasonryAssetTile({
       {showCaption && (
         <div className="mt-1.5 px-0.5 space-y-0.5 shrink-0">
           <p className="text-xs truncate text-av-text-primary leading-tight">{asset.filename}</p>
+          {assetUserType ? (
+            <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 min-w-0">
+              <span
+                className="inline-flex items-center gap-0.5 max-w-full text-[10px] text-av-text-muted"
+                title={assetUserType.name}
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                  style={{ backgroundColor: assetUserType.color }}
+                  aria-hidden
+                />
+                <span className="truncate">
+                  {assetUserType.icon ? `${assetUserType.icon} ` : ''}
+                  {assetUserType.name}
+                </span>
+              </span>
+            </div>
+          ) : null}
           {asset.width && asset.height ? (
             <p className="text-[10px] text-av-text-muted tabular-nums">
               {asset.width} × {asset.height}

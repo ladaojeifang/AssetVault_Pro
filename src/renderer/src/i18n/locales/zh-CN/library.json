@@ -64,7 +64,7 @@
   "importComplete": "导入完成：{{name}}",
   "importSummary": "新增 {{added}} · 跳过重复 {{skipped}} · 失败 {{failed}}",
   "importCatalogStats": "本地新增 {{local}} · 引用新增 {{ref}} · 导入时本地化 {{localized}} · 跳过本地重复 {{skippedLocal}}",
-  "importFolderTagStats": "文件夹 +{{created}} / 合并 {{merged}} · 标签 +{{tagsCreated}} / 合并 {{tagsMerged}}",
+  "importFolderTagStats": "文件夹 +{{created}} / 合并 {{merged}} · 标签 +{{tagsCreated}} / 合并 {{tagsMerged}} · 类型 +{{categoriesCreated}} / 合并 {{categoriesMerged}}",
   "sourceLibraryTag": "源库标签：{{name}}",
   "failureDetails": "{{count}} 条失败详情",
   "dismiss": "关闭",

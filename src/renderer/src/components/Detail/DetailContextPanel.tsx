@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { formatFileSizeMbFilterLabel } from '@/shared/assetFilters'
+import { formatFileSizeMbFilterLabel, formatExtensionFilterLabel } from '@/shared/assetFilters'
 import type { DatePreset, SizePreset } from '@/shared/assetFilters'
+import { splitTypeFilterIds, userCategoryItemsOnly } from '@/shared/assetTypeRegistry'
+import type { FileType } from '@/shared/types'
 import { useApp } from '../../stores/AppContext'
 import { findFolderInTree, getChildFolders } from '../../utils/folderTreeNav'
 import { FolderIconDisplay } from '../Common/FolderIconDisplay'
@@ -12,16 +14,23 @@ import {
   translateSizePresetLabel
 } from '../../utils/assetFilterLabels'
 
-const FILE_TYPE_META: Record<string, { label: string; emoji: string }> = {
-  image: { label: 'Images', emoji: '🖼️' },
-  video: { label: 'Videos', emoji: '🎬' },
-  audio: { label: 'Audio', emoji: '🎵' },
-  font: { label: 'Fonts', emoji: '🔤' },
-  design: { label: 'Design', emoji: '🎨' },
-  document: { label: 'Docs', emoji: '📄' },
-  '3d': { label: '3D', emoji: '📦' },
-  code: { label: 'Code', emoji: '💻' },
-  other: { label: 'Other', emoji: '📎' }
+const FILE_TYPE_EMOJI: Record<string, string> = {
+  image: '🖼️',
+  video: '🎬',
+  audio: '🎵',
+  font: '🔤',
+  design: '🎨',
+  document: '📄',
+  '3d': '📦',
+  code: '💻',
+  other: '📎'
+}
+
+function fileTypeMeta(fileType: string, ta: TFunction<'assets'>) {
+  return {
+    label: ta(`fileTypes.${fileType}` as 'fileTypes.image', { defaultValue: fileType }),
+    emoji: FILE_TYPE_EMOJI[fileType] ?? '📎'
+  }
 }
 
 function buildActiveFilterChips(
@@ -34,7 +43,10 @@ function buildActiveFilterChips(
     fileSizeMinMb: number | null
     fileSizeMaxMb: number | null
     datePresetFilter: DatePreset | null
+    extensionFilter: string | null
     tagFilters: string[]
+    typeFilters: string[]
+    excludeTypeId?: string
   }
 ): string[] {
   const filters: string[] = []
@@ -55,8 +67,17 @@ function buildActiveFilterChips(
       t('context.filter.date', { value: translateDatePresetLabel(ta, p.datePresetFilter) })
     )
   }
+  if (p.extensionFilter) {
+    filters.push(
+      t('context.filter.extension', { value: formatExtensionFilterLabel(p.extensionFilter) })
+    )
+  }
   if (p.tagFilters.length > 0) {
     filters.push(t('context.filter.tags', { count: p.tagFilters.length }))
+  }
+  const extraTypeCount = p.typeFilters.filter((id) => id !== p.excludeTypeId).length
+  if (extraTypeCount > 0) {
+    filters.push(t('context.filter.types', { count: extraTypeCount }))
   }
   return filters
 }
@@ -217,11 +238,11 @@ function FolderContextView({ onClose }: { onClose: () => void }) {
   )
 }
 
-function TypeContextView({ onClose }: { onClose: () => void }) {
+function TypeContextView({ fileType, onClose }: { fileType: FileType; onClose: () => void }) {
   const { t } = useTranslation('detail')
   const { t: ta } = useTranslation('assets')
   const {
-    fileTypeFilter,
+    typeFilters,
     totalAssets,
     debouncedSearch,
     tagFilters,
@@ -229,13 +250,11 @@ function TypeContextView({ onClose }: { onClose: () => void }) {
     sizePresetFilter,
     fileSizeMinMb,
     fileSizeMaxMb,
-    datePresetFilter
+    datePresetFilter,
+    extensionFilter
   } = useApp()
-  const meta = fileTypeFilter ? FILE_TYPE_META[fileTypeFilter] : null
-
-  if (!meta || !fileTypeFilter) {
-    return <LibraryContextView onClose={onClose} />
-  }
+  const meta = fileTypeMeta(fileType, ta)
+  const primaryTypeId = typeFilters.find((id) => id.startsWith('__sys:')) ?? null
 
   const filters = buildActiveFilterChips(t, ta, {
     debouncedSearch,
@@ -244,10 +263,13 @@ function TypeContextView({ onClose }: { onClose: () => void }) {
     fileSizeMinMb,
     fileSizeMaxMb,
     datePresetFilter,
-    tagFilters
+    extensionFilter,
+    tagFilters,
+    typeFilters,
+    excludeTypeId: primaryTypeId ?? undefined
   })
 
-  const desc = t(`context.fileTypeDesc.${fileTypeFilter}` as 'context.fileTypeDesc.image')
+  const desc = t(`context.fileTypeDesc.${fileType}` as 'context.fileTypeDesc.image')
 
   return (
     <DetailPanelShell
@@ -262,7 +284,10 @@ function TypeContextView({ onClose }: { onClose: () => void }) {
       }
     >
       <ContextInfoSection title={t('context.type.infoSection')}>
-        <ContextInfoRow label={t('context.labels.typeId')} value={fileTypeFilter} />
+        <ContextInfoRow
+          label={t('context.labels.typeId')}
+          value={primaryTypeId ?? `__sys:${fileType}`}
+        />
         <ContextInfoRow label={t('context.labels.matchCount')} value={totalAssets.toLocaleString()} />
         {filters.length > 0 ? (
           <ContextInfoRow label={t('context.labels.extraFilters')} value={filters.join(' · ')} />
@@ -273,9 +298,78 @@ function TypeContextView({ onClose }: { onClose: () => void }) {
   )
 }
 
+function CategoryContextView({ categoryId, onClose }: { categoryId: string; onClose: () => void }) {
+  const { t } = useTranslation('detail')
+  const { t: ta } = useTranslation('assets')
+  const {
+    categories,
+    totalAssets,
+    debouncedSearch,
+    tagFilters,
+    colorBucketFilter,
+    sizePresetFilter,
+    fileSizeMinMb,
+    fileSizeMaxMb,
+    datePresetFilter,
+    extensionFilter
+  } = useApp()
+  const category = categories.find((c) => c.id === categoryId)
+
+  if (!category || category.kind !== 'user') {
+    return <LibraryContextView onClose={onClose} />
+  }
+
+  const filters = buildActiveFilterChips(t, ta, {
+    debouncedSearch,
+    colorBucketFilter,
+    sizePresetFilter,
+    fileSizeMinMb,
+    fileSizeMaxMb,
+    datePresetFilter,
+    extensionFilter,
+    tagFilters,
+    typeFilters: [categoryId],
+    excludeTypeId: categoryId
+  })
+
+  return (
+    <DetailPanelShell
+      title={category.name}
+      subtitle={t('context.category.subtitle')}
+      onClose={onClose}
+      preview={
+        <div
+          className="w-full h-full flex flex-col items-center justify-center gap-2"
+          style={{ backgroundColor: `${category.color}22` }}
+        >
+          {category.icon ? <span className="text-5xl">{category.icon}</span> : null}
+          <span
+            className="w-4 h-4 rounded-full"
+            style={{ backgroundColor: category.color }}
+            aria-hidden
+          />
+          <p className="text-sm text-av-text-secondary">
+            {t('context.category.assetCount', { count: category.usageCount })}
+          </p>
+        </div>
+      }
+    >
+      <ContextInfoSection title={t('context.category.infoSection')}>
+        <ContextInfoRow label={t('context.labels.name')} value={category.name} />
+        <ContextInfoRow label={t('context.labels.matchCount')} value={totalAssets.toLocaleString()} />
+        <ContextInfoRow label={t('context.labels.usageCount')} value={String(category.usageCount)} />
+        {filters.length > 0 ? (
+          <ContextInfoRow label={t('context.labels.extraFilters')} value={filters.join(' · ')} />
+        ) : null}
+      </ContextInfoSection>
+      <p className="text-[11px] text-av-text-muted leading-relaxed">{t('context.category.footerHint')}</p>
+    </DetailPanelShell>
+  )
+}
+
 function LibraryContextView({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation('detail')
-  const { totalAssets, folderTree, tags } = useApp()
+  const { totalAssets, folderTree, tags, categories } = useApp()
   const [libraryState, setLibraryState] = useState<{
     libraryDisplayName: string
     activeLibraryRoot: string
@@ -349,6 +443,7 @@ function LibraryContextView({ onClose }: { onClose: () => void }) {
         <ContextInfoRow label={t('context.labels.totalAssets')} value={totalAssets.toLocaleString()} />
         <ContextInfoRow label={t('context.labels.folders')} value={String(folderCount)} />
         <ContextInfoRow label={t('context.labels.tags')} value={String(tags.length)} />
+        <ContextInfoRow label={t('context.labels.categories')} value={String(userCategoryItemsOnly(categories).length)} />
         {storage ? (
           <>
             <ContextInfoRow label={t('context.labels.itemPacks')} value={String(storage.itemPackCount)} />
@@ -374,19 +469,31 @@ function LibraryContextView({ onClose }: { onClose: () => void }) {
 }
 
 const DetailContextPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { currentFolderId, fileTypeFilter, selectedFontFamilyKey } = useApp()
+  const { currentFolderId, typeFilters, selectedFontFamilyKey } = useApp()
+  const { systemFileTypes, userCategoryIds } = splitTypeFilterIds(typeFilters)
+  const singleSystem =
+    typeFilters.length === 1 && systemFileTypes.length === 1 && userCategoryIds.length === 0
+      ? systemFileTypes[0]!
+      : null
+  const singleUserCategory =
+    typeFilters.length === 1 && userCategoryIds.length === 1 && systemFileTypes.length === 0
+      ? userCategoryIds[0]!
+      : null
 
   if (currentFolderId) {
     return <FolderContextView onClose={onClose} />
   }
-  if (fileTypeFilter === 'font') {
+  if (singleUserCategory) {
+    return <CategoryContextView categoryId={singleUserCategory} onClose={onClose} />
+  }
+  if (singleSystem === 'font') {
     if (selectedFontFamilyKey) {
       return <FontFamilyContextView familyKey={selectedFontFamilyKey} onClose={onClose} />
     }
     return <FontTypeContextView onClose={onClose} />
   }
-  if (fileTypeFilter) {
-    return <TypeContextView onClose={onClose} />
+  if (singleSystem) {
+    return <TypeContextView fileType={singleSystem} onClose={onClose} />
   }
   return <LibraryContextView onClose={onClose} />
 }

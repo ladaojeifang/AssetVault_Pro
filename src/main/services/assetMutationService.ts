@@ -7,6 +7,7 @@ import { renameAsset } from './renameAsset'
 import { localizeAssets } from './localizeAsset'
 import { relinkAssetSource } from './libraryUpgrade'
 import { getAssetById } from './assetQueryService'
+import type { AssetItem } from '@/shared/types'
 
 export async function updateAssetNotes(id: string, notes: unknown): Promise<boolean> {
   const database = getDatabase()
@@ -90,6 +91,19 @@ export async function patchAsset(
   if (errors.length > 0) {
     throw new Error(`patchAsset partial failure: ${errors.join('; ')}`)
   }
+
+  return getAssetById(id, { incrementViewCount: false })
+}
+
+export async function setAssetFavorite(id: string, favorite: boolean): Promise<AssetItem | null> {
+  const database = getDatabase()
+  const existing = await getAssetById(id, { incrementViewCount: false })
+  if (!existing) return null
+
+  await database
+    .update(assets)
+    .set({ isFavorite: favorite, updatedAt: new Date() })
+    .where(eq(assets.id, id))
 
   return getAssetById(id, { incrementViewCount: false })
 }

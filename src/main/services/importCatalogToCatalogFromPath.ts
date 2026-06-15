@@ -1,4 +1,5 @@
 import type { SqliteDatabase } from '../db/sqliteTypes'
+import { resolveImportedTypeId } from '@/shared/assetTypeRegistry'
 import { existsSync } from 'fs'
 import { normalize } from 'path'
 import { v4 as uuidv4 } from 'uuid'
@@ -24,6 +25,7 @@ import {
   mergeAssetMetadata,
   openSourceLibraryDb,
   phaseFolders,
+  phaseCategories,
   phaseTags,
   readSourceDisplayName,
   readSourceLibraryMode,
@@ -32,6 +34,7 @@ import {
   resolveSourceContentAbs,
   sourceAssetPackDir,
   tsToDate,
+  resolveSourceAssetTypeId,
   type ProgressFn,
   type SourceAssetRow
 } from './importLibraryShared'
@@ -42,6 +45,8 @@ type CatalogImportStats = {
   foldersMerged: number
   tagsCreated: number
   tagsMerged: number
+  categoriesCreated: number
+  categoriesMerged: number
   assetsAdded: number
   assetsSkippedDuplicate: number
   assetsFailed: number
@@ -56,13 +61,20 @@ async function insertReferencedAssetFromSource(
   targetDb: ReturnType<typeof getDatabase>,
   sourceRow: SourceAssetRow,
   contentHash: string,
-  contentAbs: string
+  contentAbs: string,
+  categoryMap: Map<string, string>,
+  sourceDb: SqliteDatabase
 ): Promise<string> {
   const newId = uuidv4()
   const canonical = toCanonicalFilePath(contentAbs)
   const now = new Date()
   const ext = sourceRow.extension.replace(/^\./, '').toLowerCase()
   const importSource = sourceRow.import_source?.trim() || canonical
+  const typeId = resolveImportedTypeId(
+    resolveSourceAssetTypeId(sourceDb, sourceRow),
+    sourceRow.file_type,
+    categoryMap
+  )
 
   await targetDb.insert(assets).values({
     id: newId,
@@ -71,6 +83,7 @@ async function insertReferencedAssetFromSource(
     extension: ext,
     mimeType: sourceRow.mime_type,
     fileType: sourceRow.file_type,
+    typeId,
     folderId: null,
     filePath: canonical,
     storageMode: 'referenced',
@@ -108,6 +121,7 @@ async function processLocalizedAsset(
   contentAbs: string,
   folderMap: Map<string, string>,
   tagMap: Map<string, string>,
+  categoryMap: Map<string, string>,
   sourceLibraryTagId: string,
   stats: CatalogImportStats
 ) {
@@ -130,7 +144,9 @@ async function processLocalizedAsset(
       sourceRoot,
       row,
       contentHash,
-      contentAbs
+      contentAbs,
+      categoryMap,
+      sourceDb
     )
     await applySourceFolders(targetDb, newId, row, folderMap, sourceDb)
     await applySourceTagsAndLibraryTag(targetDb, newId, row.id, sourceDb, tagMap, sourceLibraryTagId)
@@ -195,6 +211,7 @@ async function processReferencedAsset(
   contentAbs: string,
   folderMap: Map<string, string>,
   tagMap: Map<string, string>,
+  categoryMap: Map<string, string>,
   sourceLibraryTagId: string,
   stats: CatalogImportStats
 ) {
@@ -205,7 +222,14 @@ async function processReferencedAsset(
     return
   }
 
-  const newId = await insertReferencedAssetFromSource(targetDb, row, contentHash, contentAbs)
+  const newId = await insertReferencedAssetFromSource(
+    targetDb,
+    row,
+    contentHash,
+    contentAbs,
+    categoryMap,
+    sourceDb
+  )
   await applySourceFolders(targetDb, newId, row, folderMap, sourceDb)
   await applySourceTagsAndLibraryTag(targetDb, newId, row.id, sourceDb, tagMap, sourceLibraryTagId)
   stats.assetsAdded++
@@ -262,6 +286,8 @@ export async function importCatalogToCatalogFromPath(
     foldersMerged: 0,
     tagsCreated: 0,
     tagsMerged: 0,
+    categoriesCreated: 0,
+    categoriesMerged: 0,
     assetsAdded: 0,
     assetsSkippedDuplicate: 0,
     assetsFailed: 0,
@@ -274,11 +300,17 @@ export async function importCatalogToCatalogFromPath(
 
   try {
     emitImportProgress(onProgress, win, { phase: 'tags', current: 0, total: 1, filename: '', status: 'processing' })
-    const { tagMap, sourceLibraryTagId, folderMap } = await withSqliteTransaction(async () => {
+    const { tagMap, sourceLibraryTagId, folderMap, categoryMap } = await withSqliteTransaction(async () => {
       const tagsResult = await phaseTags(sourceDb, targetDb, sourceLibraryTagName, stats)
+      const categoryMapResult = await phaseCategories(sourceDb, targetDb, stats)
       emitImportProgress(onProgress, win, { phase: 'folders', current: 0, total: 1, filename: '', status: 'processing' })
       const folderMapResult = await phaseFolders(sourceDb, targetDb, stats)
-      return { tagMap: tagsResult.tagMap, sourceLibraryTagId: tagsResult.sourceLibraryTagId, folderMap: folderMapResult }
+      return {
+        tagMap: tagsResult.tagMap,
+        sourceLibraryTagId: tagsResult.sourceLibraryTagId,
+        folderMap: folderMapResult,
+        categoryMap: categoryMapResult
+      }
     })
 
     const sourceAssets = loadSourceAssets(sourceDb)
@@ -332,6 +364,7 @@ export async function importCatalogToCatalogFromPath(
               contentAbs,
               folderMap,
               tagMap,
+              categoryMap,
               sourceLibraryTagId,
               stats
             )
@@ -346,6 +379,7 @@ export async function importCatalogToCatalogFromPath(
               contentAbs,
               folderMap,
               tagMap,
+              categoryMap,
               sourceLibraryTagId,
               stats
             )
@@ -397,6 +431,8 @@ export async function importCatalogToCatalogFromPath(
       foldersMerged: stats.foldersMerged,
       tagsCreated: stats.tagsCreated,
       tagsMerged: stats.tagsMerged,
+      categoriesCreated: stats.categoriesCreated,
+      categoriesMerged: stats.categoriesMerged,
       sourceLibraryTagName,
       assetsAddedLocal: stats.assetsAddedLocal,
       assetsAddedReferenced: stats.assetsAddedReferenced,

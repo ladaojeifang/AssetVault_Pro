@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { AssetItem } from '@/shared/types'
 import { formatFileSize } from '@/shared/types'
 import { isSvgExtension } from '@/shared/svgFormats'
+import { canAssetPreview } from '@/shared/assetPreviewRegistry'
 import { useApp } from '../../stores/AppContext'
 import { loadSvgPreviewObjectUrl, revokeSvgPreviewObjectUrl } from '../../utils/loadSvgPreviewUrl'
 import { DESTRUCTIVE_MESSAGE_CLASS } from '../../theme/destructiveActionClasses'
@@ -145,7 +146,7 @@ const SvgPreviewPage: React.FC<SvgPreviewPageProps> = ({ assetId }) => {
     )
   }
 
-  if (!asset || asset.fileType !== 'image' || !isSvg) {
+  if (!asset || !canAssetPreview(asset, 'svg')) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-av-text-secondary">
         <p>{t('notFoundSvg')}</p>

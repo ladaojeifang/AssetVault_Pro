@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Modal, Input } from '@arco-design/web-react'
 import { notify } from '../Common/notify'
 import { useApp } from '../../stores/AppContext'
-import type { FolderItem, TagItem } from '@/shared/types'
+import type { FolderItem, TagItem, CategoryItem } from '@/shared/types'
 import { LibrarySwitcherBar } from './LibrarySwitcher'
 import { FolderIconDisplay } from '../Common/FolderIconDisplay'
 import { findFolderInTree } from '../../utils/folderTreeNav'
@@ -11,6 +11,10 @@ import {
   FolderContextMenu,
   type FolderContextMenuState
 } from './FolderContextMenu'
+import {
+  CategoryContextMenu,
+  type CategoryContextMenuState
+} from './CategoryContextMenu'
 import { addDraggedAssetsToFolder } from '../../utils/addAssetsToFolder'
 import { MAX_FOLDER_PARENT_LEVEL_FOR_CHILD } from '@/shared/folderLimits'
 import { extensionsForDialog } from '@/shared/assetFormatRegistry'
@@ -25,15 +29,25 @@ function collectSubtreeFolderIds(folder: FolderItem): string[] {
 
 const Sidebar: React.FC = () => {
   const { t } = useTranslation(['sidebar', 'common'])
+  const { t: ta } = useTranslation('assets')
   const {
     folderTree,
     tags,
+    categories,
     currentFolderId,
+    favoritesOnly,
+    favoriteCount,
     tagFilters,
+    typeFilters,
     setCurrentFolder,
+    showAllAssets,
+    setFavoritesOnly,
     setTagFilters,
+    toggleTypeFilter,
+    setTypeFilters,
     refreshFolders,
-    refreshAssets
+    refreshAssets,
+    refreshCategories
   } = useApp()
 
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
@@ -63,8 +77,20 @@ const Sidebar: React.FC = () => {
   const [iconEditPreview, setIconEditPreview] = useState<string | null>(null)
   const [iconEditBaselineRel, setIconEditBaselineRel] = useState<string | null>(null)
   const [iconEditBusy, setIconEditBusy] = useState(false)
+  const [createCategoryOpen, setCreateCategoryOpen] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryColor, setNewCategoryColor] = useState('#FF9F1C')
+  const [newCategoryIcon, setNewCategoryIcon] = useState('')
+  const [createCategoryBusy, setCreateCategoryBusy] = useState(false)
+  const [editCategoryOpen, setEditCategoryOpen] = useState(false)
+  const [editCategoryId, setEditCategoryId] = useState<string | null>(null)
+  const [editCategoryName, setEditCategoryName] = useState('')
+  const [editCategoryColor, setEditCategoryColor] = useState('#FF9F1C')
+  const [editCategoryIcon, setEditCategoryIcon] = useState('')
+  const [editCategoryBusy, setEditCategoryBusy] = useState(false)
 
   const [folderContextMenu, setFolderContextMenu] = useState<FolderContextMenuState>(null)
+  const [categoryContextMenu, setCategoryContextMenu] = useState<CategoryContextMenuState>(null)
 
   const toggleFolder = (id: string) => {
     setExpandedFolders((prev) => {
@@ -104,6 +130,130 @@ const Sidebar: React.FC = () => {
     setNewFolderParentId(currentFolderId)
     setCreateFolderOpen(true)
   }, [currentFolderId])
+
+  const openCreateCategoryModal = useCallback(() => {
+    setNewCategoryName('')
+    setNewCategoryColor('#FF9F1C')
+    setNewCategoryIcon('')
+    setCreateCategoryOpen(true)
+  }, [])
+
+  const submitCreateCategory = useCallback(async () => {
+    const name = newCategoryName.trim()
+    if (!name) {
+      notify.warning(t('sidebar:enterCategoryName'))
+      return
+    }
+    setCreateCategoryBusy(true)
+    try {
+      await window.assetVaultAPI.categories.create({
+        name,
+        color: newCategoryColor,
+        icon: newCategoryIcon.trim() || undefined
+      })
+      await refreshCategories()
+      setCreateCategoryOpen(false)
+      notify.success(t('sidebar:categoryCreated'))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      notify.error(msg || t('sidebar:createFailed'))
+    } finally {
+      setCreateCategoryBusy(false)
+    }
+  }, [newCategoryName, newCategoryColor, newCategoryIcon, refreshCategories, t])
+
+  const openEditCategoryModal = useCallback((category: CategoryItem) => {
+    setEditCategoryId(category.id)
+    setEditCategoryName(category.name)
+    setEditCategoryColor(category.color || '#FF9F1C')
+    setEditCategoryIcon(category.icon ?? '')
+    setEditCategoryOpen(true)
+  }, [])
+
+  const submitEditCategory = useCallback(async () => {
+    if (!editCategoryId) return
+    const name = editCategoryName.trim()
+    if (!name) {
+      notify.warning(t('sidebar:enterCategoryName'))
+      return
+    }
+    setEditCategoryBusy(true)
+    try {
+      await window.assetVaultAPI.categories.update(editCategoryId, {
+        name,
+        color: editCategoryColor,
+        icon: editCategoryIcon.trim() || null
+      })
+      await refreshCategories()
+      await refreshAssets()
+      setEditCategoryOpen(false)
+      setEditCategoryId(null)
+      notify.success(t('sidebar:categoryUpdated'))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      notify.error(msg || t('sidebar:updateFailed'))
+    } finally {
+      setEditCategoryBusy(false)
+    }
+  }, [
+    editCategoryId,
+    editCategoryName,
+    editCategoryColor,
+    editCategoryIcon,
+    refreshCategories,
+    refreshAssets,
+    t
+  ])
+
+  const confirmDeleteCategory = useCallback(
+    (category: CategoryItem) => {
+      Modal.confirm({
+        title: t('sidebar:deleteCategoryTitle'),
+        content: t('sidebar:deleteCategoryContent', { name: category.name }),
+        okText: t('common:delete'),
+        cancelText: t('common:cancel'),
+        okButtonProps: { status: 'danger' as const },
+        async onOk() {
+          try {
+            await window.assetVaultAPI.categories.delete(category.id)
+            await refreshCategories()
+            await refreshAssets()
+            if (typeFilters.includes(category.id)) {
+              setTypeFilters(typeFilters.filter((id) => id !== category.id))
+            }
+            notify.success(t('sidebar:deleteCategorySuccess'))
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            notify.error(msg || t('sidebar:deleteFailed'))
+            throw e
+          }
+        }
+      })
+    },
+    [typeFilters, refreshCategories, refreshAssets, setTypeFilters, t]
+  )
+
+  const handleCategoryContextAction = useCallback(
+    (key: string, category: CategoryItem) => {
+      switch (key) {
+        case 'edit':
+          openEditCategoryModal(category)
+          break
+        case 'delete':
+          confirmDeleteCategory(category)
+          break
+        default:
+          break
+      }
+    },
+    [openEditCategoryModal, confirmDeleteCategory]
+  )
+
+  const openCategoryContextMenu = useCallback((category: CategoryItem, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setCategoryContextMenu({ category, x: e.clientX, y: e.clientY })
+  }, [])
 
   const openCreateSubfolderModal = useCallback((parent: FolderItem) => {
     if (parent.level >= MAX_FOLDER_PARENT_LEVEL_FOR_CHILD) {
@@ -466,13 +616,27 @@ const Sidebar: React.FC = () => {
         <LibrarySwitcherBar />
       </SidebarSection>
 
-      <div className="px-3 py-2 border-b border-av-border/50">
+      <div className="px-3 py-2 border-b border-av-border/50 space-y-0.5">
         <SidebarItem
           icon="🗂"
           label={t('sidebar:allAssets')}
-          active={!currentFolderId}
-          onClick={() => void setCurrentFolder(null)}
+          active={!currentFolderId && !favoritesOnly}
+          onClick={() => void showAllAssets()}
           count={null}
+        />
+        <SidebarItem
+          icon={
+            <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden className="text-av-accent-blue">
+              <path
+                d="M12 2l2.9 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 7.1-1.01L12 2z"
+                fill="currentColor"
+              />
+            </svg>
+          }
+          label={t('sidebar:favorites')}
+          active={favoritesOnly}
+          onClick={() => void setFavoritesOnly(true)}
+          count={favoriteCount}
         />
       </div>
 
@@ -499,6 +663,30 @@ const Sidebar: React.FC = () => {
           </svg>
           {t('sidebar:newFolder')}
         </button>
+      </SidebarSection>
+
+      {/* Tags — directly under folders */}
+      <SidebarSection title={t('sidebar:tags')}>
+        <div className="space-y-0.5">
+          {tags.length === 0 ? (
+            <p className="text-xs text-av-text-muted px-1 py-2">{t('sidebar:noTags')}</p>
+          ) : (
+            tags.map((tag) => (
+              <TagFilterItem
+                key={tag.id}
+                tag={tag}
+                active={tagFilters.includes(tag.id)}
+                onToggle={(id) => {
+                  if (tagFilters.includes(id)) {
+                    setTagFilters(tagFilters.filter((tagId) => tagId !== id))
+                  } else {
+                    setTagFilters([...tagFilters, id])
+                  }
+                }}
+              />
+            ))
+          )}
+        </div>
       </SidebarSection>
 
       <Modal
@@ -674,41 +862,117 @@ const Sidebar: React.FC = () => {
         </p>
       </Modal>
 
-      {/* Tags Section */}
-      <SidebarSection title="Tags">
-        <div className="space-y-0.5">
-          {tags.length === 0 ? (
-            <p className="text-xs text-av-text-muted px-1 py-2">No tags yet</p>
-          ) : (
-            tags.map((tag) => (
-              <TagFilterItem
-                key={tag.id}
-                tag={tag}
-                active={tagFilters.includes(tag.id)}
-                onToggle={(id) => {
-                  if (tagFilters.includes(id)) {
-                    setTagFilters(tagFilters.filter((t) => t !== id))
-                  } else {
-                    setTagFilters([...tagFilters, id])
-                  }
-                }}
-              />
-            ))
-          )}
+      <Modal
+        title={t('sidebar:createCategoryTitle')}
+        visible={createCategoryOpen}
+        onOk={() => void submitCreateCategory()}
+        onCancel={() => setCreateCategoryOpen(false)}
+        okText={t('sidebar:create')}
+        cancelText={t('common:cancel')}
+        confirmLoading={createCategoryBusy}
+        mountOnEnter={false}
+      >
+        <Input
+          value={newCategoryName}
+          onChange={(v) => setNewCategoryName(v)}
+          placeholder={t('sidebar:categoryName')}
+          onPressEnter={() => void submitCreateCategory()}
+        />
+        <div className="flex gap-3 mt-3 items-center">
+          <label className="text-xs text-av-text-muted shrink-0">{t('sidebar:color')}</label>
+          <input
+            type="color"
+            value={newCategoryColor}
+            onChange={(e) => setNewCategoryColor(e.target.value)}
+            className="h-8 w-12 rounded border border-av-border bg-transparent cursor-pointer"
+          />
         </div>
-      </SidebarSection>
+        <div className="flex gap-3 mt-2 items-center">
+          <label className="text-xs text-av-text-muted shrink-0">{t('sidebar:icon')}</label>
+          <Input
+            value={newCategoryIcon}
+            onChange={(v) => setNewCategoryIcon(v)}
+            placeholder={t('sidebar:categoryIconEmoji')}
+            className="flex-1"
+            maxLength={8}
+          />
+        </div>
+      </Modal>
 
-      {/* File Types Section */}
-      <SidebarSection title="Types">
-        <TypeFilterItem type="image" label="Images" emoji="🖼️" />
-        <TypeFilterItem type="video" label="Videos" emoji="🎬" />
-        <TypeFilterItem type="audio" label="Audio" emoji="🎵" />
-        <TypeFilterItem type="font" label="Fonts" emoji="🔤" />
-        <TypeFilterItem type="design" label="Design" emoji="🎨" />
-        <TypeFilterItem type="document" label="Docs" emoji="📄" />
-        <TypeFilterItem type="3d" label="3D" emoji="📦" />
-        <TypeFilterItem type="code" label="Code" emoji="💻" />
-        <TypeFilterItem type="other" label="Other" emoji="📎" />
+      <Modal
+        title={t('sidebar:editCategoryTitle')}
+        visible={editCategoryOpen}
+        onOk={() => void submitEditCategory()}
+        onCancel={() => {
+          setEditCategoryOpen(false)
+          setEditCategoryId(null)
+        }}
+        okText={t('common:save')}
+        cancelText={t('common:cancel')}
+        confirmLoading={editCategoryBusy}
+        mountOnEnter={false}
+      >
+        <Input
+          value={editCategoryName}
+          onChange={(v) => setEditCategoryName(v)}
+          placeholder={t('sidebar:categoryName')}
+          onPressEnter={() => void submitEditCategory()}
+        />
+        <div className="flex gap-3 mt-3 items-center">
+          <label className="text-xs text-av-text-muted shrink-0">{t('sidebar:color')}</label>
+          <input
+            type="color"
+            value={editCategoryColor}
+            onChange={(e) => setEditCategoryColor(e.target.value)}
+            className="h-8 w-12 rounded border border-av-border bg-transparent cursor-pointer"
+          />
+        </div>
+        <div className="flex gap-3 mt-2 items-center">
+          <label className="text-xs text-av-text-muted shrink-0">{t('sidebar:icon')}</label>
+          <Input
+            value={editCategoryIcon}
+            onChange={(v) => setEditCategoryIcon(v)}
+            placeholder={t('sidebar:categoryIconEmoji')}
+            className="flex-1"
+            maxLength={8}
+          />
+        </div>
+      </Modal>
+
+      <SidebarSection title={t('sidebar:types')}>
+        <p className="px-2 mb-1.5 text-[10px] text-av-text-muted leading-snug">
+          {t('sidebar:typesHint')}
+        </p>
+        <div className="space-y-0.5">
+          {categories.map((item) => (
+            <TypeFilterItem
+              key={item.id}
+              item={item}
+              active={typeFilters.includes(item.id)}
+              label={
+                item.kind === 'system' && item.fileType
+                  ? ta(`fileTypes.${item.fileType}` as 'fileTypes.image')
+                  : item.name
+              }
+              onToggle={toggleTypeFilter}
+              onContextMenu={
+                item.kind === 'user'
+                  ? (e) => openCategoryContextMenu(item, e)
+                  : undefined
+              }
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={openCreateCategoryModal}
+          className="w-full mt-2 px-2 py-1.5 text-xs text-av-text-muted hover:text-av-accent-blue hover:bg-av-bg-hover rounded flex items-center gap-1.5 transition-colors"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 6v12M6 12h12" />
+          </svg>
+          {t('sidebar:newCategory')}
+        </button>
       </SidebarSection>
 
       <FolderContextMenu
@@ -717,11 +981,85 @@ const Sidebar: React.FC = () => {
         onAction={handleFolderContextAction}
         maxParentLevel={MAX_FOLDER_PARENT_LEVEL_FOR_CHILD}
       />
+
+      <CategoryContextMenu
+        state={categoryContextMenu}
+        onClose={() => setCategoryContextMenu(null)}
+        onAction={handleCategoryContextAction}
+      />
     </div>
   )
 }
 
 // Sub-components
+
+function TypeFilterItem({
+  item,
+  label,
+  active,
+  onToggle,
+  onContextMenu
+}: {
+  item: CategoryItem
+  label: string
+  active: boolean
+  onToggle: (id: string) => void
+  onContextMenu?: (e: React.MouseEvent) => void
+}) {
+  return (
+    <SidebarFilterRow
+      active={active}
+      label={label}
+      dotColor={item.color}
+      icon={item.icon}
+      count={item.usageCount}
+      onClick={() => onToggle(item.id)}
+      onContextMenu={onContextMenu}
+    />
+  )
+}
+
+function SidebarFilterRow({
+  active,
+  label,
+  dotColor,
+  icon,
+  count,
+  onClick,
+  onContextMenu
+}: {
+  active: boolean
+  label: string
+  dotColor: string
+  icon?: string | null
+  count?: number | null
+  onClick: () => void
+  onContextMenu?: (e: React.MouseEvent) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      className={`w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm transition-colors ${
+        active
+          ? 'bg-av-bg-elevated ring-1 ring-av-accent-blue/30'
+          : 'hover:bg-av-bg-hover'
+      }`}
+    >
+      <span
+        className="w-2.5 h-2.5 rounded-full shrink-0"
+        style={{ backgroundColor: dotColor }}
+      />
+      {icon ? <span className="text-xs shrink-0">{icon}</span> : null}
+      <span className="truncate flex-1 text-left text-av-text-secondary">{label}</span>
+      {count != null ? (
+        <span className="text-[10px] text-av-text-muted tabular-nums">{count}</span>
+      ) : null}
+    </button>
+  )
+}
+
 function SidebarSection({
   title,
   children
@@ -899,45 +1237,12 @@ function TagFilterItem({
   onToggle: (id: string) => void
 }) {
   return (
-    <button
-      onClick={() => onToggle(tag.id)}
-      className={`w-full flex items-center gap-2 px-2 py-1 rounded-md text-sm transition-colors ${
-        active
-          ? 'bg-av-bg-elevated ring-1 ring-av-accent-blue/30'
-          : 'hover:bg-av-bg-hover'
-      }`}
-    >
-      <span
-        className="w-2.5 h-2.5 rounded-full shrink-0"
-        style={{ backgroundColor: tag.color }}
-      />
-      <span className="truncate flex-1 text-left text-sm">{tag.name}</span>
-      <span className="text-[10px] text-av-text-muted tabular-nums">{tag.usageCount}</span>
-    </button>
-  )
-}
-
-function TypeFilterItem({
-  type,
-  label,
-  emoji
-}: {
-  type: string
-  label: string
-  emoji: string
-}) {
-  const { fileTypeFilter, setFileTypeFilter } = useApp()
-  const active = fileTypeFilter === type
-
-  return (
-    <SidebarItem
-      icon={emoji}
-      label={label}
+    <SidebarFilterRow
       active={active}
-      onClick={() =>
-        setFileTypeFilter(active ? null : type)
-      }
-      indent={0}
+      label={tag.name}
+      dotColor={tag.color}
+      count={tag.usageCount}
+      onClick={() => onToggle(tag.id)}
     />
   )
 }

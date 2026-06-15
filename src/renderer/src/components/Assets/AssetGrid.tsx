@@ -4,7 +4,8 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual'
 import { useApp } from '../../stores/AppContext'
 import { resolveDropPaths } from '../../utils/resolveDroppedFilePaths'
-import { formatFileSize, type AssetItem, type FolderItem } from '@/shared/types'
+import type { AssetItem, CategoryItem, FolderItem } from '@/shared/types'
+import { formatFileSize } from '@/shared/types'
 import { Modal, Input } from '@arco-design/web-react'
 import { AssetContextMenu, type AssetContextMenuState } from './AssetContextMenu'
 import { getChildFolders, findFolderInTree } from '../../utils/folderTreeNav'
@@ -13,6 +14,7 @@ import { isAssetDragEvent } from '../../utils/assetDragDrop'
 import { addDraggedAssetsToFolder } from '../../utils/addAssetsToFolder'
 import { notify } from '../Common/notify'
 import { canAssetPreview } from '@/shared/assetPreviewRegistry'
+import { shouldRenderThumbnailSlot, usesContainThumbnailFit } from '@/shared/formatCapabilities'
 import { performAssetDefaultOpen } from '../../utils/openAssetPreview'
 import MasonryGrid from './MasonryGrid'
 import { ListViewColumnHeader } from './ListViewColumnHeader'
@@ -20,6 +22,7 @@ import { AssetListNoResults } from './AssetListNoResults'
 import { useListColumnWidths } from '../../hooks/useListColumnWidths'
 import { useListTableLayout } from '../../hooks/useListTableLayout'
 import { FileTypePlaceholder } from '../Common/FileTypePlaceholder'
+import { FavoriteStarButton } from '../Common/FavoriteStarButton'
 import { hasActiveAssetListQuery } from '@/shared/assetFilters'
 import type { SortField } from '@/shared/types'
 
@@ -44,25 +47,33 @@ const AssetGrid: React.FC = () => {
     openMarkdownPreview,
     loadMoreAssets,
     tagFilters,
-    fileTypeFilter,
+    typeFilters,
+    tags,
     debouncedSearch,
     colorBucketFilter,
     sizePresetFilter,
     fileSizeMinMb,
     fileSizeMaxMb,
     datePresetFilter,
+    extensionFilter,
+    favoritesOnly,
     currentFolderId,
     refreshAssets,
     refreshFolders,
+    refreshCategories,
     folderTree,
+    categories,
     setCurrentFolder,
+    toggleAssetFavorite,
     sortField,
     sortOrder,
     setSorting,
-    setFileTypeFilter,
+    setTypeFilters,
+    setTagFilters,
     setSizePresetFilter,
     setFileSizeMbFilter,
     setDatePresetFilter,
+    setExtensionFilter,
     setColorBucketFilter,
     clearAssetFilters
   } = useApp()
@@ -108,7 +119,7 @@ const AssetGrid: React.FC = () => {
   /** Index in current `assets` for Shift+click range selection */
   const anchorIndexRef = useRef<number | null>(null)
 
-  const selectionFilterKey = `${tagFilters.join(',')}|${currentFolderId ?? ''}|${debouncedSearch}|${fileTypeFilter ?? ''}|${colorBucketFilter ?? ''}|${sizePresetFilter ?? ''}|${fileSizeMinMb ?? ''}|${fileSizeMaxMb ?? ''}|${datePresetFilter ?? ''}`
+  const selectionFilterKey = `${tagFilters.join(',')}|${typeFilters.join(',')}|${favoritesOnly ? 'fav' : ''}|${currentFolderId ?? ''}|${debouncedSearch}|${colorBucketFilter ?? ''}|${sizePresetFilter ?? ''}|${fileSizeMinMb ?? ''}|${fileSizeMaxMb ?? ''}|${datePresetFilter ?? ''}|${extensionFilter ?? ''}`
   useEffect(() => {
     anchorIndexRef.current = null
   }, [selectionFilterKey])
@@ -119,26 +130,39 @@ const AssetGrid: React.FC = () => {
   )
 
   const showFolderHierarchy =
+    !favoritesOnly &&
     !String(debouncedSearch || '').trim() &&
     tagFilters.length === 0 &&
-    !fileTypeFilter &&
+    typeFilters.length === 0 &&
     !colorBucketFilter &&
     !sizePresetFilter &&
     fileSizeMinMb == null &&
     fileSizeMaxMb == null &&
-    !datePresetFilter
+    !datePresetFilter &&
+    !extensionFilter
   const showSubfolderStrip = showFolderHierarchy && childFolders.length > 0
 
   const hasActiveQuery = hasActiveAssetListQuery({
     debouncedSearch,
     tagFilters,
-    fileTypeFilter,
+    typeFilters,
     colorBucket: colorBucketFilter,
     sizePreset: sizePresetFilter,
     fileSizeMinMb,
     fileSizeMaxMb,
-    datePreset: datePresetFilter
+    datePreset: datePresetFilter,
+    extension: extensionFilter
   })
+
+  const listTypeFilter = useMemo((): string | null => {
+    if (typeFilters.length !== 1) return null
+    return typeFilters[0]!
+  }, [typeFilters])
+
+  const categoryMap = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories]
+  )
 
   const currentFolderNode = useMemo(
     () => (currentFolderId ? findFolderInTree(folderTree, currentFolderId) : null),
@@ -387,6 +411,15 @@ const AssetGrid: React.FC = () => {
               await refreshFolders()
             }
             break
+          case 'add-category':
+            if (extra) {
+              await window.assetVaultAPI.categories.setAssetsType(assetIds, extra)
+              const name = categories.find((c) => c.id === extra)?.name ?? t('category')
+              notify.success(t('notify.setAssetType', { count: assetIds.length, name }))
+              await refreshAssets()
+              await refreshCategories()
+            }
+            break
           case 'add-library':
             if (extra) {
               const r = await window.assetVaultAPI.assets.copyToLibrary(assetIds, extra)
@@ -474,10 +507,12 @@ const AssetGrid: React.FC = () => {
     [
       assets,
       childFolders,
+      categories,
       currentFolderId,
       folderTree,
       refreshAssets,
       refreshFolders,
+      refreshCategories,
       selectedAssetIds
     ]
   )
@@ -526,13 +561,15 @@ const AssetGrid: React.FC = () => {
     )
   }
 
-  const parentNavLabel = !currentFolderNode
+  const parentNavLabel = favoritesOnly
+    ? t('favorites')
+    : !currentFolderNode
     ? t('allAssets')
     : currentFolderNode.parentId == null || currentFolderNode.parentId === undefined
       ? t('allAssets')
       : findFolderInTree(folderTree, currentFolderNode.parentId)?.name ?? t('parent')
 
-  if (listAreaEmpty && !hasActiveQuery && !showSubfolderStrip) {
+  if (listAreaEmpty && !hasActiveQuery && !showSubfolderStrip && !favoritesOnly) {
     return <EmptyState />
   }
 
@@ -570,8 +607,15 @@ const AssetGrid: React.FC = () => {
             sortField={sortField}
             sortOrder={sortOrder}
             onSort={handleListSort}
-            fileTypeFilter={fileTypeFilter}
-            onFileTypeFilter={(t) => setFileTypeFilter(t)}
+            typeFilter={listTypeFilter}
+            typeOptions={categories}
+            onTypeFilter={(id) => setTypeFilters(id ? [id] : [])}
+            typeFilters={typeFilters}
+            tagFilters={tagFilters}
+            tags={tags}
+            onRemoveTypeFilter={(id) => setTypeFilters(typeFilters.filter((x) => x !== id))}
+            onRemoveTagFilter={(id) => setTagFilters(tagFilters.filter((x) => x !== id))}
+            onClearFilters={() => clearAssetFilters()}
             sizePresetFilter={sizePresetFilter}
             onSizePreset={setSizePresetFilter}
             fileSizeMinMb={fileSizeMinMb}
@@ -579,6 +623,8 @@ const AssetGrid: React.FC = () => {
             onFileSizeMb={setFileSizeMbFilter}
             datePresetFilter={datePresetFilter}
             onDatePreset={setDatePresetFilter}
+            extensionFilter={extensionFilter}
+            onExtensionFilter={setExtensionFilter}
             colorBucketFilter={colorBucketFilter}
             onColorBucket={setColorBucketFilter}
           />
@@ -680,12 +726,14 @@ const AssetGrid: React.FC = () => {
                   assets={assets}
                   scrollElementRef={containerRef}
                   layoutKey={`${subfoldersOpen}-${contentOpen}-${showSubfolderStrip}-${childFolders.length}`}
+                  categoryMap={categoryMap}
                   selectedIds={selectedAssetIds}
                   showCaptions={showFolderHierarchy}
                   onAssetClick={handleAssetClick}
                   onAssetDoubleClick={handleAssetDoubleClick}
                   onDragStart={handleDragStart}
                   onAssetContextMenu={handleAssetContextMenu}
+                  onToggleFavorite={(id, favorite) => void toggleAssetFavorite(id, favorite)}
                 />
               ) : (
                 <AssetListVirtualView
@@ -698,6 +746,7 @@ const AssetGrid: React.FC = () => {
                   onAssetDoubleClick={handleAssetDoubleClick}
                   onDragStart={handleDragStart}
                   onAssetContextMenu={handleAssetContextMenu}
+                  onToggleFavorite={(id, favorite) => void toggleAssetFavorite(id, favorite)}
                 />
               )
             ) : hasActiveQuery ? (
@@ -710,6 +759,16 @@ const AssetGrid: React.FC = () => {
                 }
                 parentLabel={currentFolderId ? parentNavLabel : undefined}
               />
+            ) : favoritesOnly ? (
+              <div
+                className={
+                  viewMode === 'list'
+                    ? 'flex flex-1 items-center justify-center text-sm text-av-text-muted'
+                    : 'py-10 text-center text-sm text-av-text-muted'
+                }
+              >
+                {t('emptyFavorites')}
+              </div>
             ) : showFolderHierarchy ? (
               <div
                 className={
@@ -731,6 +790,7 @@ const AssetGrid: React.FC = () => {
       <AssetContextMenu
         state={contextMenu}
         folderTree={folderTree}
+        categories={categories}
         currentFolderId={currentFolderId}
         recentLibraries={libraryRoots.recent}
         recentLibraryDisplayNames={libraryRoots.recentDisplayNames}
@@ -763,7 +823,8 @@ function AssetListVirtualView({
   onAssetClick,
   onAssetDoubleClick,
   onDragStart,
-  onAssetContextMenu
+  onAssetContextMenu,
+  onToggleFavorite
 }: {
   assets: AssetItem[]
   scrollElementRef: React.RefObject<HTMLDivElement | null>
@@ -777,6 +838,7 @@ function AssetListVirtualView({
     asset: { id: string; filename: string; filePath: string; resolvedFilePath?: string }
   ) => void
   onAssetContextMenu: (e: React.MouseEvent, asset: AssetItem) => void
+  onToggleFavorite: (id: string, favorite: boolean) => void
 }) {
   const listVirtualizer = useVirtualizer<Element, Element>({
     count: assets.length,
@@ -797,6 +859,7 @@ function AssetListVirtualView({
       onAssetDoubleClick={onAssetDoubleClick}
       onDragStart={onDragStart}
       onAssetContextMenu={onAssetContextMenu}
+      onToggleFavorite={onToggleFavorite}
     />
   )
 }
@@ -811,7 +874,8 @@ function ListContent({
   onAssetClick,
   onAssetDoubleClick,
   onDragStart,
-  onAssetContextMenu
+  onAssetContextMenu,
+  onToggleFavorite
 }: {
   assets: any[]
   virtualizer: Virtualizer<Element, Element>
@@ -825,7 +889,14 @@ function ListContent({
     asset: { id: string; filename: string; filePath: string; resolvedFilePath?: string }
   ) => void
   onAssetContextMenu: (e: React.MouseEvent, asset: AssetItem) => void
+  onToggleFavorite: (id: string, favorite: boolean) => void
 }) {
+  const { categories } = useApp()
+  const categoryMap = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories]
+  )
+
   return (
     <div className="relative w-full min-w-0" style={{ height: `${virtualizer.getTotalSize()}px` }}>
       {virtualizer.getVirtualItems().map((virtualRow: VirtualItem) => {
@@ -850,10 +921,12 @@ function ListContent({
               gridTemplateColumns={gridTemplateColumns}
               rowGridClass={rowGridClass}
               selected={selectedIds.has(asset.id)}
+              categoryMap={categoryMap}
               onClick={(e) => onAssetClick(asset.id, e)}
               onDoubleClick={() => onAssetDoubleClick(asset.id)}
               onDragStart={(e) => onDragStart(e, asset)}
               onContextMenu={(e) => onAssetContextMenu(e, asset)}
+              onToggleFavorite={onToggleFavorite}
             />
           </div>
         )
@@ -1012,24 +1085,40 @@ function AssetListItem({
   gridTemplateColumns,
   rowGridClass,
   selected,
+  categoryMap,
   onClick,
   onDoubleClick,
   onDragStart,
-  onContextMenu
+  onContextMenu,
+  onToggleFavorite
 }: {
-  asset: any
+  asset: AssetItem
   gridTemplateColumns: string
   rowGridClass: string
   selected: boolean
+  categoryMap: Map<string, CategoryItem>
   onClick: (e: React.MouseEvent) => void
   onDoubleClick: () => void
   onDragStart: (e: React.DragEvent) => void
   onContextMenu: (e: React.MouseEvent) => void
+  onToggleFavorite: (id: string, favorite: boolean) => void
 }) {
   const { t } = useTranslation('assets')
   const can3dPreview = canAssetPreview(asset, 'model')
 
   const ext = (asset.extension || '').replace(/^\./, '').toLowerCase() || '—'
+  const detectedTypeLabel = t(`fileTypes.${asset.fileType}` as 'fileTypes.image', {
+    defaultValue: asset.fileType
+  })
+  const assetType = categoryMap.get(asset.typeId)
+  const assetTypeLabel = assetType
+    ? assetType.kind === 'system'
+      ? t(`fileTypes.${assetType.fileType ?? assetType.name}` as 'fileTypes.image', {
+          defaultValue: assetType.name
+        })
+      : assetType.name
+    : detectedTypeLabel
+  const assetUserType = assetType?.kind === 'user' ? assetType : undefined
 
   return (
     <div
@@ -1044,12 +1133,12 @@ function AssetListItem({
       style={{ gridTemplateColumns }}
     >
       <div className="w-10 h-10 rounded bg-av-bg-tertiary shrink-0 flex items-center justify-center overflow-hidden">
-        {asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === 'font' || can3dPreview || asset.hasThumbnail ? (
+        {shouldRenderThumbnailSlot(asset.extension, asset.hasThumbnail) || can3dPreview ? (
           <div className="w-full h-full [&_img]:w-full [&_img]:h-full">
             <ThumbnailImage
               assetId={asset.id}
-              cacheKey={asset.updatedAt}
-              objectFit={asset.fileType === 'font' ? 'contain' : 'cover'}
+              cacheKey={asset.updatedAt.getTime()}
+              objectFit={usesContainThumbnailFit(asset.extension) ? 'contain' : 'cover'}
               retryWhileEmpty={can3dPreview && !asset.hasThumbnail}
               onError={() => {}}
             />
@@ -1085,7 +1174,22 @@ function AssetListItem({
       <span className="text-xs text-av-text-muted tabular-nums truncate text-left">
         {formatFileSize(asset.fileSize)}
       </span>
-      <span className="text-xs text-av-text-muted truncate capitalize text-left">{asset.fileType}</span>
+      <span className="text-xs text-av-text-muted truncate text-left min-w-0">
+        <span className="block truncate capitalize">{assetTypeLabel}</span>
+        {assetUserType ? (
+          <span className="inline-flex items-center gap-0.5 max-w-full text-[10px] text-av-text-secondary mt-0.5">
+            <span
+              className="w-1.5 h-1.5 rounded-full shrink-0"
+              style={{ backgroundColor: assetUserType.color }}
+              aria-hidden
+            />
+            <span className="truncate">
+              {assetUserType.icon ? `${assetUserType.icon} ` : ''}
+              {assetUserType.name}
+            </span>
+          </span>
+        ) : null}
+      </span>
       <span className="text-xs text-av-text-muted font-mono truncate text-left" title={ext}>
         .{ext}
       </span>
@@ -1094,21 +1198,12 @@ function AssetListItem({
       </span>
 
       <div className="flex justify-end w-full">
-        {selected ? (
-          <div className="w-4 h-4 rounded-full bg-av-accent-blue flex items-center justify-center shrink-0">
-            <svg width="8" height="8" viewBox="0 0 10 10" fill="white">
-              <path d="M2 5l2 2 4-4" stroke="white" strokeWidth="1.5" fill="none" />
-            </svg>
-          </div>
-        ) : asset.dominantColor ? (
-          <span
-            className="w-4 h-4 rounded border border-av-border/60 shrink-0"
-            style={{ backgroundColor: asset.dominantColor }}
-            title={asset.dominantColor}
-          />
-        ) : (
-          <span className="w-4 h-4 shrink-0" />
-        )}
+        <FavoriteStarButton
+          isFavorite={Boolean(asset.isFavorite)}
+          onToggle={() => onToggleFavorite(asset.id, !asset.isFavorite)}
+          size="sm"
+          className={asset.isFavorite ? 'opacity-100' : 'opacity-60 hover:opacity-100'}
+        />
       </div>
     </div>
   )

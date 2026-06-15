@@ -20,6 +20,7 @@ tags:
   - name: asset
   - name: folder
   - name: tag
+  - name: category
 
 components:
   securitySchemes:
@@ -85,7 +86,8 @@ components:
       properties:
         id: { type: string, format: uuid }
         filename: { type: string }
-        fileType: { type: string }
+        fileType: { type: string, description: 'Detected format (pipeline)' }
+        typeId: { type: string, description: 'Effective type __sys:{fileType} or user uuid' }
         filePath: { type: string }
         resolvedFilePath: { type: string }
         notes: { type: string }
@@ -93,6 +95,11 @@ components:
         importedAt: { type: string, format: date-time }
         tagIds: { type: array, items: { type: string } }
         folderIds: { type: array, items: { type: string } }
+        categoryIds:
+          type: array
+          deprecated: true
+          description: 'Compat: [typeId]'
+          items: { type: string }
     AssetListPage:
       type: object
       properties:
@@ -118,6 +125,69 @@ components:
         name: { type: string }
         color: { type: string }
         usageCount: { type: integer }
+    CategoryDto:
+      type: object
+      properties:
+        id: { type: string, description: 'User uuid or system __sys:{fileType}' }
+        name: { type: string }
+        color: { type: string }
+        icon: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        usageCount: { type: integer }
+        sortOrder: { type: integer }
+        kind: { type: string, enum: [system, user] }
+        fileType: { type: string, description: 'Present when kind=system' }
+        createdAt: { type: string, format: date-time }
+    ImportLibrarySuccess:
+      type: object
+      description: |
+        JSend `data` for successful `POST /library/importFromLibrary` (includes `ok: true`).
+        Request blocks until complete; progress is IPC-only (`library:import-progress`), no HTTP SSE.
+      required:
+        - ok
+        - sourceDisplayName
+        - sourceLibraryRoot
+        - assetsAdded
+        - assetsSkippedDuplicate
+        - assetsFailed
+        - foldersCreated
+        - foldersMerged
+        - tagsCreated
+        - tagsMerged
+        - categoriesCreated
+        - categoriesMerged
+        - sourceLibraryTagName
+        - errors
+      properties:
+        ok: { type: boolean, enum: [true] }
+        importMode:
+          type: string
+          enum: [archive_to_archive, catalog_to_catalog_same_machine]
+        sourceDisplayName: { type: string }
+        sourceLibraryRoot: { type: string }
+        assetsAdded: { type: integer }
+        assetsSkippedDuplicate: { type: integer }
+        assetsFailed: { type: integer }
+        foldersCreated: { type: integer }
+        foldersMerged: { type: integer }
+        tagsCreated: { type: integer }
+        tagsMerged: { type: integer }
+        categoriesCreated: { type: integer }
+        categoriesMerged: { type: integer }
+        sourceLibraryTagName: { type: string }
+        assetsAddedLocal: { type: integer }
+        assetsAddedReferenced: { type: integer }
+        assetsLocalizedOnImport: { type: integer }
+        assetsSkippedDuplicateLocal: { type: integer }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [sourceAssetId, filename, reason]
+            properties:
+              sourceAssetId: { type: string }
+              filename: { type: string }
+              reason: { type: string }
 
 paths:
   /app/info:
@@ -153,6 +223,10 @@ paths:
     post:
       tags: [library]
       summary: Import entire library from another (archive→archive or catalog→catalog)
+      description: |
+        Source and active library must both be **archive** or both **catalog** (same machine paths).
+        Deduplicates by SHA-256; merges folder tree, tags, **user categories** (by name), asset `type_id`, notes, etc.
+        Source `displayName` is added as an extra tag. See library-import-from-library-spec.md.
       requestBody:
         required: true
         content:
@@ -167,6 +241,13 @@ paths:
       responses:
         '200':
           description: Import succeeded (catalog merge includes importMode, assetsAddedLocal, etc.)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/JSendSuccess'
+                  - properties:
+                      data: { $ref: '#/components/schemas/ImportLibrarySuccess' }
         '400':
           description: Invalid path, source mode mismatch, or unsupported archive/catalog combination
         '409':
@@ -181,7 +262,34 @@ paths:
         - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 1000 } }
         - { name: search, in: query, schema: { type: string } }
         - { name: folderId, in: query, schema: { type: string } }
-        - { name: fileType, in: query, schema: { type: string } }
+        - { name: fileType, in: query, schema: { type: string }, description: 'Deprecated; use typeFilters=__sys:{fileType}' }
+        - name: typeFilters
+          in: query
+          description: Comma-separated type ids (__sys:image or user category uuid); OR union
+          schema: { type: string }
+        - name: categories
+          in: query
+          description: Comma-separated user category uuids (legacy; merged into type filter)
+          schema: { type: string }
+        - name: tags
+          in: query
+          description: Comma-separated tag ids (OR union)
+          schema: { type: string }
+        - name: colorBucket
+          in: query
+          schema: { type: string }
+        - name: sizePreset
+          in: query
+          schema: { type: string, enum: [small, medium, large] }
+        - { name: minFileSizeMb, in: query, schema: { type: number } }
+        - { name: maxFileSizeMb, in: query, schema: { type: number } }
+        - name: datePreset
+          in: query
+          schema: { type: string, enum: [today, week, month, year] }
+        - name: extension
+          in: query
+          description: Exact extension without leading dot (e.g. png)
+          schema: { type: string }
         - { name: sortBy, in: query, schema: { type: string } }
         - { name: sortOrder, in: query, schema: { type: string, enum: [asc, desc] } }
       responses:
@@ -204,6 +312,28 @@ paths:
       responses:
         '200': { description: OK }
 
+  /asset/extensions:
+    get:
+      tags: [asset]
+      summary: List extensions used in the library
+      description: Sorted by asset count descending; values without leading dot (e.g. png)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/JSendSuccess'
+                  - properties:
+                      data:
+                        type: object
+                        required: [extensions]
+                        properties:
+                          extensions:
+                            type: array
+                            items: { type: string }
+
   /asset/info:
     get:
       tags: [asset]
@@ -218,6 +348,9 @@ paths:
     post:
       tags: [asset]
       summary: Import from local path
+      description: |
+        Does not accept `tagIds` / `typeId` / `categoryIds` in the body; optional `targetFolderId` for logical folder.
+        After import, call `POST /tag/assign` and `POST /category/assign` (see guide §3.7).
       requestBody:
         required: true
         content:
@@ -239,6 +372,8 @@ paths:
     post:
       tags: [asset]
       summary: Import direct media URL (main process download; page URLs return 400 — use pageVideoImport)
+      description: |
+        Does not accept `tagIds` / `typeId` / `categoryIds`; call `POST /tag/assign` and `POST /category/assign` (`typeId`) after import.
       requestBody:
         required: true
         content:
@@ -894,5 +1029,117 @@ paths:
               properties:
                 assetIds: { type: array, items: { type: string } }
                 tagIds: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /category/get:
+    get:
+      tags: [category]
+      summary: List types (user categories + system formats)
+      responses:
+        '200': { description: OK }
+
+  /category/info:
+    get:
+      tags: [category]
+      summary: Single type entry
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /category/create:
+    post:
+      tags: [category]
+      summary: Create user category
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                color: { type: string }
+                icon: { type: string, nullable: true }
+                description: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /category/update:
+    patch:
+      tags: [category]
+      summary: Update user category
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                name: { type: string }
+                color: { type: string }
+                icon: { type: string, nullable: true }
+                description: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /category/delete:
+    delete:
+      tags: [category]
+      summary: Delete user category
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /category/assign:
+    post:
+      tags: [category]
+      summary: Set effective asset type (one per asset)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetIds]
+              properties:
+                assetIds: { type: array, items: { type: string } }
+                typeId:
+                  type: string
+                  description: '__sys:{fileType} or user category uuid'
+                categoryIds:
+                  type: array
+                  maxItems: 1
+                  deprecated: true
+                  description: 'Compat: single-element array equals typeId'
+                  items: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /category/remove:
+    post:
+      tags: [category]
+      summary: Reset asset type to detected format (__sys:{file_type})
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetIds]
+              properties:
+                assetIds: { type: array, items: { type: string } }
+                categoryIds:
+                  type: array
+                  deprecated: true
+                  description: 'Ignored; kept for old clients'
+                  items: { type: string }
       responses:
         '200': { description: OK }

@@ -12,16 +12,20 @@ import { getThumbnailService } from '../../services/ThumbnailService'
 import { isModelThumbnailSkipped, clearModelThumbnailSkip } from '../../services/modelThumbnailSkip'
 import { waitForModelSnapshotBridge } from '../../services/modelThumbnailRenderer'
 import { ALL_SUPPORTED_IMPORT_EXTENSIONS } from '@/shared/supportedFormats'
-import { isSvgExtension } from '@/shared/svgFormats'
+import {
+  resolveFormatCapabilities,
+  supportsColorAnalysis,
+  needsSvgThumbForColorAnalysis
+} from '@/shared/formatCapabilities'
 import { resolveLibraryPath, itemThumbRelative } from '../../services/libraryBundle'
 import { resolveAssetContentPath } from '../../services/assetPathResolver'
 import { syncAssetSidecarFromDb } from '../../services/assetSidecar'
 import { analyzeColorsFromFile } from '../../services/analyzeAssetColors'
-import { queryAssets, getAssetById, deleteAssets } from '../../services/assetQueryService'
+import { queryAssets, getAssetById, deleteAssets, countFavoriteAssets, listDistinctExtensions } from '../../services/assetQueryService'
 import { persistAssetColorAnalysis } from '../../services/persistAssetColors'
 import { bufferToImageDataUrl, shouldUseOriginalImageDimensions } from '../../utils/thumbnailSizing'
 import { renameAsset } from '../../services/renameAsset'
-import { updateAssetNotes, updateAssetSourceUrl } from '../../services/assetMutationService'
+import { updateAssetNotes, updateAssetSourceUrl, setAssetFavorite } from '../../services/assetMutationService'
 import { copyAssetsToOtherLibrary } from '../../services/copyAssetsToOtherLibrary'
 import { promptDuplicateImport, registerDuplicateImportPromptHandlers } from '../../services/duplicateImportPrompt'
 import { scanLibraryContentHashes } from '../../services/contentHashService'
@@ -29,9 +33,6 @@ import { regenerateFontThumbnails } from '../../services/regenerateFontThumbnail
 import { regenerateModelThumbnails } from '../../services/regenerateModelThumbnails'
 import { regenerateEmbeddedDccThumbnails } from '../../services/regenerateEmbeddedDccThumbnails'
 import { regenerateTextPreviewThumbnails } from '../../services/regenerateTextPreviewThumbnails'
-import { isModel3dPreviewExtension } from '@/shared/model3dFormats'
-import { isTextPreviewExtension } from '@/shared/textPreviewFormats'
-import { isEmbeddedDccThumbExtension } from '@/shared/embeddedDccFormats'
 import {
   refreshAssetThumbnail,
   setCustomThumbnailFromClipboard,
@@ -71,13 +72,12 @@ function resolveThumbPathForColorAnalysis(asset: {
   id: string
   thumbnailPath: string | null
   extension: string
-  fileType: string
 }): string | undefined {
   if (asset.thumbnailPath) {
     const abs = resolveLibraryPath(asset.thumbnailPath)
     if (existsSync(abs)) return abs
   }
-  if (asset.fileType === 'image' && isSvgExtension(asset.extension)) {
+  if (needsSvgThumbForColorAnalysis(asset.extension)) {
     const abs = resolveLibraryPath(itemThumbRelative(asset.id))
     if (existsSync(abs)) return abs
   }
@@ -117,9 +117,21 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     return queryAssets(params)
   })
 
+  ipc.handle('assets:list-extensions', async () => {
+    if (!isDatabaseReady()) return [] as string[]
+    return listDistinctExtensions()
+  })
+
   ipc.handle('assets:get-by-id', async (_event, id: string) => {
     assertString('id', id)
     return getAssetById(id)
+  })
+
+  ipc.handle('assets:count-favorites', async () => countFavoriteAssets())
+
+  ipc.handle('assets:set-favorite', async (_event, id: string, favorite: unknown) => {
+    assertString('id', id)
+    return setAssetFavorite(id, favorite === true)
   })
 
   ipc.handle('assets:import', async (event, filePaths: string[], optionsOrFolderId?: string | ImportAssetOptions) => {
@@ -363,7 +375,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       if (!asset) continue
       const absFile = resolveAssetContentPath(asset)
       const absThumb = resolveThumbPathForColorAnalysis(asset)
-      const result = await analyzeColorsFromFile(absFile, asset.fileType, absThumb, id)
+      const result = await analyzeColorsFromFile(absFile, asset.extension, absThumb, id)
       if (!result) continue
       await persistAssetColorAnalysis(database, id, result)
       updated++
@@ -388,11 +400,11 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     const database = getDatabase()
     const asset = await database.select().from(assets).where(eq(assets.id, id)).get()
     if (!asset) return null
-    if (asset.fileType !== 'image' && asset.fileType !== 'video') return null
+    if (!supportsColorAnalysis(asset.extension)) return null
 
     const absFile = resolveAssetContentPath(asset)
     const absThumb = resolveThumbPathForColorAnalysis(asset)
-    const result = await analyzeColorsFromFile(absFile, asset.fileType, absThumb, id)
+    const result = await analyzeColorsFromFile(absFile, asset.extension, absThumb, id)
     if (!result) return null
 
     await persistAssetColorAnalysis(database, id, result)
@@ -442,6 +454,8 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
 
     if (!asset) return null
 
+    const caps = resolveFormatCapabilities(asset.extension ?? '')
+    const ext = asset.extension || ''
     const absFile = asset.filePath ? resolveAssetContentPath(asset) : ''
 
     if (isCustomThumbnail(asset.id)) {
@@ -450,11 +464,11 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
     }
 
     if (
-      asset.fileType === 'image' &&
+      caps.importPipeline === 'image' &&
       absFile &&
       existsSync(absFile) &&
       shouldUseOriginalImageDimensions(asset.width, asset.height) &&
-      asset.extension?.toLowerCase() !== '.exr'
+      caps.imagePipeline !== 'exr'
     ) {
       try {
         const buffer = readFileSync(absFile)
@@ -483,7 +497,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       }
     }
 
-    if (asset.fileType === 'image' && absFile && existsSync(absFile)) {
+    if (caps.importPipeline === 'image' && absFile && existsSync(absFile)) {
       const gen = await getThumbnailService().generate(
         absFile,
         asset.id,
@@ -504,12 +518,12 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
           return `data:image/webp;base64,${buf.toString('base64')}`
         }
         // EXR 不能直接作为原始位图直出给浏览器，否则会解析失败。
-        if (asset.extension?.toLowerCase() === '.exr') return null
+        if (caps.imagePipeline === 'exr') return null
         return bufferToImageDataUrl(gen.buffer, asset.mimeType || 'image/jpeg')
       }
     }
 
-    if (asset.fileType === 'video' && absFile && existsSync(absFile)) {
+    if (caps.importPipeline === 'video' && absFile && existsSync(absFile)) {
       const gen = await getThumbnailService().generateVideo(
         absFile,
         asset.id,
@@ -530,7 +544,7 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       }
     }
 
-    if (asset.fileType === 'font' && absFile && existsSync(absFile)) {
+    if (caps.importPipeline === 'font' && absFile && existsSync(absFile)) {
       const gen = await getThumbnailService().generateFont(absFile, asset.id, {
         width: 512,
         height: 512,
@@ -551,81 +565,72 @@ export function handleAssetOperations(ipc: typeof ipcMain): void {
       }
     }
 
-    if (asset.fileType === '3d' && absFile && existsSync(absFile)) {
-      const ext = asset.extension || asset.filePath.split('.').pop() || ''
+    if (caps.asyncThumbnail === 'model3d' && absFile && existsSync(absFile)) {
+      const relThumb = itemThumbRelative(asset.id)
+      const absThumb = resolveLibraryPath(relThumb)
 
-      if (isModel3dPreviewExtension(ext)) {
-        const relThumb = itemThumbRelative(asset.id)
-        const absThumb = resolveLibraryPath(relThumb)
-
-        if (existsSync(absThumb)) {
-          const fromDisk = readStoredThumbnailDataUrl(relThumb)
-          if (fromDisk) {
-            if (!asset.hasThumbnail || asset.thumbnailPath !== relThumb) {
-              await database
-                .update(assets)
-                .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
-                .where(eq(assets.id, id))
-            }
-            return fromDisk
+      if (existsSync(absThumb)) {
+        const fromDisk = readStoredThumbnailDataUrl(relThumb)
+        if (fromDisk) {
+          if (!asset.hasThumbnail || asset.thumbnailPath !== relThumb) {
+            await database
+              .update(assets)
+              .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
+              .where(eq(assets.id, id))
           }
-        }
-
-        clearModelThumbnailSkip(asset.id)
-        await waitForModelSnapshotBridge(90_000)
-        const gen = await getThumbnailService().generateModel(absFile, asset.id, ext, {
-          ...getThumbnailService().getGenerationDefaults(),
-          force: true
-        })
-        if (gen?.buffer?.length) {
-          await database
-            .update(assets)
-            .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
-            .where(eq(assets.id, id))
-          const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
-          return `data:image/webp;base64,${buf.toString('base64')}`
+          return fromDisk
         }
       }
 
-      if (isEmbeddedDccThumbExtension('.' + ext)) {
-        const relThumb = itemThumbRelative(asset.id)
-        const absThumb = resolveLibraryPath(relThumb)
+      clearModelThumbnailSkip(asset.id)
+      await waitForModelSnapshotBridge(90_000)
+      const gen = await getThumbnailService().generateModel(absFile, asset.id, ext, {
+        ...getThumbnailService().getGenerationDefaults(),
+        force: true
+      })
+      if (gen?.buffer?.length) {
+        await database
+          .update(assets)
+          .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
+          .where(eq(assets.id, id))
+        const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
+        return `data:image/webp;base64,${buf.toString('base64')}`
+      }
+    }
 
-        if (existsSync(absThumb)) {
-          const fromDisk = readStoredThumbnailDataUrl(relThumb)
-          if (fromDisk) {
-            if (!asset.hasThumbnail || asset.thumbnailPath !== relThumb) {
-              await database
-                .update(assets)
-                .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
-                .where(eq(assets.id, id))
-            }
-            return fromDisk
+    if (caps.asyncThumbnail === 'embedded-dcc' && absFile && existsSync(absFile)) {
+      const relThumb = itemThumbRelative(asset.id)
+      const absThumb = resolveLibraryPath(relThumb)
+
+      if (existsSync(absThumb)) {
+        const fromDisk = readStoredThumbnailDataUrl(relThumb)
+        if (fromDisk) {
+          if (!asset.hasThumbnail || asset.thumbnailPath !== relThumb) {
+            await database
+              .update(assets)
+              .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
+              .where(eq(assets.id, id))
           }
+          return fromDisk
         }
-
-        const gen = await getThumbnailService().generateEmbeddedDcc(absFile, asset.id, ext, {
-          ...getThumbnailService().getGenerationDefaults(),
-          force: true
-        })
-        if (gen?.buffer?.length) {
-          await database
-            .update(assets)
-            .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
-            .where(eq(assets.id, id))
-          const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
-          return `data:image/webp;base64,${buf.toString('base64')}`
-        }
-        return null
       }
 
+      const gen = await getThumbnailService().generateEmbeddedDcc(absFile, asset.id, ext, {
+        ...getThumbnailService().getGenerationDefaults(),
+        force: true
+      })
+      if (gen?.buffer?.length) {
+        await database
+          .update(assets)
+          .set({ thumbnailPath: relThumb, hasThumbnail: true, updatedAt: new Date() })
+          .where(eq(assets.id, id))
+        const buf = Buffer.isBuffer(gen.buffer) ? gen.buffer : Buffer.from(gen.buffer as ArrayLike<number>)
+        return `data:image/webp;base64,${buf.toString('base64')}`
+      }
       return null
     }
 
-    if ((asset.fileType === 'code' || asset.fileType === 'document') && absFile && existsSync(absFile)) {
-      const ext = asset.extension || ''
-      if (!isTextPreviewExtension('.' + ext)) return null
-
+    if (caps.asyncThumbnail === 'text-preview' && absFile && existsSync(absFile)) {
       const existingRel = resolveExistingThumbnailRelPath(asset.id, asset.thumbnailPath)
       if (existingRel) {
         const fromDisk = readStoredThumbnailDataUrl(existingRel)

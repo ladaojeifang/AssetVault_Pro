@@ -1,13 +1,31 @@
 {
   "allAssets": "All Assets",
+  "favorites": "Favorites",
   "folders": "Folders",
   "tags": "Tags",
+  "types": "Types",
+  "typesHint": "One effective type per asset; multi-select filters OR-match type_id. Includes system formats and your categories.",
+  "categories": "Categories",
+  "newCategory": "New category",
+  "newType": "New type",
+  "createCategoryTitle": "New category",
+  "categoryName": "Category name",
+  "categoryIconEmoji": "Optional icon, e.g. 📷",
+  "enterCategoryName": "Enter a category name",
+  "categoryCreated": "Category created",
+  "editCategoryTitle": "Edit category",
+  "categoryUpdated": "Category updated",
+  "deleteCategoryTitle": "Delete category",
+  "deleteCategoryContent": "Delete \"{{name}}\"? Assets using this type will revert to their detected format type. This cannot be undone.",
+  "deleteCategorySuccess": "Category deleted",
+  "noCategories": "No categories yet",
+  "noTags": "No tags yet",
   "newFolder": "New Folder",
   "newFolderDefault": "New Folder",
   "folderName": "Folder name",
   "folderIconEmoji": "Optional, e.g. 📷 Logo",
   "folderIconShort": "Optional, e.g. 📷",
-  "dragAltHint": "Sidebar: hold Alt while dragging to a folder to classify; drag to subfolder cards in the main area directly",
+  "dragAltHint": "Sidebar: hold Alt while dragging to a folder to add it there; drag to subfolder cards in the main area directly",
   "addedToFolder": "Added {{count}} item(s) to folder",
   "addToFolderFailed": "Failed to add to folder",
   "deleteFolderTitle": "Delete folder",
@@ -45,5 +63,9 @@
     "editIcon": "Edit folder icon",
     "editColor": "Edit folder color",
     "delete": "Delete folder"
+  },
+  "categoryMenu": {
+    "edit": "Edit category",
+    "delete": "Delete category"
   }
 }

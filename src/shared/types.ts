@@ -59,15 +59,22 @@ export interface AssetItem {
   sourceUrl?: string | null
   viewCount: number
   accessCount: number
+  /** User-marked favorite */
+  isFavorite?: boolean
   fileCreatedAt?: Date | null
   fileModifiedAt?: Date | null
   importedAt: Date
   updatedAt: Date
+  /** Effective sidebar type id: `__sys:{fileType}` or user category uuid */
+  typeId: string
   /** Tag ids from server when listing assets */
   tagIds?: string[]
+  /** @deprecated API compat alias; use typeId */
+  categoryIds?: string[]
   /** Logical folder ids (multi-assign) */
   folderIds?: string[]
   tags?: TagItem[]
+  categories?: CategoryItem[]
 }
 
 export interface TagItem {
@@ -79,6 +86,23 @@ export interface TagItem {
   createdAt: Date
 }
 
+export type CategoryKind = 'system' | 'user'
+
+export interface CategoryItem {
+  id: string
+  name: string
+  color: string
+  icon?: string | null
+  description?: string | null
+  usageCount: number
+  sortOrder: number
+  /** system = format-derived sidebar type; user = manually assigned */
+  kind: CategoryKind
+  /** Present when kind === 'system' */
+  fileType?: FileType
+  createdAt?: Date
+}
+
 export interface QueryParams {
   /** 0-based row offset for infinite scroll. If omitted, `page` is used. */
   offset?: number
@@ -86,14 +110,22 @@ export interface QueryParams {
   pageSize?: number
   search?: string
   folderId?: string
+  /** @deprecated Prefer typeFilters */
   fileType?: FileType
   tags?: string[]
+  /** @deprecated Prefer typeFilters */
+  categories?: string[]
+  /** Sidebar type filter ids: `__sys:{fileType}` or user category uuid (OR union) */
+  typeFilters?: string[]
+  favoritesOnly?: boolean
   colorBucket?: ColorBucket
   sizePreset?: SizePreset
   /** Min file size in MB (mutually exclusive with sizePreset in UI). */
   minFileSizeMb?: number
   maxFileSizeMb?: number
   datePreset?: DatePreset
+  /** Filter by file extension (no leading dot), e.g. `png`. */
+  extension?: string
   sortBy?: 'importedAt' | 'filename' | 'fileSize' | 'fileType' | 'extension' | 'dominantColor' | 'viewCount' | 'random'
   sortOrder?: 'asc' | 'desc'
 }

@@ -1,30 +1,27 @@
 import React, { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { FileType, SortField } from '@/shared/types'
+import type { CategoryItem, SortField, TagItem } from '@/shared/types'
 
 import type { ColorBucket } from '@/shared/colorBucket'
 
 import type { DatePreset, SizePreset } from '@/shared/assetFilters'
+import { hasActiveAssetFilters, formatExtensionFilterLabel } from '@/shared/assetFilters'
 
 import { FileSizeFilterControl } from './FileSizeFilterControl'
+import { ExtensionFilterControl } from './ExtensionFilterControl'
 
 import { ListColumnResizeHandle } from './ListColumnResizeHandle'
 import { getColorBucketOptions } from '../../utils/colorBucketLabels'
 
 import { getTranslatedDatePresetOptions } from '../../utils/assetFilterLabels'
 
-const FILE_TYPE_IDS: ReadonlyArray<FileType | '3d'> = [
-  'image',
-  'video',
-  'audio',
-  'font',
-  'design',
-  'document',
-  '3d',
-  'code',
-  'other'
-]
+function typeOptionLabel(item: CategoryItem, fileTypeLabel: (id: string) => string): string {
+  if (item.kind === 'system' && item.fileType) {
+    return fileTypeLabel(item.fileType)
+  }
+  return item.icon ? `${item.icon} ${item.name}` : item.name
+}
 
 function SortCaret({ active, order }: { active: boolean; order: 'asc' | 'desc' }) {
   if (!active) {
@@ -72,28 +69,28 @@ function SortButton({
   )
 }
 
-/** 统一两行：标题行 + 筛选行（无筛选也占位，保证各列对齐） */
-function HeaderColumn({
-  sort,
-  filter,
-  align = 'start'
+function ListFilterChip({
+  label,
+  color,
+  onRemove
 }: {
-  sort: React.ReactNode
-  filter?: React.ReactNode
-  align?: 'start' | 'end' | 'center'
+  label: string
+  color: string
+  onRemove: () => void
 }) {
-  const titleAlign =
-    align === 'end' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'
-  const filterAlign =
-    align === 'end' ? 'items-end' : align === 'center' ? 'items-center' : 'items-start'
-
   return (
-    <div className="flex flex-col min-w-0 w-full h-full">
-      <div className={`h-6 flex items-center shrink-0 ${titleAlign}`}>{sort}</div>
-      <div className={`min-h-[28px] pt-1 flex flex-col ${filterAlign} w-full`}>
-        {filter ?? <span className="block h-6 w-full" aria-hidden />}
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onRemove}
+      className="inline-flex items-center gap-1 max-w-[120px] px-1.5 py-0.5 rounded-md text-[10px] text-av-text-secondary bg-av-bg-elevated border border-av-border hover:border-av-accent-blue/50 hover:text-av-text-primary transition-colors"
+      title={label}
+    >
+      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} aria-hidden />
+      <span className="truncate">{label}</span>
+      <span className="text-av-text-muted shrink-0 leading-none" aria-hidden>
+        ×
+      </span>
+    </button>
   )
 }
 
@@ -102,16 +99,18 @@ function ListHeaderCell({
   resizable,
   onResizeColumn,
   onResetColumn,
-  children
+  children,
+  className = ''
 }: {
   columnIndex: number
   resizable?: boolean
   onResizeColumn?: (columnIndex: number, e: React.MouseEvent) => void
   onResetColumn?: (columnIndex: number) => void
   children: React.ReactNode
+  className?: string
 }) {
   return (
-    <div className="av-list-header__cell group/cell min-w-0 h-full">
+    <div className={`av-list-header__cell group/cell min-w-0 ${className}`}>
       {children}
       {resizable && onResizeColumn ? (
         <ListColumnResizeHandle
@@ -137,8 +136,15 @@ type Props = {
   sortField: SortField
   sortOrder: 'asc' | 'desc'
   onSort: (field: SortField) => void
-  fileTypeFilter: string | null
-  onFileTypeFilter: (type: string | null) => void
+  typeFilter: string | null
+  typeOptions: CategoryItem[]
+  onTypeFilter: (typeId: string | null) => void
+  typeFilters: string[]
+  tagFilters: string[]
+  tags: TagItem[]
+  onRemoveTypeFilter: (id: string) => void
+  onRemoveTagFilter: (id: string) => void
+  onClearFilters: () => void
   sizePresetFilter: SizePreset | null
   onSizePreset: (preset: SizePreset | null) => void
   fileSizeMinMb: number | null
@@ -146,6 +152,8 @@ type Props = {
   onFileSizeMb: (minMb: number | null, maxMb: number | null) => void
   datePresetFilter: DatePreset | null
   onDatePreset: (preset: DatePreset | null) => void
+  extensionFilter: string | null
+  onExtensionFilter: (extension: string | null) => void
   colorBucketFilter: ColorBucket | null
   onColorBucket: (bucket: ColorBucket | null) => void
 }
@@ -164,8 +172,15 @@ export function ListViewColumnHeader({
   sortField,
   sortOrder,
   onSort,
-  fileTypeFilter,
-  onFileTypeFilter,
+  typeFilter,
+  typeOptions,
+  onTypeFilter,
+  typeFilters,
+  tagFilters,
+  tags,
+  onRemoveTypeFilter,
+  onRemoveTagFilter,
+  onClearFilters,
   sizePresetFilter,
   onSizePreset,
   fileSizeMinMb,
@@ -173,6 +188,8 @@ export function ListViewColumnHeader({
   onFileSizeMb,
   datePresetFilter,
   onDatePreset,
+  extensionFilter,
+  onExtensionFilter,
   colorBucketFilter,
   onColorBucket
 }: Props): React.ReactElement {
@@ -183,6 +200,37 @@ export function ListViewColumnHeader({
 
   const fileTypeLabel = (id: string) =>
     id === '3d' ? '3D' : t(`fileTypes.${id}` as 'fileTypes.image')
+
+  const categoryById = useMemo(
+    () => new Map(typeOptions.map((c) => [c.id, c])),
+    [typeOptions]
+  )
+  const tagById = useMemo(() => new Map(tags.map((tag) => [tag.id, tag])), [tags])
+
+  const activeTypeItems = useMemo(
+    () =>
+      typeFilters
+        .map((id) => categoryById.get(id))
+        .filter((c): c is CategoryItem => Boolean(c)),
+    [typeFilters, categoryById]
+  )
+  const activeTagItems = useMemo(
+    () => tagFilters.map((id) => tagById.get(id)).filter((tag): tag is TagItem => Boolean(tag)),
+    [tagFilters, tagById]
+  )
+
+  const hasToolbarFilters = hasActiveAssetFilters({
+    colorBucket: colorBucketFilter,
+    sizePreset: sizePresetFilter,
+    fileSizeMinMb,
+    fileSizeMaxMb,
+    datePreset: datePresetFilter,
+    extension: extensionFilter
+  })
+  const hasSidebarFilters = typeFilters.length > 0 || tagFilters.length > 0
+  const hasAnyFilters = hasToolbarFilters || hasSidebarFilters
+
+  const gridStyle = { gridTemplateColumns }
 
   return (
     <div
@@ -214,153 +262,180 @@ export function ListViewColumnHeader({
       )}
 
       {contentOpen && (
-        <div
-          className={`av-list-header__grid ${headerGridClass} py-2 text-[11px]`}
-          style={{ gridTemplateColumns }}
-          role="row"
-        >
-          <ListHeaderCell
-            columnIndex={0}
-            resizable
-            onResizeColumn={onResizeColumn}
-            onResetColumn={onResetColumn}
+        <>
+          <div
+            className={`av-list-header__grid av-list-header__sort-row ${headerGridClass} py-1.5 text-[11px]`}
+            style={gridStyle}
+            role="row"
           >
-            <HeaderColumn
-              align="center"
-              sort={
+            <ListHeaderCell columnIndex={0} resizable onResizeColumn={onResizeColumn} onResetColumn={onResetColumn}>
+              <div className="flex items-center justify-center h-6">
                 <span className="text-[10px] text-av-text-muted/80 font-medium" aria-hidden>
                   {t('columns.thumb')}
                 </span>
-              }
-            />
-          </ListHeaderCell>
+              </div>
+            </ListHeaderCell>
 
-          <ListHeaderCell
-            columnIndex={1}
-            resizable
-            onResizeColumn={onResizeColumn}
-            onResetColumn={onResetColumn}
-          >
-            <HeaderColumn
-              sort={<SortButton label={t('columns.name')} field="filename" {...sortProps} />}
-            />
-          </ListHeaderCell>
+            <ListHeaderCell columnIndex={1} resizable onResizeColumn={onResizeColumn} onResetColumn={onResetColumn}>
+              <div className="flex items-center h-6 min-w-0">
+                <SortButton label={t('columns.name')} field="filename" {...sortProps} />
+              </div>
+            </ListHeaderCell>
 
-          <ListHeaderCell
-            columnIndex={2}
-            resizable
-            onResizeColumn={onResizeColumn}
-            onResetColumn={onResetColumn}
-          >
-            <HeaderColumn
-              sort={<SortButton label={t('columns.size')} field="fileSize" {...sortProps} />}
-              filter={
-                <FileSizeFilterControl
-                  sizePreset={sizePresetFilter}
-                  minMb={fileSizeMinMb}
-                  maxMb={fileSizeMaxMb}
-                  onPresetChange={onSizePreset}
-                  onMbChange={onFileSizeMb}
-                  selectClass="av-list-filter"
-                  inputClass="av-list-filter-input"
-                  layout="header"
-                />
-              }
-            />
-          </ListHeaderCell>
+            <ListHeaderCell columnIndex={2} resizable onResizeColumn={onResizeColumn} onResetColumn={onResetColumn}>
+              <div className="flex items-center h-6 min-w-0">
+                <SortButton label={t('columns.size')} field="fileSize" {...sortProps} />
+              </div>
+            </ListHeaderCell>
 
-          <ListHeaderCell
-            columnIndex={3}
-            resizable
-            onResizeColumn={onResizeColumn}
-            onResetColumn={onResetColumn}
-          >
-            <HeaderColumn
-              sort={<SortButton label={t('columns.type')} field="fileType" {...sortProps} />}
-              filter={
-                <select
-                  className="av-list-filter"
-                  value={fileTypeFilter ?? ''}
-                  onChange={(e) => onFileTypeFilter(e.target.value || null)}
-                  title={t('filterByType')}
-                >
-                  <option value="">{t('all')}</option>
-                  {FILE_TYPE_IDS.map((id) => (
-                    <option key={id} value={id}>
-                      {fileTypeLabel(id)}
-                    </option>
-                  ))}
-                </select>
-              }
-            />
-          </ListHeaderCell>
+            <ListHeaderCell columnIndex={3} resizable onResizeColumn={onResizeColumn} onResetColumn={onResetColumn}>
+              <div className="flex items-center h-6 min-w-0">
+                <SortButton label={t('columns.type')} field="fileType" {...sortProps} />
+              </div>
+            </ListHeaderCell>
 
-          <ListHeaderCell
-            columnIndex={4}
-            resizable
-            onResizeColumn={onResizeColumn}
-            onResetColumn={onResetColumn}
-          >
-            <HeaderColumn
-              sort={<SortButton label={t('columns.extension')} field="extension" {...sortProps} />}
-            />
-          </ListHeaderCell>
+            <ListHeaderCell columnIndex={4} resizable onResizeColumn={onResizeColumn} onResetColumn={onResetColumn}>
+              <div className="flex items-center h-6 min-w-0">
+                <SortButton label={t('columns.extension')} field="extension" {...sortProps} />
+              </div>
+            </ListHeaderCell>
 
-          <ListHeaderCell
-            columnIndex={5}
-            resizable
-            onResizeColumn={onResizeColumn}
-            onResetColumn={onResetColumn}
-          >
-            <HeaderColumn
-              sort={<SortButton label={t('columns.importedAt')} field="importedAt" {...sortProps} />}
-              filter={
-                <select
-                  className="av-list-filter"
-                  value={datePresetFilter ?? ''}
-                  onChange={(e) => onDatePreset((e.target.value || null) as DatePreset | null)}
-                  title={t('filterByDate')}
-                >
-                  <option value="">{t('all')}</option>
-                  {datePresetOptions.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              }
-            />
-          </ListHeaderCell>
+            <ListHeaderCell columnIndex={5} resizable onResizeColumn={onResizeColumn} onResetColumn={onResetColumn}>
+              <div className="flex items-center h-6 min-w-0">
+                <SortButton label={t('columns.importedAt')} field="importedAt" {...sortProps} />
+              </div>
+            </ListHeaderCell>
 
-          <ListHeaderCell columnIndex={6}>
-            <HeaderColumn
-              align="end"
-              sort={
+            <ListHeaderCell columnIndex={6}>
+              <div className="flex items-center justify-end h-6 min-w-0">
                 <SortButton label={t('columns.dominantColor')} field="dominantColor" {...sortProps} />
-              }
-              filter={
-                <div className="av-list-color-row" role="group" aria-label={t('filterBar.dominantColor')}>
-                  {colorBucketOptions.map((opt) => {
-                    const active = colorBucketFilter === opt.id
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        title={opt.label}
-                        onClick={() => onColorBucket(active ? null : opt.id)}
-                        className="av-list-color-swatch"
-                        data-active={active}
-                        style={{ backgroundColor: opt.hex }}
-                        aria-label={opt.label}
-                        aria-pressed={active}
-                      />
-                    )
-                  })}
-                </div>
-              }
-            />
-          </ListHeaderCell>
-        </div>
+              </div>
+            </ListHeaderCell>
+          </div>
+
+          <div
+            className={`av-list-header__grid av-list-header__filter-row ${headerGridClass} pb-2 text-[11px]`}
+            style={gridStyle}
+            role="row"
+          >
+            <div className="av-list-header__filter-cell" aria-hidden />
+
+            <div className="av-list-header__filter-cell min-w-0">
+              <div className="flex items-center gap-1 min-w-0 flex-wrap">
+                {hasAnyFilters ? (
+                  <button
+                    type="button"
+                    onClick={onClearFilters}
+                    className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md border border-av-border/60 bg-av-bg-elevated/50 text-av-text-muted hover:text-av-accent-blue hover:border-av-accent-blue/40 transition-colors"
+                    title={t('clearFilters')}
+                    aria-label={t('clearFilters')}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+                    </svg>
+                  </button>
+                ) : null}
+                {activeTypeItems.map((item) => (
+                  <ListFilterChip
+                    key={item.id}
+                    label={item.icon ? `${item.icon} ${item.name}` : item.name}
+                    color={item.color}
+                    onRemove={() => onRemoveTypeFilter(item.id)}
+                  />
+                ))}
+                {activeTagItems.map((tag) => (
+                  <ListFilterChip
+                    key={tag.id}
+                    label={tag.name}
+                    color={tag.color}
+                    onRemove={() => onRemoveTagFilter(tag.id)}
+                  />
+                ))}
+                {extensionFilter ? (
+                  <ListFilterChip
+                    label={formatExtensionFilterLabel(extensionFilter)}
+                    color="#64748b"
+                    onRemove={() => onExtensionFilter(null)}
+                  />
+                ) : null}
+              </div>
+            </div>
+
+            <div className="av-list-header__filter-cell min-w-0">
+              <FileSizeFilterControl
+                sizePreset={sizePresetFilter}
+                minMb={fileSizeMinMb}
+                maxMb={fileSizeMaxMb}
+                onPresetChange={onSizePreset}
+                onMbChange={onFileSizeMb}
+                selectClass="av-list-filter"
+                inputClass="av-list-filter-input"
+                layout="stack"
+                compact
+              />
+            </div>
+
+            <div className="av-list-header__filter-cell min-w-0">
+              <select
+                className="av-list-filter"
+                value={typeFilter ?? ''}
+                onChange={(e) => onTypeFilter(e.target.value || null)}
+                title={t('filterByType')}
+              >
+                <option value="">{t('all')}</option>
+                {typeOptions.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {typeOptionLabel(item, fileTypeLabel)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="av-list-header__filter-cell min-w-0">
+              <ExtensionFilterControl
+                value={extensionFilter}
+                onChange={onExtensionFilter}
+              />
+            </div>
+
+            <div className="av-list-header__filter-cell min-w-0">
+              <select
+                className="av-list-filter"
+                value={datePresetFilter ?? ''}
+                onChange={(e) => onDatePreset((e.target.value || null) as DatePreset | null)}
+                title={t('filterByDate')}
+              >
+                <option value="">{t('all')}</option>
+                {datePresetOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="av-list-header__filter-cell min-w-0">
+              <div className="av-list-color-row" role="group" aria-label={t('filterBar.dominantColor')}>
+                {colorBucketOptions.map((opt) => {
+                  const active = colorBucketFilter === opt.id
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      title={opt.label}
+                      onClick={() => onColorBucket(active ? null : opt.id)}
+                      className="av-list-color-swatch"
+                      data-active={active}
+                      style={{ backgroundColor: opt.hex }}
+                      aria-label={opt.label}
+                      aria-pressed={active}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )

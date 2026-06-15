@@ -1,5 +1,31 @@
 {
   "closePanel": "Close panel",
+  "fileInfoSection": "File information",
+  "assetId": "Asset ID",
+  "type": "Type",
+  "size": "Size",
+  "dimensions": "Dimensions",
+  "duration": "Duration",
+  "imported": "Imported",
+  "views": "Views",
+  "tagsSection": "Tags",
+  "categoriesSection": "Type",
+  "categoriesHint": "One type per asset — system format types or your custom categories. Changing type does not affect preview pipelines (still based on file format).",
+  "resetTypeToFormat": "Reset to detected format type",
+  "addCategory": "Add category…",
+  "categoryNamePlaceholder": "Category name…",
+  "createNewCategory": "+ Create new category",
+  "addTag": "Add tag…",
+  "tagNamePlaceholder": "Tag name…",
+  "createTag": "Create",
+  "createNewTag": "+ Create new tag",
+  "colorAnalysisSection": "Color analysis",
+  "dominantColor": "Dominant color",
+  "sourceLinkSection": "Source link",
+  "openFile": "Open",
+  "showInExplorer": "Show in Explorer",
+  "deleteAsset": "Delete asset",
+  "confirmDeleteAsset": "Delete \"{{name}}\"?",
   "storage": "Storage",
   "storageRefMissing": "Reference (source missing)",
   "storageRefOnly": "Reference only",
@@ -56,13 +82,21 @@
     "type": {
       "subtitle": "Type filter",
       "infoSection": "Type information",
-      "footerHint": "Click the same type in the sidebar again to clear the filter and return to the library overview."
+      "footerHint": "Click the same item again in the sidebar Types section to clear the filter."
+    },
+    "category": {
+      "subtitle": "Category filter",
+      "infoSection": "Category information",
+      "assetCount": "{{count}} assets",
+      "footerHint": "Click the same type again in the sidebar Types section to clear the filter."
     },
     "labels": {
       "name": "Name",
       "totalAssets": "Total assets",
       "folders": "Folders",
       "tags": "Tags",
+      "categories": "Categories",
+      "usageCount": "Linked assets",
       "itemPacks": "Item packs",
       "dbRows": "Database rows",
       "assetCount": "Asset count",
@@ -82,7 +116,10 @@
       "sizePreset": "Size {{value}}",
       "volume": "File size {{value}}",
       "date": "Date {{value}}",
-      "tags": "{{count}} tag filters"
+      "extension": "Extension {{value}}",
+      "tags": "{{count}} tag filters",
+      "types": "{{count}} type filters",
+      "categories": "{{count}} category filters"
     },
     "fileTypeDesc": {
       "image": "Images and photos",

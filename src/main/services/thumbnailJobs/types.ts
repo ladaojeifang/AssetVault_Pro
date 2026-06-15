@@ -51,7 +51,7 @@ export type ThumbGenerateFn = (
 export interface AsyncThumbnailJob {
   id: 'model3d' | 'embedded-dcc' | 'text-preview'
   logTag: string
-  matchesAsset: (fileType: string, extNoDot: string) => boolean
+  matchesAsset: (extNoDot: string) => boolean
   loadRows: (database: Database) => Promise<AssetThumbRow[]>
   /** When false, non-matching rows in loadRows count as skipped (3D preview job). */
   rowsAreCandidatesOnly: boolean

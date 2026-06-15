@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react'
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useApp } from '../../stores/AppContext'
 import { flattenFolderTree } from '../../utils/flattenFolderTree'
@@ -17,18 +17,34 @@ import {
   listAssetPreviewKinds
 } from '@/shared/assetPreviewRegistry'
 import { isSvgExtension, isSvgOverRasterLimit } from '@/shared/svgFormats'
+import {
+  supportsColorAnalysis,
+  isFontPreviewExtension,
+  shouldRenderThumbnailSlot,
+  resolveFormatCapabilities
+} from '@/shared/formatCapabilities'
 import { openAssetPreview } from '../../utils/openAssetPreview'
 import { FileTypePlaceholder } from '../Common/FileTypePlaceholder'
+import { isSystemTypeCategoryId } from '@/shared/assetTypeRegistry'
 import { DESTRUCTIVE_BUTTON_CLASS } from '../../theme/destructiveActionClasses'
 
 const DetailPanel: React.FC = () => {
   const { t } = useTranslation('detail')
-  const { selectedAssetIds, assets, tags, folderTree, clearSelection, refreshAssets, refreshFolders, setDetailPanelOpen, refreshTags, openFontPreview, openModelPreview, openSvgPreview, openExrPreview, openMarkdownPreview } = useApp()
+  const { t: ta } = useTranslation('assets')
+  const { t: tc } = useTranslation('common')
+  const { selectedAssetIds, assets, tags, categories, folderTree, clearSelection, refreshAssets, refreshFolders, setDetailPanelOpen, refreshTags, refreshCategories, openFontPreview, openModelPreview, openSvgPreview, openExrPreview, openMarkdownPreview } = useApp()
+  const sortedCategories = useMemo(
+    () => [...categories].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
+    [categories]
+  )
   const [assetTagIds, setAssetTagIds] = useState<string[]>([])
+  const [assetTypeId, setAssetTypeId] = useState('')
   const [assetFolderIds, setAssetFolderIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [newTagName, setNewTagName] = useState('')
   const [showTagInput, setShowTagInput] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [showCategoryInput, setShowCategoryInput] = useState(false)
   const [notesDraft, setNotesDraft] = useState('')
   const notesDirtyRef = useRef(false)
   const savingNotesRef = useRef(false)
@@ -46,10 +62,18 @@ const DetailPanel: React.FC = () => {
     : ''
 
   useEffect(() => {
-    if (selectedAsset && (selectedAsset as any).tagIds) {
-      setAssetTagIds((selectedAsset as any).tagIds || [])
+    if (selectedAsset?.tagIds) {
+      setAssetTagIds(selectedAsset.tagIds)
     } else if (selectedAsset) {
       setAssetTagIds([])
+    }
+  }, [selectedAsset])
+
+  useEffect(() => {
+    if (selectedAsset?.typeId) {
+      setAssetTypeId(selectedAsset.typeId)
+    } else if (selectedAsset) {
+      setAssetTypeId(`__sys:${selectedAsset.fileType}`)
     }
   }, [selectedAsset])
 
@@ -76,7 +100,7 @@ const DetailPanel: React.FC = () => {
       setPaletteLoading(false)
       return
     }
-    if (a.fileType !== 'image' && a.fileType !== 'video') {
+    if (!supportsColorAnalysis(a.extension)) {
       setPaletteColors([])
       setPaletteLoading(false)
       return
@@ -117,7 +141,7 @@ const DetailPanel: React.FC = () => {
     return () => {
       cancelled = true
     }
-  }, [selectedAsset?.id, selectedAsset?.colors, selectedAsset?.dominantColor, selectedAsset?.fileType])
+  }, [selectedAsset?.id, selectedAsset?.colors, selectedAsset?.dominantColor, selectedAsset?.extension])
 
   const saveNotesIfChanged = useCallback(async () => {
     const sel = assets.find((a) => selectedAssetIds.has(a.id))
@@ -229,8 +253,35 @@ const DetailPanel: React.FC = () => {
     }
   }
 
+  async function handleSetType(typeId: string) {
+    try {
+      setLoading(true)
+      await window.assetVaultAPI.categories.setAssetsType([asset.id], typeId)
+      setAssetTypeId(typeId)
+      await refreshAssets()
+      await refreshCategories()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleCreateCategory() {
+    const name = newCategoryName.trim()
+    if (!name) return
+    try {
+      setLoading(true)
+      const created = await window.assetVaultAPI.categories.create({ name })
+      await refreshCategories()
+      await handleSetType(created.id)
+      setNewCategoryName('')
+      setShowCategoryInput(false)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handleDelete() {
-    if (!confirm(`Delete "${asset.filename}"?`)) return
+    if (!confirm(t('confirmDeleteAsset', { name: asset.filename }))) return
     await window.assetVaultAPI.assets.delete([asset.id])
     clearSelection()
     await refreshAssets()
@@ -252,7 +303,7 @@ const DetailPanel: React.FC = () => {
         <button
           onClick={() => setDetailPanelOpen(false)}
           className="btn-icon"
-          title="Close panel"
+          title={t('closePanel')}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 6L6 18M6 6l12 12" />
@@ -268,22 +319,25 @@ const DetailPanel: React.FC = () => {
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-5 scrollbar-hide">
         {/* File info */}
-        <InfoSection title="File Information">
-          <InfoRow label="Asset ID" value={asset.id} variant="block" />
-          <InfoRow label="Type" value={asset.fileType} />
-          <InfoRow label="Size" value={formatFileSize(asset.fileSize)} />
+        <InfoSection title={t('fileInfoSection')}>
+          <InfoRow label={t('assetId')} value={asset.id} variant="block" />
+          <InfoRow
+            label={t('type')}
+            value={ta(`fileTypes.${asset.fileType}` as 'fileTypes.image', { defaultValue: asset.fileType })}
+          />
+          <InfoRow label={t('size')} value={formatFileSize(asset.fileSize)} />
           {asset.width && asset.height && (
             <InfoRow
-              label="Dimensions"
+              label={t('dimensions')}
               value={`${asset.width} x ${asset.height} px`}
             />
           )}
-          {asset.duration && <InfoRow label="Duration" value={`${asset.duration.toFixed(1)}s`} />}
+          {asset.duration && <InfoRow label={t('duration')} value={`${asset.duration.toFixed(1)}s`} />}
           <InfoRow
-            label="Imported"
+            label={t('imported')}
             value={new Date(asset.importedAt).toLocaleString()}
           />
-          <InfoRow label="Views" value={String(asset.viewCount)} />
+          <InfoRow label={t('views')} value={String(asset.viewCount)} />
           <InfoRow
             label={t('storage')}
             value={
@@ -318,7 +372,7 @@ const DetailPanel: React.FC = () => {
           </button>
         ))}
 
-        {asset.fileType === 'font' && (
+        {isFontPreviewExtension(asset.extension) && (
           <FontDetailSection asset={asset} onRefresh={() => void refreshAssets()} />
         )}
         <InfoSection title={t('foldersSection')}>
@@ -371,8 +425,83 @@ const DetailPanel: React.FC = () => {
           </div>
         </InfoSection>
 
+        <InfoSection title={t('categoriesSection')}>
+          <p className="text-[11px] text-av-text-muted mb-2 leading-relaxed">{t('categoriesHint')}</p>
+          <div className="space-y-2">
+            {showCategoryInput ? (
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void handleCreateCategory()
+                    if (e.key === 'Escape') {
+                      setShowCategoryInput(false)
+                      setNewCategoryName('')
+                    }
+                  }}
+                  placeholder={t('categoryNamePlaceholder')}
+                  className="input-base py-1 text-xs flex-1"
+                  autoFocus
+                />
+                <button
+                  onClick={() => void handleCreateCategory()}
+                  className="btn-primary py-1 px-2 text-xs"
+                  disabled={loading || !newCategoryName.trim()}
+                >
+                  {t('createTag')}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCategoryInput(false)
+                    setNewCategoryName('')
+                  }}
+                  className="btn-secondary py-1 px-2 text-xs"
+                >
+                  {tc('cancel')}
+                </button>
+              </div>
+            ) : (
+              <select
+                className="input-base py-1 text-xs w-full"
+                value={assetTypeId}
+                disabled={loading}
+                onChange={(e) => {
+                  if (e.target.value === '__create__') {
+                    setShowCategoryInput(true)
+                  } else if (e.target.value) {
+                    void handleSetType(e.target.value)
+                  }
+                }}
+              >
+                {sortedCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.kind === 'system'
+                      ? ta(`fileTypes.${category.fileType ?? category.name}` as 'fileTypes.image', {
+                          defaultValue: category.name
+                        })
+                      : `${category.icon ? `${category.icon} ` : ''}${category.name}`}
+                  </option>
+                ))}
+                <option value="__create__">{t('createNewCategory')}</option>
+              </select>
+            )}
+            {!isSystemTypeCategoryId(assetTypeId) ? (
+              <button
+                type="button"
+                className="text-[11px] text-av-text-muted hover:text-av-text-secondary"
+                disabled={loading}
+                onClick={() => void handleSetType(`__sys:${asset.fileType}`)}
+              >
+                {t('resetTypeToFormat')}
+              </button>
+            ) : null}
+          </div>
+        </InfoSection>
+
         {/* Tags */}
-        <InfoSection title="Tags">
+        <InfoSection title={t('tagsSection')}>
           <div className="space-y-2">
             {/* Assigned tags */}
             {assetTagIds.length > 0 && (
@@ -406,7 +535,7 @@ const DetailPanel: React.FC = () => {
                         setNewTagName('')
                       }
                     }}
-                    placeholder="Tag name..."
+                    placeholder={t('tagNamePlaceholder')}
                     className="input-base py-1 text-xs flex-1"
                     autoFocus
                   />
@@ -415,7 +544,7 @@ const DetailPanel: React.FC = () => {
                     className="btn-primary py-1 px-2 text-xs"
                     disabled={loading || !newTagName.trim()}
                   >
-                    Create
+                    {t('createTag')}
                   </button>
                   <button
                     onClick={() => {
@@ -424,7 +553,7 @@ const DetailPanel: React.FC = () => {
                     }}
                     className="btn-secondary py-1 px-2 text-xs"
                   >
-                    Cancel
+                    {tc('cancel')}
                   </button>
                 </>
               ) : (
@@ -441,7 +570,9 @@ const DetailPanel: React.FC = () => {
                     }}
                     defaultValue=""
                   >
-                    <option value="" disabled>Add tag...</option>
+                    <option value="" disabled>
+                      {t('addTag')}
+                    </option>
                     {tags
                       .filter((t) => !assetTagIds.includes(t.id))
                       .map((tag) => (
@@ -449,7 +580,7 @@ const DetailPanel: React.FC = () => {
                           {tag.name}
                         </option>
                       ))}
-                    <option value="__create__">+ Create new tag</option>
+                    <option value="__create__">{t('createNewTag')}</option>
                   </select>
                 </>
               )}
@@ -458,8 +589,9 @@ const DetailPanel: React.FC = () => {
         </InfoSection>
 
         {/* Color info */}
-        {(asset.fileType === 'image' || asset.fileType === 'video') && (
-          <InfoSection title="COLOR ANALYSIS">
+        {(resolveFormatCapabilities(asset.extension).importPipeline === 'image' ||
+          resolveFormatCapabilities(asset.extension).importPipeline === 'video') && (
+          <InfoSection title={t('colorAnalysisSection')}>
             {paletteLoading && paletteColors.length === 0 ? (
               <p className="text-xs text-av-text-muted">{t('analyzingColors')}</p>
             ) : paletteColors.length > 0 ? (
@@ -476,7 +608,7 @@ const DetailPanel: React.FC = () => {
                     <p className="text-sm font-mono text-av-text-primary truncate">
                       {paletteColors[0]}
                     </p>
-                    <p className="text-xs text-av-text-muted">Dominant color</p>
+                    <p className="text-xs text-av-text-muted">{t('dominantColor')}</p>
                   </div>
                 </div>
               </div>
@@ -504,7 +636,7 @@ const DetailPanel: React.FC = () => {
         </InfoSection>
 
         {/* Source URL */}
-        <InfoSection title="SOURCE LINK">
+        <InfoSection title={t('sourceLinkSection')}>
           <p className="text-[11px] text-av-text-muted mb-2 leading-relaxed">
             {t('sourceUrlHint')}
           </p>
@@ -600,13 +732,13 @@ const DetailPanel: React.FC = () => {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
           </svg>
-          Open
+          {t('openFile')}
         </button>
         <button onClick={openInExplorer} className="btn-secondary w-full justify-center text-xs">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
           </svg>
-          Show in Explorer
+          {t('showInExplorer')}
         </button>
         <button
           onClick={handleDelete}
@@ -615,7 +747,7 @@ const DetailPanel: React.FC = () => {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
           </svg>
-          Delete Asset
+          {t('deleteAsset')}
         </button>
       </div>
     </div>
@@ -646,13 +778,13 @@ function DetailPreview({ asset }: { asset: any }) {
       }
     }
 
-    if (asset.fileType === '3d') {
+    if (resolveFormatCapabilities(asset.extension).defaultFileType === '3d' && !canAssetPreview(asset, 'model')) {
       return () => {
         cancelled = true
       }
     }
 
-    if (asset.hasThumbnail || asset.fileType === 'image' || asset.fileType === 'video' || asset.fileType === 'font') {
+    if (shouldRenderThumbnailSlot(asset.extension, asset.hasThumbnail)) {
       void window.assetVaultAPI.assets.getThumbnail(asset.id).then((data) => {
         if (!cancelled && data) setPreviewSrc(data as string)
       })
@@ -660,7 +792,7 @@ function DetailPreview({ asset }: { asset: any }) {
     return () => {
       cancelled = true
     }
-  }, [asset.id, asset.fileType, asset.filePath, asset.resolvedFilePath])
+  }, [asset.id, asset.extension, asset.hasThumbnail, asset.filePath, asset.resolvedFilePath])
 
   if (canAssetPreview(asset, 'model') && modelFileUrl) {
     return (

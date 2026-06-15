@@ -335,7 +335,9 @@ export function LibrarySettingsPanel(): React.ReactElement {
               created: importResult.foldersCreated,
               merged: importResult.foldersMerged,
               tagsCreated: importResult.tagsCreated,
-              tagsMerged: importResult.tagsMerged
+              tagsMerged: importResult.tagsMerged,
+              categoriesCreated: importResult.categoriesCreated,
+              categoriesMerged: importResult.categoriesMerged
             })}
           </div>
           <div className="text-xs text-av-text-muted">

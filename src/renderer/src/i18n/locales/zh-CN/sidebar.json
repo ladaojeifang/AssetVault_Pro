@@ -1,13 +1,31 @@
 {
   "allAssets": "全部资产",
+  "favorites": "收藏",
   "folders": "文件夹",
   "tags": "标签",
+  "types": "类型",
+  "typesHint": "每资产一种有效类型；多选筛选为 OR（匹配 type_id）。含系统格式与您创建的分类。",
+  "categories": "分类",
+  "newCategory": "新建分类",
+  "newType": "新建类型",
+  "createCategoryTitle": "新建分类",
+  "categoryName": "分类名称",
+  "categoryIconEmoji": "可选图标，如 📷",
+  "enterCategoryName": "请输入分类名称",
+  "categoryCreated": "已创建分类",
+  "editCategoryTitle": "编辑分类",
+  "categoryUpdated": "分类已更新",
+  "deleteCategoryTitle": "删除分类",
+  "deleteCategoryContent": "确定删除「{{name}}」？使用该类型的资产将恢复为检测到的格式类型，此操作不可撤销。",
+  "deleteCategorySuccess": "已删除分类",
+  "noCategories": "暂无分类",
+  "noTags": "暂无标签",
   "newFolder": "新建文件夹",
   "newFolderDefault": "新建文件夹",
   "folderName": "文件夹名称",
   "folderIconEmoji": "可选，如 📷 Logo",
   "folderIconShort": "可选，如 📷",
-  "dragAltHint": "侧栏：按住 Alt 拖到文件夹可加入分类；主区域子文件夹卡片可直接拖入",
+  "dragAltHint": "侧栏：按住 Alt 拖到文件夹可加入该文件夹；主区域子文件夹卡片可直接拖入",
   "addedToFolder": "已将 {{count}} 项加入文件夹",
   "addToFolderFailed": "加入文件夹失败",
   "deleteFolderTitle": "删除文件夹",
@@ -45,5 +63,9 @@
     "editIcon": "修改文件夹图标",
     "editColor": "修改文件夹颜色",
     "delete": "删除文件夹"
+  },
+  "categoryMenu": {
+    "edit": "编辑分类",
+    "delete": "删除分类"
   }
 }

@@ -89,10 +89,9 @@ export async function runThumbnailJobForAsset(
   job: AsyncThumbnailJob,
   assetId: string,
   absFile: string,
-  extNoDot: string,
-  fileType: string
+  extNoDot: string
 ): Promise<void> {
-  if (!job.matchesAsset(fileType, extNoDot)) return
+  if (!job.matchesAsset(extNoDot)) return
   if (isCustomThumbnail(assetId)) return
 
   const row = await database
@@ -146,11 +145,10 @@ export function scheduleAsyncThumbnailAfterImport(
   assetId: string,
   absFile: string,
   extNoDot: string,
-  fileType: string,
   job: AsyncThumbnailJob
 ): void {
-  if (!job.matchesAsset(fileType, extNoDot)) return
-  deferThumbnailWork(() => runThumbnailJobForAsset(database, job, assetId, absFile, extNoDot, fileType))
+  if (!job.matchesAsset(extNoDot)) return
+  deferThumbnailWork(() => runThumbnailJobForAsset(database, job, assetId, absFile, extNoDot))
 }
 
 export async function processPendingForJob(database: Database, job: AsyncThumbnailJob): Promise<void> {
@@ -160,13 +158,13 @@ export async function processPendingForJob(database: Database, job: AsyncThumbna
 
   const rows = await job.loadRows(database)
   for (const row of rows) {
-    if (!job.matchesAsset(row.fileType, row.extension)) continue
+    if (!job.matchesAsset(row.extension)) continue
     if (!shouldProcessPendingRow(row, job)) continue
 
     const absFile = row.filePath ? resolveAssetContentPath(row) : ''
     if (!absFile) continue
 
-    await runThumbnailJobForAsset(database, job, row.id, absFile, row.extension, row.fileType)
+    await runThumbnailJobForAsset(database, job, row.id, absFile, row.extension)
   }
 }
 
@@ -191,7 +189,7 @@ export async function regenerateForJob(
     const row = rows[i]!
     onProgress?.({ current: i + 1, total, assetId: row.id, status: 'processing' })
 
-    if (!job.rowsAreCandidatesOnly && !job.matchesAsset(row.fileType, row.extension)) {
+    if (!job.rowsAreCandidatesOnly && !job.matchesAsset(row.extension)) {
       skipped++
       onProgress?.({ current: i + 1, total, assetId: row.id, status: 'done' })
       continue

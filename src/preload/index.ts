@@ -88,18 +88,12 @@ const api = {
 
   // Asset operations
   assets: {
-    query: (params: {
-      offset?: number
-      page?: number
-      pageSize?: number
-      search?: string
-      folderId?: string
-      fileType?: string
-      tags?: string[]
-      sortBy?: string
-      sortOrder?: 'asc' | 'desc'
-    }) => ipcRenderer.invoke('assets:query', params),
+    query: (params: import('@/shared/types').QueryParams) => ipcRenderer.invoke('assets:query', params),
+    listExtensions: () => ipcRenderer.invoke('assets:list-extensions') as Promise<string[]>,
     getById: (id: string) => ipcRenderer.invoke('assets:get-by-id', id),
+    countFavorites: () => ipcRenderer.invoke('assets:count-favorites') as Promise<number>,
+    setFavorite: (id: string, favorite: boolean) =>
+      ipcRenderer.invoke('assets:set-favorite', id, favorite) as Promise<import('@/shared/types').AssetItem | null>,
     import: (
       filePaths: string[],
       options?: string | import('../shared/importTypes').ImportAssetOptions
@@ -390,6 +384,23 @@ const api = {
       ipcRenderer.invoke('tags:assign-to-assets', assetIds, tagIds),
     removeFromAssets: (assetIds: string[], tagIds: string[]) =>
       ipcRenderer.invoke('tags:remove-from-assets', assetIds, tagIds)
+  },
+
+  categories: {
+    list: () => ipcRenderer.invoke('categories:list') as Promise<import('@/shared/types').CategoryItem[]>,
+    create: (data: { name: string; color?: string; icon?: string; description?: string }) =>
+      ipcRenderer.invoke('categories:create', data) as Promise<import('@/shared/types').CategoryItem>,
+    update: (id: string, data: Record<string, unknown>) =>
+      ipcRenderer.invoke('categories:update', id, data),
+    delete: (id: string) => ipcRenderer.invoke('categories:delete', id),
+    setAssetsType: (assetIds: string[], typeId: string) =>
+      ipcRenderer.invoke('categories:set-assets-type', assetIds, typeId),
+    resetAssetsType: (assetIds: string[]) =>
+      ipcRenderer.invoke('categories:reset-assets-type', assetIds),
+    assignToAssets: (assetIds: string[], categoryIds: string[]) =>
+      ipcRenderer.invoke('categories:assign-to-assets', assetIds, categoryIds),
+    removeFromAssets: (assetIds: string[], categoryIds: string[]) =>
+      ipcRenderer.invoke('categories:remove-from-assets', assetIds, categoryIds)
   },
 
   // File system

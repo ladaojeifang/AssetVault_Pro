@@ -37,6 +37,18 @@ export function tagNotFound(id?: string): ApiError {
   return new ApiError('TAG_NOT_FOUND', id ? `标签不存在: ${id}` : '标签不存在', 404)
 }
 
+export function categoryNotFound(id?: string): ApiError {
+  return new ApiError('CATEGORY_NOT_FOUND', id ? `分类不存在: ${id}` : '分类不存在', 404)
+}
+
+export function systemCategoryImmutable(id?: string): ApiError {
+  return new ApiError(
+    'SYSTEM_CATEGORY_IMMUTABLE',
+    id ? `系统类型不可修改: ${id}` : '系统类型不可修改',
+    400
+  )
+}
+
 export function libraryNotReady(): ApiError {
   return new ApiError('LIBRARY_NOT_READY', '资料库未初始化', 503)
 }
